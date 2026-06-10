@@ -1,12 +1,15 @@
 <script lang="ts">
 	import Timer from './Timer.svelte';
 	import SpeechTimer from './SpeechTimer.svelte';
+	import PacingTimer from './PacingTimer.svelte';
 	import Button from './Button.svelte';
 	import type { TimerState, SpeechTimerState, TimerSpeech } from '$lib/models/timer';
 	import { timer } from '$lib/models/transition';
 	import { settings } from '$lib/models/settings';
 	import { onDestroy, tick } from 'svelte';
 	import { debateStyles, debateStyleMap, type DebateStyle } from '$lib/models/debateStyle';
+	import { nodes } from '$lib/models/store';
+	import type { Nodes } from '$lib/models/node';
 
 	let states: {
 		prep?: TimerState;
@@ -55,6 +58,13 @@
 	}
 
 	resetStates();
+
+	let currentNodes: Nodes;
+	nodes.subscribe((n) => (currentNodes = n));
+
+	$: currentSpeech = debateStyle.timerSpeeches[states.speech.resetTimeIndex];
+	$: pacingPalette = currentSpeech?.secondary ? 'accent-secondary' : 'accent';
+	$: pacingEnabled = settings.data.pacingEnabled.value as boolean;
 </script>
 
 <div class="top">
@@ -83,6 +93,14 @@
 					bind:time={states.speech.time}
 					bind:state={states.speech.state}
 				/>
+				{#if pacingEnabled}
+					<PacingTimer
+						nodes={currentNodes}
+						mainTimerTime={states.speech.time}
+						isRunning={states.speech.state.name === 'running'}
+						palette={pacingPalette}
+					/>
+				{/if}
 			</div>
 		{/if}
 	{/key}

@@ -715,6 +715,26 @@ export const settings: Settings = new Settings({
 		value: true,
 		auto: true,
 		type: 'toggle'
+	},
+	pacingEnabled: {
+		name: 'Enable pacing',
+		type: 'toggle',
+		value: false,
+		auto: false
+	},
+	pacingGracePeriod: {
+		name: 'Grace period (seconds)',
+		type: 'slider',
+		value: 10,
+		auto: 10,
+		detail: {
+			min: 0,
+			max: 60,
+			step: 1
+		},
+		visibilityCondition: () => {
+			return settings.data.pacingEnabled.value as boolean;
+		}
 	}
 });
 
@@ -818,5 +838,9 @@ export const settingsGroups: SettingsGroup[] = [
 		name: 'Scrollbars',
 		settings: ['customScrollbar', 'customScrollbarWidth']
 	},
-	{ name: 'Controls', settings: ['consistentEnterBehaviour', 'tabReturnsToParent'] }
+	{ name: 'Controls', settings: ['consistentEnterBehaviour', 'tabReturnsToParent'] },
+	{
+		name: 'Pacing',
+		settings: ['pacingEnabled', 'pacingGracePeriod']
+	}
 ];

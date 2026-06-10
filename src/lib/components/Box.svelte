@@ -12,6 +12,8 @@
 		getParentFlowId,
 		checkIdBox,
 		getAdjacentBox,
+		getAdjacentAcrossFlows,
+		getColumnName,
 		getNode,
 		newBoxId
 	} from '$lib/models/node';
@@ -477,15 +479,23 @@
 	function focusAdjacent(direction: 'up' | 'down'): boolean {
 		let boxId = checkIdBox($nodes, id);
 		if (boxId == null) return false;
+		const currentColName = getColumnName($nodes, boxId);
 		while (true) {
 			let adjacentBox = getAdjacentBox($nodes, boxId, direction);
-			if (adjacentBox == null) return false;
+			if (adjacentBox != null) {
+				const adjColName = getColumnName($nodes, adjacentBox);
+				if (adjColName !== currentColName) {
+					adjacentBox = null;
+				}
+			}
+			if (adjacentBox == null) {
+				adjacentBox = getAdjacentAcrossFlows($nodes, boxId, direction);
+				if (adjacentBox == null) return false;
+			}
 			if (getNode($nodes, adjacentBox).unwrap().value.empty) {
-				// skip if empty
 				boxId = adjacentBox;
 				continue;
 			} else {
-				// if not empty, focus on box
 				$focusId = adjacentBox;
 				return true;
 			}
