@@ -7,6 +7,7 @@
 	import KeyboardScene from '$lib/components/scenes/KeyboardScene.svelte';
 	import SettingsScene from '$lib/components/scenes/SettingsScene.svelte';
 	import SharingScene from '$lib/components/scenes/SharingScene.svelte';
+	import IHaveToGetWorkOnThisDoneOrItsGoingToLookLikeIJustMadeThisForkBecauseIDontLikeVercel from '$lib/components/scenes/IHaveToGetWorkOnThisDoneOrItsGoingToLookLikeIJustMadeThisForkBecauseIDontLikeVercel.svelte';
 
 	import Flower from '$lib/components/scenes/Flower.svelte';
 
@@ -17,9 +18,10 @@
 	<article>
 		<section class="title">
 			<div class="words">
-				<h1>Flower</h1>
-				<p>An easier way to flow.</p>
-				<p>A better way to debate.</p>
+				<h1><em>Flew</em> Notes</h1> 
+				<p>It's past tense now.</p>
+				<p>'Yeah. I mean it is.' - many people i asked</p>
+				<p>If anyone asks, thats not a flower. its uh a decorative spiral - ></p>
 			</div>
 			<a href="./app" class="flowerholder">
 				<Flower {hover} />
@@ -68,6 +70,11 @@
 				detail="Change the color theme, font, accent colors, spacing, and more to customize your flow."
 				component={SettingsScene}
 			/>
+			<Benefit
+				title="Woke"
+				detail="made by a trans girl now. also no more netenyahu. i promise you i didnt make this because i hate vercel but i do i just also want to make new stuff but this is the first patch which means i gotta brand it ok"
+				component={IHaveToGetWorkOnThisDoneOrItsGoingToLookLikeIJustMadeThisForkBecauseIDontLikeVercel}
+			/>
 		</section>
 		<a href="./app">
 			<section class="tryagain">
@@ -77,7 +84,7 @@
 			</section>
 		</a>
 		<section class="footer">
-			<a href="https://github.com/Ashwagandhae/debate-flow" target="_blank">Source Code on Github</a
+			<a href="https://github.com/index3rr/flew-notes" target="_blank">Source Code on Github</a
 			>
 		</section>
 	</article>

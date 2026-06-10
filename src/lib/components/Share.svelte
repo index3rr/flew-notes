@@ -53,7 +53,7 @@
 		<div class="start">
 			<div class="explain">
 				<p>
-					Flower allows sharing through <a href="https://en.wikipedia.org/wiki/WebRTC">WebRTC</a>.
+					Flew Notes allows sharing through <a href="https://en.wikipedia.org/wiki/WebRTC">WebRTC</a>.
 					You can either
 					<span class="usePalette palette-accent">host</span>
 					a room to share your current flow, or edit someone else's flow as a

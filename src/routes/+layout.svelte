@@ -330,7 +330,7 @@
 		name="description"
 		content="App for flowing in competitive debate, better than Excel or Google Sheets. Supports Policy, Lincoln-Douglas, Public Forum, Congress, and World Schools debate."
 	/>
-	<link rel="canonical" href="https://debate-flow.netlify.app/" />
+	<link rel="canonical" href="https://flew-notes.netlify.app/" />
 </svelte:head>
 {#if closeWindow}
 	<CloseWindow reason="confirm link information has been sent to host tab" />

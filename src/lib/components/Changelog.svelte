@@ -16,6 +16,26 @@
 	<div class="scroll">
 		<section>
 			<div class="above">
+				<h2>v1.1.8</h2>
+			</div>
+			<ul>
+				<li>
+					AAAAAAAAa this is where the fork happend!!!!!!! everything before this is from
+					<a href="https://github.com/Ashwagandhae/debate-flow"> https://github.com/Ashwagandhae/debate-flow</a>
+				</li>
+				<li>
+					basically, i found this legal loophole called gpl3 which allows me to take this code for myself and then add my github to it and stuff and then improve apon it and offer it for free for the purposes of public good, that ?dude? (no pronouns on the other ?guys? github this is why i have to take over) must be so pissed 
+				</li>
+				<li>
+					thought really hard about what i want to do and decided to move to netlify (if ya didnt know: vercel is tight with the big benny yahu)
+				</li>
+				<li>
+					oh my god bruh i talk like im an idiot when im trying to write stupid stuff to procrastinate doing actual work :// i swear im a normal person.
+				</li>
+			</ul>
+		</section>
+		<section>
+			<div class="above">
 				<h2>v1.1.7</h2>
 			</div>
 			<ul>
@@ -116,7 +136,7 @@
 				</li>
 				<li>
 					removed sheet sharing. You can still access sheet sharing in the <a
-						href="https://debate-flow.netlify.app/app/"
+						href="https://debate-flow-git-sheet-sharing-ashwagandhae.vercel.app/app/"
 						>legacy version</a
 					>, but please <Button
 						text="let me know"

@@ -23,7 +23,7 @@
 			<Button
 				icon="angleBrackets"
 				text="code"
-				link="https://github.com/Ashwagandhae/debate-flow"
+				link="https://github.com/index3rr/flew-notes"
 				target="_blank"
 			/>
 			<Button
@@ -54,13 +54,16 @@
 			<p>send feedback</p>
 		</div>
 		<ul>
-			<Button icon="copy" text="email" on:click={() => copyText('julianlianbauer@gmail.com')} />
-			<Button icon="copy" text="discord" on:click={() => copyText('ashwagandhae')} />
-			<Button icon="link" text="github" link="https://github.com/Ashwagandhae/" target="_blank" />
+			<Button icon="copy" text="email" on:click={() => copyText('striped_dibble_0j@icloud.com')} 
+				tooltip="contact me on disc, barely check this"
+			/>
+			<Button icon="copy" text="discord" on:click={() => copyText('indexerr')} />
+			<Button icon="link" text="github" link="https://github.com/index3rr/" target="_blank" />
 			<Button
 				icon="link"
 				text="reddit"
-				link="https://www.reddit.com/user/ash-wag-and"
+				link="https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+				tooltip="look, i dont have a reddit but the visual space would feel really off if there wasnt a button here. forgive me for this button and what it does. direct your anger at me on discord"
 				target="_blank"
 			/>
 		</ul>
