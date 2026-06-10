@@ -41,6 +41,7 @@ export type Setting = ToggleSetting | RadioSetting | SliderSetting | ColorSettin
 class Settings {
 	data: { [key: string]: Setting };
 	callbacks: { [key: string]: ((key: string) => void)[] } = { any: [] };
+	funIntervals: ReturnType<typeof setInterval>[] = [];
 	constructor(settings: { [key: string]: Setting }) {
 		this.data = settings;
 	}
@@ -49,6 +50,13 @@ class Settings {
 	}
 	setValue(key: string, value: boolean | number | Hexcode): void {
 		this.data[key].value = value;
+		if (key === 'funMode') {
+			if (value) {
+				this.startFunMode();
+			} else {
+				this.stopFunMode();
+			}
+		}
 		if (this.callbacks[key]) {
 			for (const callback of this.callbacks[key]) {
 				callback(key);
@@ -57,6 +65,53 @@ class Settings {
 		for (const callback of this.callbacks['any']) {
 			callback(key);
 		}
+	}
+	startFunMode() {
+		this.stopFunMode();
+		this.setValue('colorTheme', 3);
+		for (const key in this.data) {
+			const s = this.data[key];
+			if (s.type === 'slider') {
+				const speed = 0.5 + Math.random() * 2;
+				const min = s.detail.min;
+				const max = s.detail.max;
+				const mid = (min + max) / 2;
+				const range = (max - min) / 2;
+				this.funIntervals.push(
+					setInterval(() => {
+						const t = Date.now() / 1000;
+						this.setValue(key, +(mid + Math.sin((t * Math.PI * 2) / speed) * range).toFixed(2));
+					}, 16)
+				);
+			}
+		}
+		this.funIntervals.push(
+			setInterval(() => {
+				if (!(this.data.funMode.value as boolean)) return;
+				const keys = Object.keys(this.data).filter(
+					(k) => this.data[k].type !== 'slider' && k !== 'funMode' && k !== 'colorTheme'
+				);
+				if (keys.length === 0) return;
+				const k = keys[Math.floor(Math.random() * keys.length)];
+				const s = this.data[k];
+				if (s.type === 'toggle') {
+					this.setValue(k, Math.random() < 0.5);
+				} else if (s.type === 'radio') {
+					this.setValue(k, Math.floor(Math.random() * s.detail.options.length));
+				} else if (s.type === 'color') {
+					const r = Math.floor(Math.random() * 256).toString(16).padStart(2, '0');
+					const g = Math.floor(Math.random() * 256).toString(16).padStart(2, '0');
+					const b = Math.floor(Math.random() * 256).toString(16).padStart(2, '0');
+					this.setValue(k, ('#' + r + g + b) as Hexcode);
+				}
+			}, 10)
+		);
+	}
+	stopFunMode() {
+		for (const interval of this.funIntervals) {
+			clearInterval(interval);
+		}
+		this.funIntervals = [];
 	}
 	subscribe(keys: string[], callback: (key: string) => void): () => void {
 		for (const key of keys) {
@@ -735,6 +790,12 @@ export const settings: Settings = new Settings({
 		visibilityCondition: () => {
 			return settings.data.pacingEnabled.value as boolean;
 		}
+	},
+	funMode: {
+		name: 'Fun mode',
+		type: 'toggle',
+		value: false,
+		auto: false
 	}
 });
 
@@ -842,5 +903,6 @@ export const settingsGroups: SettingsGroup[] = [
 	{
 		name: 'Pacing',
 		settings: ['pacingEnabled', 'pacingGracePeriod']
-	}
+	},
+	{ name: 'Fun', settings: ['funMode'] }
 ];
