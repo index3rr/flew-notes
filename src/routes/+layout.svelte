@@ -4,8 +4,6 @@
 	import { popups, closePopup, openPopup, type Popup as PopupType } from '$lib/models/popup';
 	import { screenTransition } from '$lib/models/transition';
 
-	import { dev } from '$app/environment';
-	import { inject } from '@vercel/analytics';
 	import { onDestroy, onMount } from 'svelte';
 	import {
 		giveGuestHostKey,
@@ -18,8 +16,6 @@
 	import CloseWindow from '$lib/components/CloseWindow.svelte';
 	import Message from '$lib/components/Message.svelte';
 	import Popup from '$lib/components/Popup.svelte';
-
-	inject({ mode: dev ? 'development' : 'production' });
 
 	const colorThemeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
 	if (colorThemeMediaQuery.matches) {
@@ -334,7 +330,7 @@
 		name="description"
 		content="App for flowing in competitive debate, better than Excel or Google Sheets. Supports Policy, Lincoln-Douglas, Public Forum, Congress, and World Schools debate."
 	/>
-	<link rel="canonical" href="https://debate-flow.vercel.app/" />
+	<link rel="canonical" href="https://debate-flow.netlify.app/" />
 </svelte:head>
 {#if closeWindow}
 	<CloseWindow reason="confirm link information has been sent to host tab" />

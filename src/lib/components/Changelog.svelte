@@ -116,7 +116,7 @@
 				</li>
 				<li>
 					removed sheet sharing. You can still access sheet sharing in the <a
-						href="https://debate-flow-git-sheet-sharing-ashwagandhae.vercel.app/app/"
+						href="https://debate-flow.netlify.app/app/"
 						>legacy version</a
 					>, but please <Button
 						text="let me know"
