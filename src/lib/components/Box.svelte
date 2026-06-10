@@ -38,6 +38,7 @@
 	let consistentEnterBehaviour: boolean = settings.data['consistentEnterBehaviour']
 		.value as boolean;
 	let tabReturnsToParent: boolean = settings.data['tabReturnsToParent'].value as boolean;
+	let dottedLines: boolean = settings.data['dottedLines'].value as boolean;
 
 	let node: Node<Box | Flow>;
 	let box: Box | null;
@@ -69,6 +70,15 @@
 		if (newIndex == -1) return lastValidIndex;
 		lastValidIndex = newIndex;
 		return lastValidIndex;
+	}
+	let isLastChild: boolean = false;
+	$: {
+		let parentNode = $nodes[node.parent];
+		if (parentNode == null) {
+			isLastChild = false;
+		} else {
+			isLastChild = index() === parentNode.children.length - 1;
+		}
 	}
 
 	export let addSibling: (childIndex: number, direction: number) => boolean = () => false;
@@ -588,6 +598,7 @@
 					class="line above"
 					class:left={node.children.length > 0}
 					class:right={index() == 0 && node.level > 1 && !parentIsEmpty}
+					class:dotted={dottedLines && index() > 0}
 					in:brIn
 					out:brOut
 					on:click={() => {
@@ -632,6 +643,7 @@
 				<!-- we can ignore accesibility because you can use keyboard inside the cell for same function -->
 				<div
 					class="line below"
+					class:dotted={dottedLines && !isLastChild}
 					in:brIn
 					out:brOut
 					on:click={() => {
@@ -761,7 +773,7 @@
 		display: none;
 	}
 	.line {
-		z-index: -1;
+		z-index: 1;
 	}
 	.line {
 		content: '';
@@ -779,6 +791,19 @@
 	.line.below {
 		margin-top: calc(-0.5 * var(--line-width));
 	}
+	.line.dotted {
+		background: none;
+		height: var(--line-width);
+		border-radius: var(--border-radius-small);
+		background-image: repeating-linear-gradient(
+			to right,
+			var(--this-background-indent) 0,
+			var(--this-background-indent) 1.5px,
+			transparent 1.5px,
+			transparent 5px
+		);
+		background-repeat: repeat-x;
+	}
 	.line.left {
 		width: calc(var(--column-width) - var(--padding));
 		border-radius: 3px 0 0 3px;
@@ -795,14 +820,10 @@
 		margin-left: 0;
 	}
 	.childFocus > .content > .barcontainer > .line,
+	:is(.focus, .focus.activeMouse) > .content > .barcontainer > .line,
 	.activeMouse .content:hover > .barcontainer > .line {
-		z-index: 2;
-
-		background-color: var(--this-color-fade);
-	}
-	:is(.focus, .focus.activeMouse) > .content > .barcontainer > .line {
 		z-index: 3;
-		background-color: var(--this-color);
+		background-color: var(--this-color-fade);
 	}
 
 	.barcontainer {

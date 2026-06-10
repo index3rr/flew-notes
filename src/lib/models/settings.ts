@@ -709,6 +709,12 @@ export const settings: Settings = new Settings({
 		auto: false,
 		type: 'toggle',
 		info: 'Reload for these changes to take effect'
+	},
+	dottedLines: {
+		name: 'Dotted lines',
+		value: true,
+		auto: true,
+		type: 'toggle'
 	}
 });
 
@@ -793,7 +799,7 @@ export const settingsGroups: SettingsGroup[] = [
 	},
 	{
 		name: 'Borders',
-		settings: ['lineWidth', 'borderRadius']
+		settings: ['lineWidth', 'borderRadius', 'dottedLines']
 	},
 	{
 		name: 'Animations',
