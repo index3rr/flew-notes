@@ -27,6 +27,9 @@
 			textarea.value = textarea.value.replace(/\r?\n|\r/g, '');
 			textarea.style.height = '0px';
 			textHeight = textarea.scrollHeight;
+			if (textHeight === 0) {
+				textHeight = parseInt(getComputedStyle(textarea).lineHeight, 10) || 24;
+			}
 			textarea.style.height = textHeight + 'px';
 
 			lastValue = value;
