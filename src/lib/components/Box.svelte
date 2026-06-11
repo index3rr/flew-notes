@@ -175,28 +175,24 @@
 				}
 			},
 			c: {
-				handle: () => {
-					const boxId = checkIdBox($nodes, id);
-					if (boxId == null) return;
-					const data: CopiedBoxData = {
-						tag: 'flew-notes-boxes',
-						version: 1,
-						boxes: [serializeBoxSubtree($nodes, boxId)]
-					};
-					navigator.clipboard.writeText(JSON.stringify(data));
-				},
-				require: () => {
-					const el = document.activeElement;
-					if (el && el.tagName === 'TEXTAREA') {
-						return (el as HTMLTextAreaElement).selectionStart === (el as HTMLTextAreaElement).selectionEnd;
-					}
-					return true;
-				}
+				handle: () => copySelfToClipboard(),
+				require: noTextSelected
 			},
 			e: {
 				handle: () => {
 					if (!box?.isExtension && addExtentionChild()) focusGrandchildStrict(0, 0);
 				}
+			},
+			x: {
+				handle: () => {
+					const boxId = checkIdBox($nodes, id);
+					if (boxId == null) return;
+					if (copySelfToClipboard(boxId)) {
+						blurSelf();
+						deleteBox(boxId);
+					}
+				},
+				require: noTextSelected
 			}
 		},
 		'alt shift': {
@@ -641,6 +637,26 @@
 	}
 
 	$: isFolded = getIsFolded($folded);
+
+	function noTextSelected() {
+		const el = document.activeElement;
+		if (el && el.tagName === 'TEXTAREA') {
+			return (el as HTMLTextAreaElement).selectionStart === (el as HTMLTextAreaElement).selectionEnd;
+		}
+		return true;
+	}
+
+	function copySelfToClipboard(boxId?: BoxId) {
+		const id2 = boxId ?? checkIdBox($nodes, id);
+		if (id2 == null) return false;
+		const data: CopiedBoxData = {
+			tag: 'flew-notes-boxes',
+			version: 1,
+			boxes: [serializeBoxSubtree($nodes, id2)]
+		};
+		navigator.clipboard.writeText(JSON.stringify(data));
+		return true;
+	}
 
 	function toggleFold() {
 		let boxId = checkIdBox($nodes, id);
