@@ -325,7 +325,7 @@
 </script>
 
 <svelte:head>
-	<title>Flower: Debate Flowing App</title>
+	<title>Flew Notes</title>
 	<meta
 		name="description"
 		content="App for flowing in competitive debate, better than Excel or Google Sheets. Supports Policy, Lincoln-Douglas, Public Forum, Congress, and World Schools debate."

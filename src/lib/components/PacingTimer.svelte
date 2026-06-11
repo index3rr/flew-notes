@@ -3,7 +3,7 @@
 	import { focusId } from '$lib/models/focus';
 	import Button from './Button.svelte';
 	import { checkIdBox, getColumnBoxes } from '$lib/models/node';
-	import type { Nodes, BoxId } from '$lib/models/node';
+	import type { Nodes, BoxId, Box } from '$lib/models/node';
 	import { settings } from '$lib/models/settings';
 
 	export let nodes: Nodes;
@@ -19,6 +19,10 @@
 	let startTimestamp = 0;
 	let ogTime = 0;
 	let prevRunning = false;
+
+	function shouldSkipBox(box: Box): boolean {
+		return !!(box.isExtension || box.crossed || box.content.length === 0);
+	}
 
 	function resetPacing() {
 		const remaining = boxes.length - currentIndex;
@@ -37,11 +41,19 @@
 	$: {
 		const boxId = $focusId ? checkIdBox(nodes, $focusId) : null;
 		if (boxId && boxId !== prevFocusId) {
-			boxes = getColumnBoxes(nodes, boxId);
+			prevFocusId = boxId;
+			const allBoxes = getColumnBoxes(nodes, boxId);
+			boxes = allBoxes.filter((id) => {
+				const n = nodes[id];
+				return !n || n.value.tag !== 'box' || !shouldSkipBox(n.value);
+			});
 			currentIndex = boxes.indexOf(boxId);
 			if (currentIndex >= 0) {
-				prevFocusId = boxId;
 				resetPacing();
+			} else {
+				pacingCountdown = 0;
+				ogTime = 0;
+				stopInterval();
 			}
 		}
 	}
@@ -90,7 +102,7 @@
 	});
 </script>
 
-{#if boxes.length > 0 && currentIndex >= 0}
+{#if prevFocusId && boxes.length > 0}
 	<div class="pacing">
 		<div class="top palette-{palette}">
 			<Button icon="arrowLeft" palette={palette} on:click={() => advance('prev')} />
@@ -101,7 +113,9 @@
 		</div>
 		<div class="info">
 			<span class="name">{boxContent || '(empty)'}</span>
-			<span class="index">{currentIndex + 1}/{boxes.length}</span>
+			{#if currentIndex >= 0}
+				<span class="index">{currentIndex + 1}/{boxes.length}</span>
+			{/if}
 		</div>
 	</div>
 {/if}
