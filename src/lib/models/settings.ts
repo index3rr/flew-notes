@@ -765,6 +765,12 @@ export const settings: Settings = new Settings({
 		type: 'toggle',
 		info: 'Reload for these changes to take effect'
 	},
+	shiftArrowThroughCells: {
+		name: 'Shift + arrow navigates cells (instead of selecting text)',
+		value: true,
+		auto: true,
+		type: 'toggle'
+	},
 	dottedLines: {
 		name: 'Dotted lines',
 		value: true,
@@ -899,7 +905,7 @@ export const settingsGroups: SettingsGroup[] = [
 		name: 'Scrollbars',
 		settings: ['customScrollbar', 'customScrollbarWidth']
 	},
-	{ name: 'Controls', settings: ['consistentEnterBehaviour', 'tabReturnsToParent'] },
+	{ name: 'Controls', settings: ['consistentEnterBehaviour', 'tabReturnsToParent', 'shiftArrowThroughCells'] },
 	{
 		name: 'Pacing',
 		settings: ['pacingEnabled', 'pacingGracePeriod']

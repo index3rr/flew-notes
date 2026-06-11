@@ -39,6 +39,14 @@
 	import { folded } from '$lib/models/fold';
 	import Tooltip from './Tooltip.svelte';
 	import Fold from './Fold.svelte';
+	import {
+		selectionAnchorId,
+		selectedBoxIds,
+		collectBoxRange,
+		isShiftHeld,
+		consumeAnchorCapture,
+		clearSelection
+	} from '$lib/models/selection';
 
 	export let id: BoxId | FlowId;
 	export let parentIsEmpty = false;
@@ -46,6 +54,8 @@
 	let consistentEnterBehaviour: boolean = settings.data['consistentEnterBehaviour']
 		.value as boolean;
 	let tabReturnsToParent: boolean = settings.data['tabReturnsToParent'].value as boolean;
+	let shiftArrowThroughCells: boolean = settings.data['shiftArrowThroughCells']
+		.value as boolean;
 	let dottedLines: boolean = settings.data['dottedLines'].value as boolean;
 
 	let node: Node<Box | Flow>;
@@ -141,6 +151,32 @@
 		dispatchSelfFocus(id, false);
 	});
 	$: $focusId, focusChange();
+	$: $focusId, updateSelection();
+
+	function updateSelection() {
+		if ($focusId == null) {
+			clearSelection();
+			return;
+		}
+		const shift = isShiftHeld() || shiftClickPending;
+		shiftClickPending = false;
+		if (shift) {
+			if ($selectionAnchorId == null) {
+				const captured = consumeAnchorCapture();
+				if (captured != null) $selectionAnchorId = captured;
+			}
+			const anchor = $selectionAnchorId;
+			if (anchor != null) {
+				const range = collectBoxRange($nodes, anchor, $focusId as BoxId);
+				if (range.length > 0) {
+					$selectedBoxIds = new Set(range);
+				}
+			}
+		} else {
+			$selectedBoxIds = new Set();
+			$selectionAnchorId = null;
+		}
+	}
 
 	function handleBlur() {
 		if ($focusId == id) {
@@ -185,6 +221,7 @@
 			},
 			x: {
 				handle: () => {
+					if (cutSelection()) return;
 					const boxId = checkIdBox($nodes, id);
 					if (boxId == null) return;
 					if (copySelfToClipboard(boxId)) {
@@ -344,7 +381,7 @@
 			}
 		}
 	};
-	let handleKeydown = createKeyDownHandler(keyComboOptionsIndex);
+	let handleKeydown = createKeyDownHandler(keyComboOptionsIndex, shiftArrowThroughCells);
 
 	function formatSelf(format: Parameters<typeof toggleBoxFormat>[1]) {
 		const boxId = checkIdBox($nodes, id);
@@ -647,6 +684,22 @@
 	}
 
 	function copySelfToClipboard(boxId?: BoxId) {
+		const selected = $selectedBoxIds;
+		if (selected.size > 1) {
+			const selArr = [...selected];
+			const root = selArr.filter((bid) => {
+				const node = $nodes[bid];
+				return !node || !selected.has(node.parent as BoxId);
+			});
+			if (root.length === 0) return false;
+			const data: CopiedBoxData = {
+				tag: 'flew-notes-boxes',
+				version: 1,
+				boxes: root.map((bid) => serializeBoxSubtree($nodes, bid))
+			};
+			navigator.clipboard.writeText(JSON.stringify(data));
+			return true;
+		}
 		const id2 = boxId ?? checkIdBox($nodes, id);
 		if (id2 == null) return false;
 		const data: CopiedBoxData = {
@@ -655,6 +708,34 @@
 			boxes: [serializeBoxSubtree($nodes, id2)]
 		};
 		navigator.clipboard.writeText(JSON.stringify(data));
+		return true;
+	}
+
+	function cutSelection(): boolean {
+		const selected = $selectedBoxIds;
+		if (selected.size <= 1) return false;
+
+		const selArr = [...selected];
+		const root = selArr.filter((bid) => {
+			const node = $nodes[bid];
+			return !node || !selected.has(node.parent as BoxId);
+		});
+		if (root.length === 0) return false;
+
+		const data: CopiedBoxData = {
+			tag: 'flew-notes-boxes',
+			version: 1,
+			boxes: root.map((bid) => serializeBoxSubtree($nodes, bid))
+		};
+		navigator.clipboard.writeText(JSON.stringify(data));
+
+		const flowId = getParentFlowId($nodes, root[0]).unwrap();
+		const actions = [];
+		for (const bid of root) {
+			actions.push(...newDeleteAction($nodes, bid));
+		}
+		doActionBundle(actions, flowId);
+		$focusId = null;
 		return true;
 	}
 
@@ -674,6 +755,9 @@
 	}
 
 	let updateTextHeight: (() => void) | undefined = undefined;
+	let shiftClickPending = false;
+	let isSelected = false;
+	$: isSelected = $selectedBoxIds.has(id as BoxId);
 </script>
 
 <div
@@ -681,6 +765,7 @@
 	class:childless={node.children.length == 0}
 	class:empty={box?.empty}
 	class:focus={$focusId == id}
+	class:selected={isSelected}
 	class:childFocus
 	class:activeMouse={$activeMouse}
 	class:highlight={childFocus || $focusId == id}
@@ -696,6 +781,10 @@
 			style={`--this-background: none`}
 			class:left={node.children.length > 0}
 			class:right={index() == 0 && node.level > 1 && !parentIsEmpty}
+			role="presentation"
+			on:mousedown={(e) => {
+				if (e.shiftKey) shiftClickPending = true;
+			}}
 		>
 			<div class="barcontainer">
 				<!-- svelte-ignore a11y-click-events-have-key-events -->
@@ -857,6 +946,7 @@
 	}
 
 	.childFocus > .content,
+	.selected > .content,
 	.activeMouse .content:hover {
 		background: var(--this-background-indent);
 	}

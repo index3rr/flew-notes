@@ -88,7 +88,8 @@ type KeyComboIndex = {
 };
 
 export function createKeyDownHandler(
-	keyComboOptionIndex: KeyComboOptionsIndex
+	keyComboOptionIndex: KeyComboOptionsIndex,
+	shiftFallsThrough = true
 ): (e: KeyboardEvent) => void {
 	// convert from option to handler
 	const keyComboIndex: KeyComboIndex = {};
@@ -123,6 +124,11 @@ export function createKeyDownHandler(
 					.replace('control', 'commandControl');
 				handler = keyComboIndex[modifiersKey]?.[key];
 			}
+		}
+		if (handler == null && shiftFallsThrough && e.shiftKey) {
+			const noShift = modifiers.filter((m) => m !== 'shift');
+			const noShiftKey = noShift.length == 0 ? 'none' : noShift.join(' ');
+			handler = keyComboIndex[noShiftKey]?.[key];
 		}
 		if (handler == null) return;
 		handler(e);
