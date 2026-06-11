@@ -19,18 +19,43 @@
 	let startTimestamp = 0;
 	let ogTime = 0;
 	let prevRunning = false;
+	let timeOverride: Map<BoxId, number> = new Map();
 
 	function shouldSkipBox(box: Box): boolean {
 		return !!(box.isExtension || box.crossed || box.content.length === 0);
 	}
 
+	function parseTimecode(content: string): number {
+		const match = content.match(/(?:^|[\s(\[])(\d*):(\d{2})(?:$|[\s)\]])/);
+		if (!match) return 0;
+		const minutes = match[1] ? parseInt(match[1], 10) : 0;
+		const seconds = parseInt(match[2], 10);
+		return (minutes * 60 + seconds) * 1000;
+	}
+
 	function resetPacing() {
-		const remaining = boxes.length - currentIndex;
+		const remaining = boxes.slice(currentIndex);
 		const graceMs = (settings.data.pacingGracePeriod.value as number) * 1000;
-		const distributable = Math.max(0, mainTimerTime - graceMs);
-		const tpb = remaining > 0 ? Math.floor(distributable / remaining) : 0;
-		pacingCountdown = tpb;
-		ogTime = tpb;
+
+		let fixedSum = 0;
+		let variableCount = 0;
+		for (const id of remaining) {
+			const fixed = timeOverride.get(id) ?? 0;
+			if (fixed > 0) fixedSum += fixed;
+			else variableCount++;
+		}
+
+		const distributable = Math.max(0, mainTimerTime - graceMs - fixedSum);
+		const tpb = variableCount > 0 ? Math.floor(distributable / variableCount) : 0;
+
+		const currentFixed = timeOverride.get(boxes[currentIndex]) ?? 0;
+		if (currentFixed > 0) {
+			pacingCountdown = currentFixed;
+			ogTime = currentFixed;
+		} else {
+			pacingCountdown = tpb;
+			ogTime = tpb;
+		}
 		startTimestamp = Date.now();
 		stopInterval();
 		if (isRunning) {
@@ -47,6 +72,14 @@
 				const n = nodes[id];
 				return !n || n.value.tag !== 'box' || !shouldSkipBox(n.value);
 			});
+			timeOverride = new Map();
+			for (const id of boxes) {
+				const box = nodes[id];
+				if (box && box.value.tag === 'box') {
+					const ms = parseTimecode(box.value.content);
+					if (ms > 0) timeOverride.set(id, ms);
+				}
+			}
 			currentIndex = boxes.indexOf(boxId);
 			if (currentIndex >= 0) {
 				resetPacing();
