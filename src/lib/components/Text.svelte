@@ -48,6 +48,7 @@
 	on:input={() => requestAnimationFrame(() => autoHeight())}
 	on:beforeinput
 	on:keydown
+	on:paste
 	on:focus
 	on:blur
 	spellcheck="false"

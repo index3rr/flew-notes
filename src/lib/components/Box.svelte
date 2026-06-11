@@ -15,7 +15,9 @@
 		getAdjacentAcrossFlows,
 		getColumnName,
 		getNode,
-		newBoxId
+		newBoxId,
+		serializeBoxSubtree,
+		type CopiedBoxData
 	} from '$lib/models/node';
 	import { createKeyDownHandler, type KeyComboOptionsIndex } from '$lib/models/key';
 
@@ -27,8 +29,12 @@
 		addNewExtension,
 		deleteBox,
 		newUpdateAction,
-		toggleBoxFormat
+		toggleBoxFormat,
+		buildPasteActions,
+		newDeleteAction
 	} from '$lib/models/nodeDecorateAction';
+	import { doActionBundle } from '$lib/models/nodeAction';
+	import { resolvePendingAction } from '$lib/models/nodePendingAction';
 	import { settings } from '$lib/models/settings';
 	import { folded } from '$lib/models/fold';
 	import Tooltip from './Tooltip.svelte';
@@ -166,6 +172,25 @@
 			b: {
 				handle: () => {
 					if (!box?.isExtension) formatSelf('bold');
+				}
+			},
+			c: {
+				handle: () => {
+					const boxId = checkIdBox($nodes, id);
+					if (boxId == null) return;
+					const data: CopiedBoxData = {
+						tag: 'flew-notes-boxes',
+						version: 1,
+						boxes: [serializeBoxSubtree($nodes, boxId)]
+					};
+					navigator.clipboard.writeText(JSON.stringify(data));
+				},
+				require: () => {
+					const el = document.activeElement;
+					if (el && el.tagName === 'TEXTAREA') {
+						return (el as HTMLTextAreaElement).selectionStart === (el as HTMLTextAreaElement).selectionEnd;
+					}
+					return true;
 				}
 			},
 			e: {
@@ -535,6 +560,62 @@
 		}
 	}
 
+	function handlePaste(e: ClipboardEvent) {
+		const text = e.clipboardData?.getData('text/plain');
+		if (!text) return;
+		let data: CopiedBoxData;
+		try {
+			data = JSON.parse(text);
+		} catch {
+			return;
+		}
+		if (data.tag !== 'flew-notes-boxes' || data.version !== 1) return;
+
+		const el = document.activeElement;
+		if (el && el.tagName === 'TEXTAREA') {
+			if ((el as HTMLTextAreaElement).selectionStart !== (el as HTMLTextAreaElement).selectionEnd) {
+				return;
+			}
+		}
+
+		e.preventDefault();
+
+		const boxId = checkIdBox($nodes, id);
+		if (boxId == null) return;
+
+		resolvePendingAction($nodes);
+
+		const flowId = getParentFlowId($nodes, boxId).unwrap();
+
+		if ((content?.length ?? 0) === 0 && !box?.isExtension) {
+			const deleteActions = newDeleteAction($nodes, boxId);
+			const { actions: addActions, firstId } = buildPasteActions(
+				node.parent as BoxId | FlowId,
+				flowId,
+				data.boxes,
+				index()
+			);
+			doActionBundle([...deleteActions, ...addActions], flowId);
+			if (firstId) {
+				$focusId = firstId;
+				history.setPrevAfterFocus($focusId);
+			}
+		} else {
+			let startIndex = 0;
+			if (node.children[0] && $nodes[node.children[0]]?.value.isExtension) {
+				startIndex = 1;
+			}
+
+			const { actions, firstId } = buildPasteActions(boxId, flowId, data.boxes, startIndex);
+			doActionBundle(actions, flowId);
+
+			if (firstId) {
+				$focusId = firstId;
+				history.setPrevAfterFocus($focusId);
+			}
+		}
+	}
+
 	let editAlreadyPending: boolean = false;
 	function handleBeforeInput() {
 		if (editAlreadyPending) return;
@@ -630,6 +711,7 @@
 					{#if box != null}
 						<Text
 							on:keydown={handleKeydown}
+							on:paste={handlePaste}
 							on:blur={handleBlur}
 							on:focus={handleFocus}
 							bind:value={content}

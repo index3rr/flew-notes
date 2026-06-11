@@ -143,6 +143,32 @@ export function checkIdBox(nodes: Nodes, id: AnyId): BoxId | null {
 	return null;
 }
 
+export type SerializedBox = {
+  value: Omit<Box, 'tag' | 'flowId'>;
+  children: SerializedBox[];
+};
+
+export type CopiedBoxData = {
+  tag: 'flew-notes-boxes';
+  version: 1;
+  boxes: SerializedBox[];
+};
+
+export function serializeBoxSubtree(nodes: Nodes, boxId: BoxId): SerializedBox {
+  const node = getNode(nodes, boxId).unwrap();
+  if (node.value.tag !== 'box') throw new Error('Expected a box');
+  const { tag, flowId, ...value } = node.value;
+  return {
+    value,
+    children: node.children
+      .filter((childId): childId is BoxId => {
+        const child = nodes[childId];
+        return child != null && child.value.tag === 'box';
+      })
+      .map((childId) => serializeBoxSubtree(nodes, childId))
+  };
+}
+
 export function isNodesWorthSaving(nodes: Nodes, ignoreFirstEmptyFlow = false): boolean {
 	if (nodes.root.children.length == 0) return false;
 	// check if empty

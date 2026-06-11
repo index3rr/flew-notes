@@ -10,7 +10,8 @@ import {
 	type FlowId,
 	type Nodes,
 	type RootId,
-	type SelfIdFor
+	type SelfIdFor,
+	type SerializedBox
 } from './node';
 import {
 	doActionBundle,
@@ -86,6 +87,38 @@ export function newExtensionAction(
 	};
 
 	return addAction;
+}
+
+export function buildPasteActions(
+	parent: FlowId | BoxId,
+	flowId: FlowId,
+	boxes: SerializedBox[],
+	startIndex = 0
+): { actions: ActionBundle; firstId: BoxId | null } {
+	const actions: ActionBundle = [];
+	let firstId: BoxId | null = null;
+	let index = startIndex;
+	for (const box of boxes) {
+		const id = newBoxId();
+		if (firstId == null) firstId = id;
+		const value: Box = {
+			tag: 'box',
+			content: box.value.content,
+			flowId
+		};
+		if (box.value.empty != null) value.empty = box.value.empty;
+		if (box.value.crossed != null) value.crossed = box.value.crossed;
+		if (box.value.bold != null) value.bold = box.value.bold;
+		if (box.value.isExtension != null) value.isExtension = box.value.isExtension;
+		if (box.value.placeholder != null) value.placeholder = box.value.placeholder;
+		actions.push({ tag: 'add', parent, id, index, value });
+		if (box.children.length > 0) {
+			const childResult = buildPasteActions(id, flowId, box.children, 0);
+			actions.push(...childResult.actions);
+		}
+		index++;
+	}
+	return { actions, firstId };
 }
 
 export const addNewBox = decorate(function (
@@ -177,7 +210,7 @@ export function newUpdateAction<Value extends Flow | Box>(
 	};
 }
 
-function newDeleteAction(nodes: Nodes, id: BoxId | FlowId): ActionBundle {
+export function newDeleteAction(nodes: Nodes, id: BoxId | FlowId): ActionBundle {
 	const actionBundle: ActionBundle = [];
 
 	const box = getNode(nodes, id).unwrap();
