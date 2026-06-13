@@ -1,9 +1,10 @@
 import { Workbook, type Buffer } from 'exceljs';
 import { type BoxId, type FlowId, type Nodes, newFlowId, newBoxId, getNode } from './node';
 import type { OldBox, OldFlows } from './oldType';
-import { newNodes } from './store';
+import { newNodes, sideDocText } from './store';
 import { applyActionBundle } from './nodeAction';
 import { settings, SETTINGS_VERSION, type SaveableSettings } from './settings';
+import { get } from 'svelte/store';
 
 const CURRENT_SAVE_VERSION: Version = 1 as const;
 
@@ -12,11 +13,13 @@ type Version = number;
 type SaveableNodes = {
 	nodes: Nodes;
 	version: Version;
+	sideDocText?: string;
 };
 export function getJson(nodes: Nodes): string {
 	const saveable: SaveableNodes = {
 		nodes,
-		version: CURRENT_SAVE_VERSION
+		version: CURRENT_SAVE_VERSION,
+		sideDocText: get(sideDocText)
 	};
 	return JSON.stringify(saveable);
 }
@@ -33,6 +36,9 @@ export function loadNodes(data: {[key: string]: any}): Nodes {
 		}
 	}
 	const ret: SaveableNodes = upgraded as SaveableNodes;
+	if (ret.sideDocText) {
+		sideDocText.set(ret.sideDocText);
+	}
 	return ret.nodes;
 }
 

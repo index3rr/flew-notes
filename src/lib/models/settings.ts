@@ -715,6 +715,12 @@ export const settings: Settings = new Settings({
 		auto: true,
 		type: 'toggle'
 	},
+	showSaveButton: {
+		name: 'Manual save button',
+		value: true,
+		auto: true,
+		type: 'toggle'
+	},
 	showSideDoc: {
 		name: 'Show notes doc',
 		value: false,
@@ -898,7 +904,8 @@ export const settingsGroups: SettingsGroup[] = [
 			'showUndoRedoButtons',
 			'showBoxCreationButtons',
 			'showQuickExtensionButtons',
-			'showBoxFormatButtons'
+			'showBoxFormatButtons',
+			'showSaveButton'
 		]
 	},
 	{

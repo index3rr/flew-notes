@@ -8,6 +8,7 @@
 	import { focusId, lastFocusIds, selectedFlowId } from '$lib/models/focus';
 	import { nodes, pendingAction } from '$lib/models/store';
 	import { addNewBox, addNewExtension, deleteBox, toggleBoxFormat } from '$lib/models/nodeDecorateAction';
+	import { saveNodes } from '$lib/models/autoSave';
 	import { folded } from '$lib/models/fold';
 
 	export let flowId: FlowId;
@@ -210,6 +211,14 @@
 						$nodes[targetBox()?.children[0] as BoxId]?.value.isExtension) ? "can't extend an extended argument" 
 						: targetBox()?.value.isExtension ? "can't extend an extension"
 						: disabledReason
+				}
+			],
+			showSaveButton: [
+				{
+					icon: 'download',
+					onclick: () => saveNodes($nodes),
+					tooltip: 'save',
+					shortcut: ['commandControl', 's']
 				}
 			],
 			showBoxFormatButtons: [
