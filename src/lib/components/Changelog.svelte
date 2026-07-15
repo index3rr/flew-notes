@@ -16,11 +16,49 @@
 	<div class="scroll">
 		<section>
 			<div class="above">
+				<h2>v1.2.0</h2>
+			</div>
+			<ul>
+				Pacing:
+				<ul>
+					<li>
+						Pacing is a feature that can be enabled in settings which will look at all non blank cells in your flow for the currently focused column, and when you start the timer, show a secondary timer for the current focused cell. If you read that cell in the time it gives you and move to the next one by pushing the down arrow, you should finish the speech with exactly the amount of seconds in the 'Grace Period' setting remaining to recap arguments, etc.
+					</li>
+				</ul>
+				<li>
+					Added Cut/Copy/Paste. How did we live without it!
+				</li>
+				<li>
+					Added selection, Shift + Click/Arrows to use
+				</li>
+				<li>
+					Cell focus now wraps 
+				</li>
+				<li>
+					Added optionally dotted lines
+				</li>
+				<li>
+					Added fun mode setting (EPILEPSY WARNING)
+				</li>
+				<li>
+					Manual save button and shortcut (<Shortcut
+						keys={['control', 's']}
+						inline
+					/>)
+				</li>
+				<li>
+					Prevents extinction
+				</li>
+				look at me mom, i can write normal patch notes!
+			</ul>
+		</section>
+		<section>
+			<div class="above">
 				<h2>v1.1.8</h2>
 			</div>
 			<ul>
 				<li>
-					AAAAAAAAa this is where the fork happend!!!!!!! everything before this is from
+					this is where the fork happend!!!!!!! everything before this is from
 					<a href="https://github.com/Ashwagandhae/debate-flow"> https://github.com/Ashwagandhae/debate-flow</a>
 				</li>
 				<li>

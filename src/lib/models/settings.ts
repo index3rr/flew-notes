@@ -787,7 +787,8 @@ export const settings: Settings = new Settings({
 		name: 'Enable pacing',
 		type: 'toggle',
 		value: false,
-		auto: false
+		auto: false,
+		info: 'Reload for these changes to take effect (will be fixed.. someday)'
 	},
 	pacingGracePeriod: {
 		name: 'Grace period (seconds)',
@@ -804,10 +805,11 @@ export const settings: Settings = new Settings({
 		}
 	},
 	funMode: {
-		name: 'Fun mode',
+		name: 'Fun mode (EPILEPSY WARNING)',
 		type: 'toggle',
 		value: false,
-		auto: false
+		auto: false,
+		info: 'SERIOUSLY. DO NOT USE IF YOU ARE SENSITIVE TO FLASHING LIGHTS! This setting may be difficult to disable.'
 	}
 });
 

@@ -1,6 +1,6 @@
 {
 	"name": "flew-notes",
-	"version": "1.1.8",
+	"version": "1.2",
 	"private": true,
 	"scripts": {
 		"dev": "vite dev",

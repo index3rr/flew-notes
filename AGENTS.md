@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Flew Notes is a web-based note-taking app for competitive debate. It lets debaters organize arguments across speech rounds in a flowing grid layout. Deployed at https://flew-notes.netlify.app/. Forked from debate-flow
+Flew Notes is a web-based note-taking app for competitive debate. It lets debaters organize arguments across speech rounds in a flowing grid layout. Deployed at https://flew-notes.netlify.app/. Forked from debate-flow.
 
 ## Tech Stack
 

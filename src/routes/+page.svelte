@@ -20,8 +20,6 @@
 			<div class="words">
 				<h1><em>Flew</em> Notes</h1> 
 				<p>It's past tense now.</p>
-				<p>'Yeah. I mean it is.' - many people i asked</p>
-				<p>If anyone asks, thats not a flower. its uh a decorative spiral - ></p>
 			</div>
 			<a href="./app" class="flowerholder">
 				<Flower {hover} />
@@ -32,7 +30,7 @@
 					on:mouseleave={() => (hover = false)}
 					on:mouseout={() => (hover = false)}
 					on:blur={() => (hover = false)}
-					class="tryit">Try it</button
+					class="tryit">Begin</button
 				>
 			</a>
 		</section>
