@@ -6,9 +6,11 @@
 	import { onDestroy } from 'svelte';
 	import { settingScrollerIn, settingScrollerOut, settingTitleInOut } from '$lib/models/transition';
 	import { downloadSettingsJson } from '$lib/models/file';
+	import { flushSettingChanges } from '$lib/models/telemetry';
 
 	export const closePopup: () => void = () => {};
 	onDestroy(() => {
+		flushSettingChanges();
 		settings.saveToLocalStorage();
 	});
 

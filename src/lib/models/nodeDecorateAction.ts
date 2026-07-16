@@ -24,6 +24,7 @@ import {
 } from './nodeAction';
 import { resolvePendingAction } from './nodePendingAction';
 import { nodes } from './store';
+import { trackFlowCreated, trackFlowDeleted, trackBoxCreated } from './telemetry';
 
 let $nodes: Nodes;
 nodes.subscribe((nodes) => {
@@ -128,10 +129,12 @@ export const addNewBox = decorate(function (
 	placeholder?: string
 ) {
 	const flowId = getParentFlowId(nodes, parent).unwrap();
-	return {
+	const result = {
 		action: newBoxAction(parent, flowId, index, placeholder),
 		owner: flowId
 	};
+	trackBoxCreated(getNode(nodes, parent).unwrap().level);
+	return result;
 });
 
 export const addNewExtension = decorate(function (
@@ -180,6 +183,7 @@ export const addNewFlow = decorate(function (
 	} else {
 		actionBundle.push(newBoxAction(id, id, 0));
 	}
+	trackFlowCreated(style.name, nodes.root.children.length + 1);
 	return {
 		action: actionBundle,
 		owner: 'root',
@@ -233,6 +237,7 @@ export const deleteBox = decorate(function (nodes: Nodes, id: BoxId) {
 
 export const deleteFlow = decorate(function (nodes: Nodes, id: FlowId) {
 	const actionBundle = newDeleteAction(nodes, id);
+	trackFlowDeleted(nodes.root.children.length - 1);
 	return { action: actionBundle, owner: 'root' };
 });
 

@@ -1,4 +1,4 @@
-# Changes
+# 1.2 changes
 
 - Move to netlify
 - Changed the lines a little

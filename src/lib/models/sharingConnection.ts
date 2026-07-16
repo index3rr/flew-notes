@@ -7,6 +7,7 @@ import {
 import { openPopup } from './popup';
 import Message from '$lib/components/Message.svelte';
 import { connections } from './store';
+import { trackSharingStarted } from './telemetry';
 
 const MESSAGE_CHANNEL_NAME = 'messageChannel';
 
@@ -161,6 +162,7 @@ function generateGuestName(holder: ConnectionHolder<Host>) {
 export function initHost() {
 	connections.update(function (oldConnections) {
 		if (oldConnections.tag != 'empty') return oldConnections;
+		trackSharingStarted(true);
 		return {
 			tag: 'host',
 			building: null,
@@ -272,6 +274,7 @@ export function initGuestConnection() {
 		tag: 'guestAwaitingHostKey',
 		pc
 	};
+	trackSharingStarted(false);
 	connections.set({
 		tag: 'guest',
 		connection,

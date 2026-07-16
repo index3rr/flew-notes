@@ -5,6 +5,7 @@ import { newNodes, sideDocText } from './store';
 import { applyActionBundle } from './nodeAction';
 import { settings, SETTINGS_VERSION, type SaveableSettings } from './settings';
 import { get } from 'svelte/store';
+import { trackFileImported, trackFileExported } from './telemetry';
 
 const CURRENT_SAVE_VERSION: Version = 1 as const;
 
@@ -45,6 +46,7 @@ export function loadNodes(data: {[key: string]: any}): Nodes {
 export function downloadJson(nodes: Nodes) {
 	const data: string = getJson(nodes);
 	downloadString(data, 'flow.json');
+	trackFileExported('json', nodes.root.children.length);
 }
 
 export function downloadSettingsJson() {
@@ -200,6 +202,7 @@ export function downloadXlsx(nodes: Nodes) {
 				document.body.removeChild(a);
 				window.URL.revokeObjectURL(url);
 			}, 0);
+			trackFileExported('xlsx', nodes.root.children.length);
 		})
 		.catch(function (error) {
 			console.log(error.message);

@@ -3,6 +3,7 @@
 	import { settings } from '$lib/models/settings';
 	import { popups, closePopup, openPopup, type Popup as PopupType } from '$lib/models/popup';
 	import { screenTransition } from '$lib/models/transition';
+	import { initTelemetry, shouldShowExtraPopup, markExtraPopupShown, type TelemetryTier } from '$lib/models/telemetry';
 
 	import { onDestroy, onMount } from 'svelte';
 	import {
@@ -17,11 +18,29 @@
 	import Message from '$lib/components/Message.svelte';
 	import Popup from '$lib/components/Popup.svelte';
 
+	export let data: { ref: string | null };
+
 	const colorThemeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
 	if (colorThemeMediaQuery.matches) {
 		document.body.classList.add('dark');
 	}
 	settings.init();
+
+	const ref = data.ref ?? localStorage.getItem('telemetry_ref') ?? undefined;
+
+	onDestroy(
+		settings.subscribe(['telemetry'], function () {
+			const tier = (settings.data.telemetry.value as number) as TelemetryTier;
+			initTelemetry(tier, ref);
+			if (shouldShowExtraPopup()) {
+				markExtraPopupShown();
+				openPopup(Message, 'Extra Telemetry Enabled', {
+					message: 'so theres a button at the top left in the main flowing thign that looks liike a link, if you push it you can see my email and discord, i cant be bothered to collect any nefarious information so just go ahead and send it to my discord ok thanks'
+				});
+			}
+		})
+	);
+
 	function updateColorTheme() {
 		if (settings.data.colorTheme.value == 0) {
 			document.body.classList.toggle('dark', colorThemeMediaQuery.matches);

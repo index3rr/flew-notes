@@ -18,6 +18,7 @@
 	import { createKeyDownHandler } from '$lib/models/key';
 	import Prelude from '$lib/components/Prelude.svelte';
 	import { loadNodes, importSettingsJson } from '$lib/models/file';
+	import { trackFileImported } from '$lib/models/telemetry';
 	import Timers from '$lib/components/Timers.svelte';
 	import Help from '$lib/components/Help.svelte';
 	import Shortcuts from '$lib/components/Shortcuts.svelte';
@@ -269,6 +270,7 @@
 				replaceNodes(newNodes);
 				$selectedFlowId = null;
 				flowsChange();
+				trackFileImported('json', newNodes.root.children.length);
 			}
 		}
 	}

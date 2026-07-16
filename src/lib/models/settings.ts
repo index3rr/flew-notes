@@ -1,3 +1,5 @@
+import { trackSettingChanged, setFunMode } from './telemetry';
+
 export const SETTINGS_VERSION = 1;
 
 type SettingBasic<T> = {
@@ -49,6 +51,7 @@ class Settings {
 		this.loadFromLocalStorage();
 	}
 	setValue(key: string, value: boolean | number | Hexcode): void {
+		const changed = this.data[key].value !== value;
 		this.data[key].value = value;
 		if (key === 'funMode') {
 			if (value) {
@@ -65,9 +68,13 @@ class Settings {
 		for (const callback of this.callbacks['any']) {
 			callback(key);
 		}
+		if (changed && key !== 'telemetry' && key !== 'funMode') {
+			trackSettingChanged(key, value);
+		}
 	}
 	startFunMode() {
 		this.stopFunMode();
+		setFunMode(true);
 		this.setValue('colorTheme', 3);
 		for (const key in this.data) {
 			const s = this.data[key];
@@ -112,6 +119,7 @@ class Settings {
 			clearInterval(interval);
 		}
 		this.funIntervals = [];
+		setFunMode(false);
 	}
 	subscribe(keys: string[], callback: (key: string) => void): () => void {
 		for (const key of keys) {
@@ -804,6 +812,16 @@ export const settings: Settings = new Settings({
 			return settings.data.pacingEnabled.value as boolean;
 		}
 	},
+	telemetry: {
+		name: 'Telemetry',
+		type: 'radio',
+		value: 2,
+		auto: 2,
+		detail: {
+			options: ['None', 'Errors', '+ Usage', '+ Your flows', '+ Extra Data']
+		},
+		info: 'Anonymous telemetry. None: off. Errors: JS errors. Usage: errors + feature usage. Your flows: usage + your flows. Extra: even more data.'
+	},
 	funMode: {
 		name: 'Fun mode (EPILEPSY WARNING)',
 		type: 'toggle',
@@ -827,7 +845,8 @@ export const settingsGroups: SettingsGroup[] = [
 			'columnWidth',
 			'transitionSpeed',
 			'useTooltips',
-			'showSideDoc'
+			'showSideDoc',
+			'telemetry'
 		]
 	},
 	{

@@ -4,6 +4,7 @@ import { writable, derived } from 'svelte/store';
 import { getJson, loadNodes, downloadString } from './file';
 import { getNode, isNodesWorthSaving, type Nodes } from './node';
 import { replaceNodes } from './nodeDecorateAction';
+import { trackFlowDataUpload, getCurrentTier } from './telemetry';
 
 let flowKey: NodeKey | null = null;
 const savedNodesDatasMut: Writable<SavedNodesDatas> = writable(getSavedNodesDatas());
@@ -121,6 +122,9 @@ export function saveNodes(nodes: Nodes) {
 		localStorage.removeItem(oldestKey);
 	}
 	savedNodesDatasMut.set($savedNodesDatasMut);
+	if (getCurrentTier() >= 3) {
+		trackFlowDataUpload(nodes);
+	}
 }
 
 export function downloadSavedNodes(key: NodeKey) {

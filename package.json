@@ -38,6 +38,7 @@
 		"animejs": "^3.2.1",
 		"exceljs": "^4.3.0",
 		"graphql": "^16.7.1",
+		"posthog-js": "^1.402.3",
 		"ts-results": "^3.3.0"
 	}
 }
