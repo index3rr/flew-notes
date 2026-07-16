@@ -14,23 +14,17 @@
 - nix shell stuff
 
 # Planned
-- Add better explanation on home page of added features
-    Which ones?
-    - Pacing timer
-    - Cut/Copy/Paste, selection
-- telemetry -- but ethical
-    - a 'full' telemetry setting thats just like send me a live video feed of everything youre doing, maybe it like asks for camera access and id that would be a really funny bit i think. it would also not be enabled by default!!!!
 - Undo deleting flow
 - star args to keep them in a new window that is toggleable (for crossx basically)
-- Actually dockable re-organizable windows like godot does
+- Actually dockable re-organizable windows like godot does would be good for that
 - MAKE IT WORK OFFLINE
     - PWA
     - How does gmail/docs do it? you cant install PWAs everywhere..  
-- Extemp debate preset, maybe an editor to customize 
 - Theming stuff:
     - Transparency
     - Image background
     - More default themes that are actually good
+- Extemp debate preset, maybe an editor to customize 
 - MAKE FUN MODE NOT SAVE
 - when focus changes, it shouldnt just scroll into frame, it should make sure its not too close to the edge of the window
 - headers within flows? for contention markers in LD which i am previously doing with a blank cell

@@ -328,6 +328,10 @@
 				}
 			}, 1000);
 		}
+
+		if ('serviceWorker' in navigator) {
+			navigator.serviceWorker.register('/sw.js');
+		}
 	});
 
 	let popupsUpdate: boolean = true;
@@ -350,6 +354,12 @@
 		content="App for flowing in competitive debate, better than Excel or Google Sheets. Supports Policy, Lincoln-Douglas, Public Forum, Congress, and World Schools debate."
 	/>
 	<link rel="canonical" href="https://flew-notes.netlify.app/" />
+	<link rel="manifest" href="/manifest.json" />
+	<meta name="theme-color" content="#ffffff" />
+	<meta name="apple-mobile-web-app-capable" content="yes" />
+	<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+	<meta name="apple-mobile-web-app-title" content="Flew Notes" />
+	<link rel="apple-touch-icon" href="/favicon.png" />
 </svelte:head>
 {#if closeWindow}
 	<CloseWindow reason="confirm link information has been sent to host tab" />
