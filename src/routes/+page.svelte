@@ -8,6 +8,7 @@
 	import SettingsScene from '$lib/components/scenes/SettingsScene.svelte';
 	import SharingScene from '$lib/components/scenes/SharingScene.svelte';
 	import IHaveToGetWorkOnThisDoneOrItsGoingToLookLikeIJustMadeThisForkBecauseIDontLikeVercel from '$lib/components/scenes/IHaveToGetWorkOnThisDoneOrItsGoingToLookLikeIJustMadeThisForkBecauseIDontLikeVercel.svelte';
+	import PacingScene from '$lib/components/scenes/PacingScene.svelte';
 
 	import Flower from '$lib/components/scenes/Flower.svelte';
 
@@ -39,6 +40,11 @@
 		</div>
 		<section class="benefits">
 			<Benefit
+				title="Perfect Pacing"
+				detail="Never think about if you'll have enough time for arguments again. Pacing can be enabled in settings."
+				component={PacingScene}
+			/>
+			<Benefit
 				title="Super Spacing"
 				detail="Stop guessing how many responses your opponent will make—arguments will automatically move out of the way."
 				component={SpacingScene}
@@ -69,15 +75,15 @@
 				component={SettingsScene}
 			/>
 			<Benefit
-				title="Woke"
-				detail="made by a trans girl now. also no more netenyahu. i promise you i didnt make this because i hate vercel but i do i just also want to make new stuff but this is the first patch which means i gotta brand it ok"
+				title="Woke Wins"
+				detail="No more netenyahu."
 				component={IHaveToGetWorkOnThisDoneOrItsGoingToLookLikeIJustMadeThisForkBecauseIDontLikeVercel}
 			/>
 		</section>
 		<a href="./app">
 			<section class="tryagain">
 				<button class="tryit">
-					Try it<Icon name="arrowRight" size="4rem" />
+					Begin<Icon name="arrowRight" size="4rem" />
 				</button>
 			</section>
 		</a>
