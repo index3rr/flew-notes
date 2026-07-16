@@ -1,5 +1,6 @@
 import posthog from 'posthog-js';
 import type { Nodes } from './node';
+import { CURRENT_VERSION } from './version';
 
 const POSTHOG_TOKEN = 'phc_Dhn9bh5xNJ2B6aTBsHpLdDXeFUnyfRZhVGxHegaYRa7P';
 const POSTHOG_HOST = 'https://us.i.posthog.com';
@@ -43,7 +44,7 @@ export function initTelemetry(tier: TelemetryTier, ref?: string) {
 	}
 
 	posthog.register({
-		app_version: '1.2',
+		app_version: CURRENT_VERSION,
 		telemetry_tier: TIER_NAMES[tier]
 	});
 

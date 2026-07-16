@@ -1,4 +1,4 @@
-const CACHE_NAME = 'flew-notes-v1';
+const CACHE_NAME = 'flew-notes-v1.2';
 const PRECACHE = ['/', '/favicon.png', '/manifest.json'];
 
 self.addEventListener('install', (event) => {
