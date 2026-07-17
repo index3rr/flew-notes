@@ -1,6 +1,7 @@
 <script lang="ts">
 	import './global.css';
 	import { settings } from '$lib/models/settings';
+	import { dev } from '$app/environment';
 	import { popups, closePopup, openPopup, type Popup as PopupType } from '$lib/models/popup';
 	import { screenTransition } from '$lib/models/transition';
 	import { initTelemetry, shouldShowExtraPopup, markExtraPopupShown, type TelemetryTier } from '$lib/models/telemetry';
@@ -116,8 +117,8 @@
 			name: 'sidebar-width',
 			unit: 'px'
 		},
-		sideDocWidth: {
-			name: 'side-doc-width',
+		panelWidth: {
+			name: 'panel-width',
 			unit: 'px'
 		},
 		customScrollbarWidth: {
@@ -329,7 +330,7 @@
 			}, 1000);
 		}
 
-		if ('serviceWorker' in navigator) {
+		if (!dev && 'serviceWorker' in navigator) {
 			navigator.serviceWorker.register('/sw.js');
 		}
 	});

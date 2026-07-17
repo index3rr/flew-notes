@@ -6,10 +6,7 @@
 	import DownloadUpload from '$lib/components/DownloadUpload.svelte';
 	import Message from '$lib/components/Message.svelte';
 	import Settings from '$lib/components/Settings.svelte';
-	import SortableList from '$lib/components/SortableList.svelte';
-	import AddTab from '$lib/components/AddTab.svelte';
 	import Share from '$lib/components/Share.svelte';
-	import Tab from '$lib/components/Tab.svelte';
 	import { dev } from '$app/environment';
 	import { openPopup } from '$lib/models/popup';
 	import type { FlowId, Nodes } from '$lib/models/node';
@@ -19,11 +16,9 @@
 	import Prelude from '$lib/components/Prelude.svelte';
 	import { loadNodes, importSettingsJson } from '$lib/models/file';
 	import { trackFileImported } from '$lib/models/telemetry';
-	import Timers from '$lib/components/Timers.svelte';
 	import Help from '$lib/components/Help.svelte';
-	import Shortcuts from '$lib/components/Shortcuts.svelte';
 	import { settings } from '$lib/models/settings';
-	import SideDoc from '$lib/components/SideDoc.svelte';
+	import PanelContainer from '$lib/components/PanelContainer.svelte';
 	import { history } from '$lib/models/history';
 	import { focusId, lastFocusIds, selectedFlowId } from '$lib/models/focus';
 	import { isChangelogVersionCurrent } from '$lib/models/version';
@@ -57,13 +52,15 @@
 		});
 	});
 
-	let showSideDoc: boolean = settings.data['showSideDoc'].value as boolean;
-
-	onDestroy(
-		settings.subscribe(['showSideDoc'], (key: string) => {
-			showSideDoc = settings.data[key].value as boolean;
-		})
-	);
+	let hasRightPanels = false;
+	let panelSubUnsub = settings.subscribe(['tabsPanel', 'timersPanel', 'notesPanel'], () => {
+		const leftVal = (k: string) => settings.data[k]?.value as number;
+		const rightCount = [leftVal('tabsPanel'), leftVal('timersPanel'), leftVal('notesPanel')].filter(
+			(v) => v === 2
+		).length;
+		hasRightPanels = rightCount > 0;
+	});
+	onDestroy(panelSubUnsub);
 
 	function clickTab(id: FlowId) {
 		blurFlow();
@@ -351,21 +348,14 @@
 					]}
 				/>
 			</div>
-			<div class="tabs" class:customScrollbar={settings.data.customScrollbar.value}>
-				<div class="tabScroll">
-					<SortableList list={$nodes.root.children} on:sort={handleSort} let:index>
-						<Tab
-							on:click={() => clickTab($nodes.root.children[index])}
-							flowId={$nodes.root.children[index]}
-							selected={$selectedFlowId == $nodes.root.children[index]}
-						/>
-					</SortableList>
-					<AddTab {addFlow} bind:switchSpeakers />
-				</div>
-			</div>
-			<div class="timer">
-				<Timers />
-			</div>
+		<PanelContainer
+			side="left"
+			selectedFlowId={$selectedFlowId}
+			{clickTab}
+			{addFlow}
+			{handleSort}
+			bind:switchSpeakers
+		/>
 		</div>
 		{#if $nodes.root.children.length > 0}
 			{#if $selectedFlowId != null && $nodes[$selectedFlowId]}
@@ -381,9 +371,9 @@
 					</div>
 				{/key}
 			{/if}
-			{#if showSideDoc}
-				<div class="side-doc">
-					<SideDoc />
+			{#if hasRightPanels}
+				<div class="right-sidebar">
+					<PanelContainer side="right" />
 				</div>
 			{/if}
 		{:else}
@@ -412,10 +402,11 @@
 		box-sizing: border-box;
 		position: relative;
 	}
-	.grid:has(.side-doc) {
+	.grid:has(.right-sidebar) {
 		grid-template-areas:
-			'sidebar title box-control side-doc'
-			'sidebar flow flow side-doc';
+			'sidebar title box-control right-sidebar'
+			'sidebar flow flow right-sidebar';
+		grid-template-columns: var(--sidebar-width) 1fr auto var(--panel-width);
 	}
 	.grid.showPrelude {
 		grid-template-areas: 'sidebar prelude';
@@ -436,18 +427,16 @@
 	.header {
 		height: auto;
 		padding-bottom: var(--padding);
+		flex-shrink: 0;
 	}
-	.tabs {
-		overflow-y: auto;
+	.right-sidebar {
+		background: var(--background);
+		width: 100%;
 		height: var(--main-height);
+		border-radius: var(--border-radius);
+		padding: var(--padding);
+		grid-area: right-sidebar;
 		box-sizing: border-box;
-		position: relative;
-	}
-	.tabScroll {
-		padding: 0;
-		margin: 0;
-		padding-top: 0;
-		padding-bottom: calc(var(--view-height) * 0.6);
 	}
 
 	.title {
@@ -479,11 +468,5 @@
 		width: calc(100vw - var(--sidebar-width) - var(--gap) * 3);
 		height: var(--main-height);
 		grid-area: prelude;
-	}
-	.side-doc {
-		position: relative;
-		width: var(--side-doc-width);
-		height: var(--main-height);
-		grid-area: side-doc;
 	}
 </style>

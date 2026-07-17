@@ -26,7 +26,7 @@
 			useTooltips = settings.data.useTooltips.value as boolean;
 		})
 	);
-	let openTimeout: NodeJS.Timeout | null = null;
+	let openTimeout: ReturnType<typeof setTimeout> | null = null;
 	async function openTooltip() {
 		isHovered = true;
 		mouseMove();

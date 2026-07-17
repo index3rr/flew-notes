@@ -13,7 +13,7 @@
 
 	export let state: TimeState;
 
-	let interval: NodeJS.Timeout | null = null;
+	let interval: ReturnType<typeof setTimeout> | null = null;
 
 	if (state.name == 'running') {
 		startInterval();

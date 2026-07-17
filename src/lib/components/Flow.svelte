@@ -14,7 +14,7 @@
 	$: {
 		// hold onto node when it's deleted
 		if ($nodes[flowId] != null) {
-			node = $nodes[flowId];
+			node = $nodes[flowId]!;
 		}
 	}
 	$: flow = node.value;

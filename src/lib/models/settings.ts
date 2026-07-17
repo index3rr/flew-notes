@@ -729,14 +729,35 @@ export const settings: Settings = new Settings({
 		auto: true,
 		type: 'toggle'
 	},
-	showSideDoc: {
-		name: 'Show notes doc',
-		value: false,
-		auto: false,
-		type: 'toggle'
+	tabsPanel: {
+		name: 'Tabs',
+		value: 1,
+		auto: 1,
+		type: 'radio',
+		detail: {
+			options: ['Hidden', 'Left', 'Right']
+		}
 	},
-	sideDocWidth: {
-		name: 'Notes doc width',
+	timersPanel: {
+		name: 'Timers',
+		value: 1,
+		auto: 1,
+		type: 'radio',
+		detail: {
+			options: ['Hidden', 'Left', 'Right']
+		}
+	},
+	notesPanel: {
+		name: 'Notes',
+		value: 0,
+		auto: 0,
+		type: 'radio',
+		detail: {
+			options: ['Hidden', 'Left', 'Right']
+		}
+	},
+	panelWidth: {
+		name: 'Panel width',
 		value: 300,
 		auto: 300,
 		type: 'slider',
@@ -845,9 +866,12 @@ export const settingsGroups: SettingsGroup[] = [
 			'columnWidth',
 			'transitionSpeed',
 			'useTooltips',
-			'showSideDoc',
 			'telemetry'
 		]
+	},
+	{
+		name: 'Panels',
+		settings: ['tabsPanel', 'timersPanel', 'notesPanel']
 	},
 	{
 		name: 'Colors',
@@ -909,7 +933,7 @@ export const settingsGroups: SettingsGroup[] = [
 	},
 	{
 		name: 'Spacing',
-		settings: ['columnWidth', 'sidebarWidth', 'sideDocWidth', 'buttonSize', 'padding', 'gap']
+		settings: ['columnWidth', 'sidebarWidth', 'panelWidth', 'buttonSize', 'padding', 'gap']
 	},
 	{
 		name: 'Borders',
