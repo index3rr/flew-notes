@@ -14,6 +14,8 @@ Flew Notes is a web-based note-taking app for competitive debate. It lets debate
 - **Result types**: `ts-results` (`Option`, `Some`, `None`)
 - **Animations**: anime.js
 - **Excel export**: exceljs
+- **Telemetry**: PostHog (cookieless, US region, tiers 0-4)
+- **PWA**: Service worker (`static/sw.js`) + manifest, network-first navigation, cache-first same-origin assets
 - **GraphQL**: `@urql/svelte` + `graphql` (present in deps, usage minimal)
 - **Testing**: Playwright (E2E)
 - **Linting**: ESLint + Prettier
@@ -32,7 +34,7 @@ Flew Notes is a web-based note-taking app for competitive debate. It lets debate
 ```
 src/
   routes/
-    +layout.svelte          # Root layout (fonts, global styles)
+    +layout.svelte          # Root layout (fonts, global styles, service worker, telemetry init)
     +layout.ts              # SSR disabled
     +page.svelte            # Landing/prelude page (redirects to /app)
     global.css              # CSS variables, color themes, base styles
@@ -41,7 +43,11 @@ src/
   lib/
     models/                 # Business logic and state (no UI)
     components/             # Svelte UI components
+    components/scenes/      # Animated scene components for landing page
     svg/                    # SVG icon assets
+static/
+  sw.js                     # Service worker (network-first navigation, cache-first assets)
+  manifest.json             # PWA manifest
 tests/                      # Playwright E2E specs
 test-files/                 # Test fixture data (JSON)
 ```
@@ -156,6 +162,18 @@ Timer state types for running/paused. `Timers` component manages per-flow speech
 
 A simple popup/modal system - `openPopup(component, title, props)` renders a component in an overlay.
 
+### Telemetry (`telemetry.ts`)
+
+Cookieless PostHog integration with 5 tiers (0-4): None, Errors, Usage, All (includes flow text content), Extra. Setting changes are batched into a single `settings_changed` event, flushed when the settings popup closes. All tracking is skipped during fun mode. `trackFlowDataUpload` recursively collects box text content for the "All" tier. The telemetry tier is a radio setting visible to users.
+
+### Service Worker (`static/sw.js`)
+
+Network-first for navigation requests (with cache fallback), cache-first for same-origin assets, network-only for cross-origin (PostHog). Cache version is bumped in `CACHE_NAME` to force updates on release. Skipped in dev mode (`!dev` guard in `+layout.svelte`).
+
+### Version Management (`version.ts`)
+
+Single source of truth: `CURRENT_VERSION` constant (currently `'1.2.0'`). Imported by `telemetry.ts` for PostHog registration. `package.json` version and `sw.js` `CACHE_NAME` must be updated manually on release. `isChangelogVersionCurrent` store compares localStorage against `CURRENT_VERSION` to show update notifications.
+
 ## Key Component Files
 
 | Component | Purpose |
@@ -173,6 +191,10 @@ A simple popup/modal system - `openPopup(component, title, props)` renders a com
 | `Shortcuts.svelte` | Keyboard shortcuts reference |
 | `SideDoc.svelte` | Notes sidebar panel |
 | `SortableList.svelte` | Drag-to-reorder list (used for tab ordering) |
+| `Flower.svelte` | Spinning circle-with-arrow animation (matches favicon) |
+| `PacingScene.svelte` | Animated pacing timer demo for landing page |
+| `FakeTimer.svelte` | Presentational timer display for scene components |
+| `FakeBox.svelte` | Presentational debate cell for scene components |
 
 ## CSS Variables
 
