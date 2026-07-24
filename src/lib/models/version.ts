@@ -3,6 +3,8 @@ import { writable, type Writable } from 'svelte/store';
 export type Version = `${number}.${number}.${number}`;
 
 export const CURRENT_VERSION: Version = '1.2.0' as const;
+// you MUST change package.json AND sw.js when you change version
+// and make sure to add a changelog in Changelog.svelte (not md!)
 
 export function getLastChangelogVersion(): Version {
 	const version = localStorage.getItem('lastUsedVersion') ?? '1.0.0';
