@@ -15,6 +15,24 @@
 
 	let disabledReason: string = 'no cell selected';
 
+	let saved = false;
+	let savedTimer: ReturnType<typeof setTimeout> | null = null;
+	function handleSave() {
+		saveNodes($nodes);
+		saved = true;
+		if (savedTimer != null) {
+			clearTimeout(savedTimer);
+		}
+		savedTimer = setTimeout(() => {
+			saved = false;
+		}, 1500);
+	}
+	onDestroy(() => {
+		if (savedTimer != null) {
+			clearTimeout(savedTimer);
+		}
+	});
+
 	let targetId: BoxId | null = null;
 	async function setValidTargetId() {
 		// wait until its actually done updating
@@ -215,9 +233,9 @@
 			],
 			showSaveButton: [
 				{
-					icon: 'download',
-					onclick: () => saveNodes($nodes),
-					tooltip: 'save',
+					icon: saved ? 'check' : 'download',
+					onclick: handleSave,
+					tooltip: saved ? 'saved!' : 'save',
 					shortcut: ['commandControl', 's']
 				}
 			],
@@ -258,7 +276,7 @@
 	function updateButtonGroups() {
 		buttonGroups = getButtonGroups();
 	}
-	$: targetId, $nodes, $pendingAction, $folded, updateButtonGroups();
+	$: targetId, $nodes, $pendingAction, $folded, saved, updateButtonGroups();
 
 	let buttonGroupsShow: { [key: string]: boolean } = {};
 	for (let key of Object.keys(buttonGroups)) {
