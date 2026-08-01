@@ -1,3 +1,10 @@
+# 1.2.1 changes
+- manual save button now shows a checkmark and "saved!" tooltip when you save
+- fixed description of shift + arrow setting to say "Shift + arrow selects cells"
+- added a dedicated save icon for the manual save button
+- fun mode setting is no longer saved
+- service worker now only caches for offline use (network-first), and is skipped in dev mode
+
 # 1.2 changes
 - telemetry
 - Move to netlify
@@ -67,16 +74,12 @@
 
 
 ## Small features/fixes (..X releases)
-- change service worker setup to save flow editor but maybe not home page, clear indicator you are offline and sharing wont work, test out pwa
 - evaluate if switching to the AGPL is possible (gpl kind of does not work for this project to ensure free-ness since its served over web)
 - document the shortcuts we've added in the shortcuts list
-- make the manual save button have some indicator that you successfully saved
 - fix save button having save shortcut which doesnt work on zen because control s is compact mode, ensure the shortcut is actually implemented? im not sure it is
-- make an actual icon for save button rather then just the download one
 - set folder for flows to save at persistantly using filesystem api in chrome... ugh it sux this wont work in firefox, some way to work around this?
 - Undo deleting flow
 - Extemp debate preset
-- MAKE FUN MODE setting NOT SAVE
 - make the randomize settings button not randomize the fun mode setting, and maybe clean up the code so fun mode stuff is not in the main settings .ts file
 - oh also make randomize settings not randomize telemetry, i think that is a violation of gdpr n stuff
 - are we respecting of global privacy control?
@@ -85,7 +88,6 @@
     - could be you select cards and then push shift enter/ the button to make argument right
     - how does this get saved
 - fix that enabling pacing setting does not update without a refresh or at least clarify that like some other settings do
-- fix description of shift + arrow setting to say "Shift + arrow selects cells"
 - some way to suggest things or give feedback yknow
     - through already existing posthog integration?
     - link to github issues maker?

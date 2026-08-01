@@ -138,6 +138,8 @@ class Settings {
 	convertSettingsToJson(includeDefaults?: boolean): string {
 		const jsonSettingsData: { [key: string]: number | boolean | string | Hexcode } = {};
 		for (const key of Object.keys(this.data)) {
+			// fun mode should never be saved
+			if (key === 'funMode') continue;
 			if (this.data[key].value != this.data[key].auto || includeDefaults) {
 				jsonSettingsData[key] = this.data[key].value;
 				if (this.data[key].type == 'radio') {
@@ -780,7 +782,7 @@ export const settings: Settings = new Settings({
 		info: 'Reload for these changes to take effect'
 	},
 	shiftArrowThroughCells: {
-		name: 'Shift + arrow navigates cells (instead of selecting text)',
+		name: 'Shift + arrow selects cells',
 		value: true,
 		auto: true,
 		type: 'toggle'

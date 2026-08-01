@@ -233,7 +233,7 @@
 			],
 			showSaveButton: [
 				{
-					icon: saved ? 'check' : 'download',
+					icon: saved ? 'check' : 'save',
 					onclick: handleSave,
 					tooltip: saved ? 'saved!' : 'save',
 					shortcut: ['commandControl', 's']

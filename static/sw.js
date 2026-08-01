@@ -1,4 +1,4 @@
-const CACHE_NAME = 'flew-notes-v1.2';
+const CACHE_NAME = 'flew-notes-v1.2.1'; // you MUST change package.json AND version.ts when you change version
 const PRECACHE = ['/', '/favicon.png', '/manifest.json'];
 
 self.addEventListener('install', (event) => {
@@ -38,19 +38,18 @@ self.addEventListener('fetch', (event) => {
 		return;
 	}
 
-	// Same-origin assets: cache first, network fallback
+	// Same-origin assets: network first, cache fallback (cache is only for offline)
 	if (url.origin === location.origin) {
 		event.respondWith(
-			caches.match(event.request).then((cached) => {
-				if (cached) return cached;
-				return fetch(event.request).then((response) => {
+			fetch(event.request)
+				.then((response) => {
 					if (response.ok) {
 						const clone = response.clone();
 						caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
 					}
 					return response;
-				});
-			})
+				})
+				.catch(() => caches.match(event.request))
 		);
 		return;
 	}

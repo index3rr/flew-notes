@@ -16,6 +16,16 @@
 	<div class="scroll">
 		<section>
 			<div class="above">
+				<h2>v1.2.1</h2>
+			</div>
+			<ul>
+				<li>manual save button now shows a checkmark and "saved!" tooltip when you save</li>
+				<li>fixed description of shift + arrow setting to say "Shift + arrow selects cells"</li>
+				<li>added a dedicated save icon for the manual save button</li>
+				<li>fun mode setting is no longer saved</li>
+				<li>service worker now only caches for offline use (network-first), and is skipped in dev mode</li>
+			</ul>
+			<div class="above">
 				<h2>v1.2.0</h2>
 			</div>
 			<ul>

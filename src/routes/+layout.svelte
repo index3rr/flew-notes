@@ -6,6 +6,7 @@
 	import { initTelemetry, shouldShowExtraPopup, markExtraPopupShown, type TelemetryTier } from '$lib/models/telemetry';
 
 	import { onDestroy, onMount } from 'svelte';
+	import { dev } from '$app/environment';
 	import {
 		giveGuestHostKey,
 		initGuestConnection,
@@ -329,7 +330,7 @@
 			}, 1000);
 		}
 
-		if ('serviceWorker' in navigator) {
+		if (!dev && 'serviceWorker' in navigator) {
 			navigator.serviceWorker.register('/sw.js');
 		}
 	});

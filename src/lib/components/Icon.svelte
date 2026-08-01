@@ -41,6 +41,12 @@
 <path d="M50 66L50 14" stroke-width="10" stroke-linecap="round"/>`
 		},
 		{
+			name: 'save',
+			svg: `<path d="M20 10H70L90 30V80C90 85.5228 85.5228 90 80 90H20C14.4772 90 10 85.5228 10 80V20C10 14.4772 14.4772 10 20 10Z" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M30 10V40H65V10" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M30 90V60H70V90" stroke-width="10" stroke-linecap="round"/>`
+		},
+		{
 			name: 'upload',
 			svg: `<path d="M29 37L50 14L71 37" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M20 85L80 85" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
