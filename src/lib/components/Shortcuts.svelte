@@ -23,6 +23,7 @@
 				{ keys: ['commandControl', 'shift', 'n'], description: 'Create new secondary flow' },
 				{ keys: ['commandControl', 'z'], description: 'Undo' },
 				{ keys: ['commandControl', 'shift', 'z'], description: 'Redo' },
+				{ keys: ['commandControl', 's'], description: 'Save flow' },
 				{ keys: ['commandControl', 'option', 'up'], description: 'Switch to previous tab', note: 'Only when multiple flows open' },
 				{ keys: ['commandControl', 'option', 'down'], description: 'Switch to next tab', note: 'Only when multiple flows open' }
 			]
@@ -57,6 +58,8 @@
 				{ keys: ['commandControl', 'shift', 'x'], description: 'Toggle crossed out', note: 'Not available on extension cells' },
 				{ keys: ['control', 'l'], description: 'Fold / collapse cell', note: 'Only when cell has children' },
 				{ keys: ['commandControl', 'e'], description: 'Extend cell', note: 'Not available on extension cells' },
+				{ keys: ['commandControl', 'c'], description: 'Copy cell' },
+				{ keys: ['commandControl', 'x'], description: 'Cut cell', note: 'Only when no text is selected' },
 				{ keys: ['backspace'], description: 'Delete cell', note: 'Only when empty and has no children' },
 				{ keys: ['commandControl', 'backspace'], description: 'Force delete cell', note: 'Only when cell has no children' }
 			]

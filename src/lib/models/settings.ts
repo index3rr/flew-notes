@@ -203,6 +203,8 @@ class Settings {
 	}
 	randomize() {
 		for (const key in this.data) {
+			// never randomize fun mode or telemetry (gdpr)
+			if (key === 'funMode' || key === 'telemetry') continue;
 			const setting = this.data[key];
 			if (setting.type == 'slider') {
 				this.setValue(
@@ -797,8 +799,7 @@ export const settings: Settings = new Settings({
 		name: 'Enable pacing',
 		type: 'toggle',
 		value: false,
-		auto: false,
-		info: 'Reload for these changes to take effect (will be fixed.. someday)'
+		auto: false
 	},
 	pacingGracePeriod: {
 		name: 'Grace period (seconds)',

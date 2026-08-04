@@ -4,6 +4,13 @@
 - added a dedicated save icon for the manual save button
 - fun mode setting is no longer saved
 - service worker now only caches for offline use (network-first), and is skipped in dev mode
+- randomize settings button no longer randomizes fun mode or telemetry
+- enabling pacing now takes effect immediately without a refresh
+- fixed focus going nowhere when deleting a box made with the plus button on a column header
+- added a "suggest a feature" button in the help popup that links to the GitHub issues page
+- documented the save, copy, and cut shortcuts in the shortcuts list
+- telemetry now respects the Global Privacy Control browser signal
+- focused box now stays a comfortable distance from the edges of the scroll area
 
 # 1.2 changes
 - telemetry
@@ -71,27 +78,22 @@
     - names for guests in collab
     - view only guests (for opponents?) locked to only speeches that have already been given
     - im unsure how small of a feature this is, webrtc code based sharing? instead of copy paste? could be part of flew share
+    - an easier way to do quick webrtc handshake is you scan a qr code on your phone, it brings up that same qr code on your phone which you can scan into another computer since it would be awkward doing it with just 2 computers pointing webcam at screen
+    - clear indicator that when you are offline and running from cached serviceworker assets that things are NOT going to work!, switch sharing icon to globe crossed out to indicate no internet, grey out, and tooltip that says youre offline, sharing disabled
+- history changes
+    - make it so you can undo deleting a flow page
+    - complete google docs style version history
 
 
 ## Small features/fixes (..X releases)
-- evaluate if switching to the AGPL is possible (gpl kind of does not work for this project to ensure free-ness since its served over web)
-- document the shortcuts we've added in the shortcuts list
-- fix save button having save shortcut which doesnt work on zen because control s is compact mode, ensure the shortcut is actually implemented? im not sure it is
-- set folder for flows to save at persistantly using filesystem api in chrome... ugh it sux this wont work in firefox, some way to work around this?
-- Undo deleting flow
-- Extemp debate preset
-- make the randomize settings button not randomize the fun mode setting, and maybe clean up the code so fun mode stuff is not in the main settings .ts file
-- oh also make randomize settings not randomize telemetry, i think that is a violation of gdpr n stuff
-- are we respecting of global privacy control?
-- when focus on a box changes, it shouldnt just scroll into frame, it should make sure its not too close to the edge of the window
+- evaluate if switching to the AGPL is possible, if so do it, actually tell me to do it since it would be a waste of tokens to write it out yourself (gpl kind of does not work for this project to ensure free-ness since its served over web)
 - a good way to group cards to respond
     - could be you select cards and then push shift enter/ the button to make argument right
     - how does this get saved
-- fix that enabling pacing setting does not update without a refresh or at least clarify that like some other settings do
-- some way to suggest things or give feedback yknow
-    - through already existing posthog integration?
-    - link to github issues maker?
-- when you push the plus thing on top of a column in the flow, and then delete the resulting box it makes, your focus goes to nothing, im unsure what it should go to though
 - both shift enter and enter can navigate and make new boxes at any pace, alt enter for making a box above can navigate them fast but cant make them fast instead it seemingly waits for the animation to finish
-- an easier way to do quick webrtc handshake is you scan a qr code on your phone, it brings up that same qr code on your phone which you can scan into another computer since it would be awkward doing it with just 2 computers pointing webcam at screen
-- simple editable title for flow
+- simple editable title for flow, put it above the tabscroll bit with the list of flows, maybe make the font size a litle larger for the title, and make it white with a placeholder text "new flow" so you know its a title, and make all of that save and syncronize and stuff, make file downloads have that name by default
+
+## dont work on yet
+- fix save button having save shortcut which doesnt work on zen because control s is compact mode, ensure the shortcut is actually implemented? im not sure it is
+- set folder for flows to save at persistantly using filesystem api in chrome... ugh it sux this wont work in firefox, some way to work around this?
+- Extemp debate preset

@@ -117,6 +117,7 @@
 	let columnCount: number = getColumnCount();
 
 	let textarea: any = undefined;
+	let element: HTMLDivElement;
 
 	let childFocus: boolean = false;
 	let childFocusIds: Set<BoxId | FlowId> = new Set();
@@ -131,12 +132,49 @@
 
 	let mounted = false;
 	let lastFocus = $focusId;
+	// keeps the focused box a comfortable distance from the edges of the scroll container:
+	// scrolls when the focused box has less than 50px of clearance from the edge,
+	// and brings it to at least 200px from the edge
+	function scrollIntoViewWithMargin() {
+		// textarea here is a Text component instance, not a DOM element,
+		// so query the real DOM textarea from the bound root element.
+		// Scope to .content so we don't pick up descendant boxes' textareas
+		// (descendants live in .children, not .content).
+		const textareaEl = element?.querySelector<HTMLTextAreaElement>('.content textarea');
+		if (textareaEl == null) return;
+		// find the scrollable ancestor (the flow's content container)
+		let container: HTMLElement | null = textareaEl.parentElement;
+		while (container != null) {
+			const style = getComputedStyle(container);
+			if (style.overflowY === 'auto' || style.overflowY === 'scroll') break;
+			container = container.parentElement;
+		}
+		if (container == null) return;
+		const containerTop = container.getBoundingClientRect().top;
+		const boxTop = textareaEl.getBoundingClientRect().top - containerTop;
+		const boxBottom = textareaEl.getBoundingClientRect().bottom - containerTop;
+		const triggerThreshold = 50; // trigger when the box has less than 50px of clearance
+		const scrollPadding = 200; // scroll the box to at least 200px from the edge
+		if (boxTop < triggerThreshold) {
+			container.scrollTop += boxTop - scrollPadding;
+		} else if (boxBottom > container.clientHeight - triggerThreshold) {
+			container.scrollTop += boxBottom - (container.clientHeight - scrollPadding);
+		}
+	}
 	function focusChange() {
 		if ($focusId == id) {
 			dispatchSelfFocus(id, true);
 			if (node.level >= 1 && mounted) {
 				// Only change focus if the element is mounted to avoid double call (one call made pre-mount) lag
-				textarea && textarea.focus();
+				// focus the real DOM textarea with preventScroll so the browser's native scroll
+				// doesn't fire, letting us control scrolling ourselves
+				const textareaEl = element?.querySelector<HTMLTextAreaElement>('.content textarea');
+				if (textareaEl) {
+					textareaEl.focus({ preventScroll: true });
+				}
+				scrollIntoViewWithMargin();
+				// fallback: correct the scroll after any native focus scroll happens
+				requestAnimationFrame(() => scrollIntoViewWithMargin());
 			}
 		} else if (lastFocus == id) {
 			dispatchSelfFocus(id, false);
@@ -447,18 +485,53 @@
 				focusSelf();
 				// focus on previous child of deleted
 			} else if (node.children[childIndex - 1]) {
-				focusChild(childIndex - 1, 0);
+				focusChildSkipEmpty(childIndex - 1, 0);
 				// focus on parent when empty
 			} else if (node.children.length == 0) {
-				focusSelf();
+				// never focus an invisible empty placeholder box: focus the first real box of the flow instead
+				if (box?.empty || box == null) {
+					focusFirstBoxInFlow();
+				} else {
+					focusSelf();
+				}
 				// focus on first child if deleted first child
 			} else if (childIndex == 0) {
-				focusChild(0, 0);
+				focusChildSkipEmpty(0, 0);
 			}
 			return true;
 		} else {
-			focusChild(0, 0);
+			focusChildSkipEmpty(0, 0);
 			return false;
+		}
+	}
+	// same as focusChild but never lands on an empty placeholder box
+	// (empty boxes are invisible and focusing them looks like focus went away)
+	function focusChildSkipEmpty(childIndex: number, direction: number) {
+		let newChildIndex = childIndex + direction;
+		if (newChildIndex < 0 || newChildIndex >= node.children.length) {
+			focusFirstBoxInFlow();
+			return;
+		}
+		let child = $nodes[node.children[newChildIndex]];
+		if (child == null) {
+			focusFirstBoxInFlow();
+			return;
+		}
+		if (child.value.tag == 'box' && child.value.empty) {
+			// descend through empty boxes to the first real one
+			let targetId: BoxId | FlowId = node.children[newChildIndex];
+			let targetNode = $nodes[targetId];
+			while (targetNode != null && targetNode.value.tag == 'box' && targetNode.value.empty) {
+				if (targetNode.children.length > 0) {
+					targetId = targetNode.children[0];
+					targetNode = $nodes[targetId];
+				} else {
+					break;
+				}
+			}
+			$focusId = targetId;
+		} else {
+			$focusId = node.children[newChildIndex];
 		}
 	}
 	function focusChild(childIndex: number, direction: number, defaultToSelf?: boolean) {
@@ -565,6 +638,31 @@
 		} else {
 			$focusId = id;
 		}
+	}
+	// focuses the first real (non-empty) box in the flow, used when deleting
+	// a box created by the plus button on a column header so focus doesn't get lost
+	function focusFirstBoxInFlow() {
+		// walk up through empty ancestors to the flow root
+		let currentId: BoxId | FlowId = id;
+		let currentNode = $nodes[currentId];
+		while (currentNode != null && currentNode.value.tag == 'box') {
+			currentId = currentNode.parent as BoxId | FlowId;
+			currentNode = $nodes[currentId];
+		}
+		const flowNode = $nodes[currentId];
+		if (flowNode == null || flowNode.children.length == 0) return;
+		// descend through empty boxes to the first real box
+		let targetId: BoxId | FlowId = flowNode.children[0];
+		let targetNode = $nodes[targetId];
+		while (targetNode != null && targetNode.value.tag == 'box' && targetNode.value.empty) {
+			if (targetNode.children.length > 0) {
+				targetId = targetNode.children[0];
+				targetNode = $nodes[targetId];
+			} else {
+				break;
+			}
+		}
+		$focusId = targetId;
 	}
 	function blurSelf() {
 		if ($focusId == id) {
@@ -769,6 +867,7 @@
 	class:childFocus
 	class:activeMouse={$activeMouse}
 	class:highlight={childFocus || $focusId == id}
+	bind:this={element}
 	in:boxIn={{ skip: box == null }}
 	out:boxOut={{ skip: box == null }}
 >

@@ -34,6 +34,14 @@
 		})
 	);
 
+	let pacingEnabled = settings.data.pacingEnabled.value as boolean;
+	onDestroy(
+		settings.subscribe(['pacingEnabled'], (key: string) => {
+			pacingEnabled = settings.data[key].value as boolean;
+			update = !update;
+		})
+	);
+
 	function resetStates() {
 		let newStates: typeof states = {
 			speech: {
@@ -64,7 +72,6 @@
 
 	$: currentSpeech = debateStyle.timerSpeeches[states.speech.resetTimeIndex];
 	$: pacingPalette = currentSpeech?.secondary ? 'accent-secondary' : 'accent';
-	$: pacingEnabled = settings.data.pacingEnabled.value as boolean;
 </script>
 
 <div class="top">

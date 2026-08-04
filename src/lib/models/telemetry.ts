@@ -16,12 +16,21 @@ let errorListenersAdded = false;
 let funModeActive = false;
 const settingsBuffer: Record<string, unknown> = {};
 
+// respect Global Privacy Control: https://globalprivacycontrol.org/
+// when the browser signals it, telemetry is always treated as disabled
+export function isGlobalPrivacyControlEnabled(): boolean {
+	return (
+		typeof navigator !== 'undefined' &&
+		(navigator as { globalPrivacyControl?: boolean }).globalPrivacyControl === true
+	);
+}
+
 export function getTierName(tier: TelemetryTier): string {
 	return TIER_NAMES[tier];
 }
 
 export function initTelemetry(tier: TelemetryTier, ref?: string) {
-	if (tier === 0) {
+	if (tier === 0 || isGlobalPrivacyControlEnabled()) {
 		shutdownTelemetry();
 		return;
 	}
@@ -63,14 +72,17 @@ export function shutdownTelemetry() {
 }
 
 function isActive(): boolean {
+	if (isGlobalPrivacyControlEnabled()) return false;
 	return initialized && currentTier > 0;
 }
 
 function isUsageOrAbove(): boolean {
+	if (isGlobalPrivacyControlEnabled()) return false;
 	return initialized && currentTier >= 2;
 }
 
 function isAllOrAbove(): boolean {
+	if (isGlobalPrivacyControlEnabled()) return false;
 	return initialized && currentTier >= 3;
 }
 

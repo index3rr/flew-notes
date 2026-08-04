@@ -19,10 +19,13 @@
 				<h2>v1.2.1</h2>
 			</div>
 			<ul>
-				<li>manual save button now has an icon and indicated when you have successfully saved</li>
-				<li>Changed descriptions</li>
+				<li>Save button improvements</li>
+				<li>Changed setting description</li>
+				<li>The current focus will scroll into frame with padding</li>
 				<li>Fun mode will no longer persist upon refreshing</li>
 				<li>Offline usage improvements</li>
+				<li>All shortcuts now documented</li>
+				<li>Now 220% more GDPR compliant!</li>
 			</ul>
 			<div class="above">
 				<h2>v1.2.0</h2>
