@@ -30,7 +30,10 @@
 
 	onDestroy(
 		settings.subscribe([...panelIds], (key: string) => {
-			panelValues[key as PanelId] = settings.data[key].value as number;
+			panelValues = {
+				...panelValues,
+				[key as PanelId]: settings.data[key].value as number
+			};
 		})
 	);
 
@@ -56,9 +59,9 @@
 	<div class="panel-container" class:customScrollbar={settings.data.customScrollbar.value}>
 		{#each activePanels as panel, i}
 			{#if i > 0}
-				<div class="divider"></div>
+				<div class="divider" />
 			{/if}
-			<div class="panel">
+			<div class="panel" class:auto-size={panel.id === 'timersPanel'}>
 				{#if panel.id === 'tabsPanel'}
 					<TabsPanel {selectedFlowId} {clickTab} {addFlow} {handleSort} bind:switchSpeakers />
 				{:else if panel.id === 'timersPanel'}
@@ -75,13 +78,14 @@
 	.panel-container {
 		background: var(--background);
 		width: 100%;
-		height: var(--main-height);
 		border-radius: var(--border-radius);
 		padding: var(--padding);
 		box-sizing: border-box;
 		display: flex;
 		flex-direction: column;
 		overflow-y: auto;
+		flex: 1;
+		min-height: 0;
 	}
 	.panel {
 		flex: 1;
@@ -89,6 +93,11 @@
 		display: flex;
 		flex-direction: column;
 		overflow: hidden;
+	}
+	.panel.auto-size {
+		flex: 0 0 auto;
+		min-height: auto;
+		overflow: visible;
 	}
 	.divider {
 		height: 0;

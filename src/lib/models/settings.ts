@@ -106,9 +106,15 @@ class Settings {
 				} else if (s.type === 'radio') {
 					this.setValue(k, Math.floor(Math.random() * s.detail.options.length));
 				} else if (s.type === 'color') {
-					const r = Math.floor(Math.random() * 256).toString(16).padStart(2, '0');
-					const g = Math.floor(Math.random() * 256).toString(16).padStart(2, '0');
-					const b = Math.floor(Math.random() * 256).toString(16).padStart(2, '0');
+					const r = Math.floor(Math.random() * 256)
+						.toString(16)
+						.padStart(2, '0');
+					const g = Math.floor(Math.random() * 256)
+						.toString(16)
+						.padStart(2, '0');
+					const b = Math.floor(Math.random() * 256)
+						.toString(16)
+						.padStart(2, '0');
 					this.setValue(k, ('#' + r + g + b) as Hexcode);
 				}
 			}, 10)
@@ -689,7 +695,7 @@ export const settings: Settings = new Settings({
 		}
 	},
 	sidebarWidth: {
-		name: 'Sidebar width',
+		name: 'Left panel width',
 		value: 184,
 		auto: 184,
 		type: 'slider',
@@ -757,7 +763,7 @@ export const settings: Settings = new Settings({
 		}
 	},
 	panelWidth: {
-		name: 'Panel width',
+		name: 'Right panel width',
 		value: 300,
 		auto: 300,
 		type: 'slider',
@@ -871,7 +877,7 @@ export const settingsGroups: SettingsGroup[] = [
 	},
 	{
 		name: 'Panels',
-		settings: ['tabsPanel', 'timersPanel', 'notesPanel']
+		settings: ['tabsPanel', 'timersPanel', 'notesPanel', 'sidebarWidth', 'panelWidth']
 	},
 	{
 		name: 'Colors',
@@ -933,7 +939,7 @@ export const settingsGroups: SettingsGroup[] = [
 	},
 	{
 		name: 'Spacing',
-		settings: ['columnWidth', 'sidebarWidth', 'panelWidth', 'buttonSize', 'padding', 'gap']
+		settings: ['columnWidth', 'buttonSize', 'padding', 'gap']
 	},
 	{
 		name: 'Borders',
@@ -957,7 +963,10 @@ export const settingsGroups: SettingsGroup[] = [
 		name: 'Scrollbars',
 		settings: ['customScrollbar', 'customScrollbarWidth']
 	},
-	{ name: 'Controls', settings: ['consistentEnterBehaviour', 'tabReturnsToParent', 'shiftArrowThroughCells'] },
+	{
+		name: 'Controls',
+		settings: ['consistentEnterBehaviour', 'tabReturnsToParent', 'shiftArrowThroughCells']
+	},
 	{
 		name: 'Pacing',
 		settings: ['pacingEnabled', 'pacingGracePeriod']
