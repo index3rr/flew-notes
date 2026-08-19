@@ -26,6 +26,7 @@
 				<li>Offline usage improvements</li>
 				<li>All shortcuts now documented</li>
 				<li>Now 220% more GDPR compliant!</li>
+				<li>Prevents extinction</li>
 			</ul>
 			<div class="above">
 				<h2>v1.2.0</h2>
