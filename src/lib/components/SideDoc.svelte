@@ -1,10 +1,11 @@
 <script lang="ts">
 	import { settings } from '$lib/models/settings';
 	import { sideDocText } from '$lib/models/store';
+	export let editable = true;
 </script>
 
 <div class="document">
-	<textarea class="text" placeholder="type notes here" bind:value={$sideDocText} class:customScrollbar={settings.data.customScrollbar.value}/>
+	<textarea class="text" placeholder={editable ? 'type notes here' : 'Notes are not editable when a flow is not open'} bind:value={$sideDocText} readonly={!editable} class:readonly={!editable} class:customScrollbar={settings.data.customScrollbar.value}/>
 </div>
 
 <style>
@@ -41,4 +42,5 @@
 	.text::placeholder {
 		color: var(--text-weak);
 	}
+	.text.readonly { color: var(--text-weak); cursor: default; }
 </style>

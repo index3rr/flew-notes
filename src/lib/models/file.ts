@@ -59,9 +59,7 @@ export function importSettingsJson(data: {[key: string]: any}) {
 		return;
 	}
 
-	if (data["version"] != SETTINGS_VERSION) {
-		return; // Handle upgrading settings here if needed in the future
-	}
+	if (data['version'] > SETTINGS_VERSION) return;
 
 	try {
 		settings.parseJsonToSettings(data);

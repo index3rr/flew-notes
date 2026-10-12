@@ -59,6 +59,8 @@ export type Box = {
 	placeholder?: string;
 	empty?: boolean;
 	crossed?: boolean;
+	starred?: boolean;
+	starNote?: string;
 	bold?: boolean;
 	isExtension?: boolean;
 };

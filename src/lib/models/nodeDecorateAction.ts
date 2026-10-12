@@ -111,6 +111,8 @@ export function buildPasteActions(
 		if (box.value.crossed != null) value.crossed = box.value.crossed;
 		if (box.value.bold != null) value.bold = box.value.bold;
 		if (box.value.isExtension != null) value.isExtension = box.value.isExtension;
+		if (box.value.starred != null) value.starred = box.value.starred;
+		if (box.value.starNote != null) value.starNote = box.value.starNote;
 		if (box.value.placeholder != null) value.placeholder = box.value.placeholder;
 		actions.push({ tag: 'add', parent, id, index, value });
 		if (box.children.length > 0) {
@@ -194,7 +196,7 @@ export const addNewFlow = decorate(function (
 export const toggleBoxFormat = decorate(function (
 	nodes: Nodes,
 	id: BoxId,
-	format: 'bold' | 'crossed'
+	format: 'bold' | 'crossed' | 'starred'
 ) {
 	const box = getNode(nodes, id).unwrap();
 	return {

@@ -1,6 +1,6 @@
 import { trackSettingChanged, setFunMode } from './telemetry';
 
-export const SETTINGS_VERSION = 1;
+export const SETTINGS_VERSION = 2;
 
 type SettingBasic<T> = {
 	name: string;
@@ -169,6 +169,10 @@ class Settings {
 		}
 
 		const settingsData = jsonData as SaveableSettings;
+		// In the panels fork, existing users who had Notes visible should find it on the right.
+		const migrateNotesPanel =
+			(settingsData.version ?? 0) < 2 &&
+			(settingsData.settings['notesPanel'] === 1 || settingsData.settings['notesPanel'] === 2);
 
 		try {
 			for (const key in settingsData.settings) {
@@ -182,6 +186,10 @@ class Settings {
 					}
 				}
 				this.setValue(key, settingsData['settings'][key] as number | boolean | Hexcode);
+			}
+			if (migrateNotesPanel) {
+				this.setValue('notesPanel', 2);
+				this.saveToLocalStorage();
 			}
 		} catch (e) {
 			localStorage.setItem('settings', JSON.stringify({}));
@@ -755,12 +763,26 @@ export const settings: Settings = new Settings({
 	},
 	notesPanel: {
 		name: 'Notes',
-		value: 0,
-		auto: 0,
+		value: 2,
+		auto: 2,
 		type: 'radio',
 		detail: {
 			options: ['Hidden', 'Left', 'Right']
 		}
+	},
+	starredPanel: {
+		name: 'Starred arguments',
+		value: 0,
+		auto: 0,
+		type: 'radio',
+		detail: { options: ['Hidden', 'Left', 'Right'] }
+	},
+	speechDropPanel: {
+		name: 'SpeechDrop',
+		value: 0,
+		auto: 0,
+		type: 'radio',
+		detail: { options: ['Hidden', 'Left', 'Right'] }
 	},
 	panelWidth: {
 		name: 'Right panel width',
@@ -877,7 +899,15 @@ export const settingsGroups: SettingsGroup[] = [
 	},
 	{
 		name: 'Panels',
-		settings: ['tabsPanel', 'timersPanel', 'notesPanel', 'sidebarWidth', 'panelWidth']
+		settings: [
+			'tabsPanel',
+			'notesPanel',
+			'starredPanel',
+			'timersPanel',
+			'speechDropPanel',
+			'sidebarWidth',
+			'panelWidth'
+		]
 	},
 	{
 		name: 'Colors',

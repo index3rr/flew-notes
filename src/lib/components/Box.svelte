@@ -197,6 +197,13 @@
 				}
 			}
 		},
+		'commandControl shift': {
+			s: {
+				handle: () => {
+					if (!box?.isExtension) formatSelf('starred');
+				}
+			}
+		},
 		commandControl: {
 			Backspace: {
 				handle: () => {
@@ -813,6 +820,9 @@
 				/>
 
 				<div class="text" class:crossed={box?.crossed} class:bold={box?.bold}>
+					{#if box?.starred}
+						<span class="star-marker" aria-label="Starred argument"><Icon name="star" size="0.85rem" /></span>
+					{/if}
 					{#if box != null}
 						<Text
 							on:keydown={handleKeydown}
@@ -929,6 +939,14 @@
 		padding: var(--padding);
 		position: relative;
 		z-index: 2;
+	}
+	.star-marker {
+		position: absolute;
+		top: 2px;
+		right: 2px;
+		color: var(--this-text);
+		z-index: 3;
+		pointer-events: none;
 	}
 	.text.crossed {
 		text-decoration: line-through;

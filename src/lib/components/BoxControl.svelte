@@ -223,6 +223,14 @@
 			],
 			showBoxFormatButtons: [
 				{
+					icon: 'star',
+					onclick: () => toggleFormat('starred'),
+					disabled: targetId == null || targetBox()?.value.isExtension,
+					tooltip: 'toggle starred argument',
+					toggled: targetBox()?.value?.starred,
+					disabledReason: targetBox()?.value.isExtension ? "can't star an extension" : disabledReason
+				},
+				{
 					icon: 'cross',
 					onclick: () => toggleFormat('crossed'),
 					disabled: targetId == null || targetBox()?.value.isExtension,

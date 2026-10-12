@@ -1,9 +1,10 @@
 <script lang="ts">
 	import SideDoc from '$lib/components/SideDoc.svelte';
+	export let editable = true;
 </script>
 
 <div class="notes-panel">
-	<SideDoc />
+	<SideDoc {editable} />
 </div>
 
 <style>

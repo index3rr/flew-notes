@@ -180,6 +180,18 @@ All theming uses CSS custom properties defined in `global.css`. Key variables: `
 
 Color themes are controlled by a `data-theme` attribute on `<html>` (light/dark/system/custom).
 
+## Visual Design Conventions
+
+Use the existing theme tokens and component patterns when adding UI:
+
+- The global typography is Merriweather Sans at `--font-weight` (light, 300). Use `--font-weight-bold` only for deliberate emphasis. Global `h1` and `h2` rules already set their sizes, weight, and margin.
+- Build spacing from `--padding`, `--padding-small`, `--padding-big`, and `--gap`. Use `--border-radius` for controls and `--border-radius-small` for tighter nested surfaces.
+- Prefer the shared `Button.svelte` and `ButtonBar.svelte` for icon actions. They provide the app's standard icon size, hover/active background, disabled state, tooltip, and palette behavior.
+- Flow-colored content uses `.palette-accent` or `.palette-accent-secondary`, which define `--this-text`, `--this-text-weak`, and the matching `--this-background-*` states. Use these classes instead of hard-coded side colors. Neutral surfaces use `.palette-plain` or `.palette-plain-secondary`.
+- Interactive controls are generally borderless and transparent at rest. Use `--this-background-indent` on hover and `--this-background-active` on active/selected controls, with the shared transition speed. Avoid adding boxed cards, outlines, shadows, or bespoke colors when the existing palette states express the same hierarchy.
+- Secondary labels and placeholders use `--this-text-weak` or `--text-weak`. Separators use `--color-fade`. Content areas inherit the theme text color and use tokenized padding.
+- Panel containers are vertical flex layouts. Let content panels grow when they should fill remaining space; set an explicit auto-size class for compact panels such as timers. Keep scrolling at the appropriate parent so content-driven panels contribute their full height.
+
 ## Conventions
 
 - Svelte stores follow the pattern: `_nodesMut` (writable, mutable), `nodes` (derived, read-only)

@@ -55,6 +55,7 @@
 			shortcuts: [
 				{ keys: ['commandControl', 'b'], description: 'Toggle bold', note: 'Not available on extension cells' },
 				{ keys: ['commandControl', 'shift', 'x'], description: 'Toggle crossed out', note: 'Not available on extension cells' },
+				{ keys: ['commandControl', 'shift', 's'], description: 'Toggle starred argument', note: 'Not available on extension cells' },
 				{ keys: ['control', 'l'], description: 'Fold / collapse cell', note: 'Only when cell has children' },
 				{ keys: ['commandControl', 'e'], description: 'Extend cell', note: 'Not available on extension cells' },
 				{ keys: ['backspace'], description: 'Delete cell', note: 'Only when empty and has no children' },

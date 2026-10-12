@@ -53,9 +53,9 @@
 	});
 
 	let hasRightPanels = false;
-	let panelSubUnsub = settings.subscribe(['tabsPanel', 'timersPanel', 'notesPanel'], () => {
+	let panelSubUnsub = settings.subscribe(['tabsPanel', 'timersPanel', 'notesPanel', 'starredPanel', 'speechDropPanel'], () => {
 		const leftVal = (k: string) => settings.data[k]?.value as number;
-		const rightCount = [leftVal('tabsPanel'), leftVal('timersPanel'), leftVal('notesPanel')].filter(
+		const rightCount = [leftVal('tabsPanel'), leftVal('timersPanel'), leftVal('notesPanel'), leftVal('starredPanel'), leftVal('speechDropPanel')].filter(
 			(v) => v === 2
 		).length;
 		hasRightPanels = rightCount > 0;
@@ -375,21 +375,21 @@
 					</div>
 				{/key}
 			{/if}
-			{#if hasRightPanels}
-				<div class="right-sidebar">
-					<PanelContainer
-						side="right"
-						selectedFlowId={$selectedFlowId}
-						{clickTab}
-						{addFlow}
-						{handleSort}
-						bind:switchSpeakers
-					/>
-				</div>
-			{/if}
 		{:else}
 			<div class="prelude">
 				<Prelude />
+			</div>
+		{/if}
+		{#if hasRightPanels}
+			<div class="right-sidebar">
+				<PanelContainer
+					side="right"
+					selectedFlowId={$selectedFlowId}
+					{clickTab}
+					{addFlow}
+					{handleSort}
+					bind:switchSpeakers
+				/>
 			</div>
 		{/if}
 	</div>
@@ -422,6 +422,10 @@
 	.grid.showPrelude {
 		grid-template-areas: 'sidebar prelude';
 		grid-template-columns: var(--sidebar-width) auto;
+	}
+	.grid.showPrelude:has(.right-sidebar) {
+		grid-template-areas: 'sidebar prelude right-sidebar';
+		grid-template-columns: var(--sidebar-width) minmax(0, 1fr) var(--panel-width);
 	}
 
 	.sidebar {
@@ -481,5 +485,8 @@
 		width: calc(100vw - var(--sidebar-width) - var(--gap) * 3);
 		height: var(--main-height);
 		grid-area: prelude;
+	}
+	.grid.showPrelude:has(.right-sidebar) .prelude {
+		width: auto;
 	}
 </style>
