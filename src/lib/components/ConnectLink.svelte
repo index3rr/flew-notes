@@ -2,13 +2,9 @@
 	import {
 		createConfirmLink,
 		createJoinLink,
-		giveHostGuestKey,
-		type Broadcast,
 		type Guest,
-		type Host,
-		type HostBroadcast
+		type Host
 	} from '$lib/models/sharingConnection';
-	import { onDestroy } from 'svelte';
 	import Button from './Button.svelte';
 	import CopyBox from './CopyBox.svelte';
 

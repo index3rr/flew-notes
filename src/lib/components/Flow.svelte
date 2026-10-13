@@ -13,8 +13,9 @@
 	let node: Node<Flow>;
 	$: {
 		// hold onto node when it's deleted
-		if ($nodes[flowId] != null) {
-			node = $nodes[flowId];
+		const currentNode = $nodes[flowId];
+		if (currentNode != null) {
+			node = currentNode;
 		}
 	}
 	$: flow = node.value;
@@ -41,7 +42,11 @@
 
 <div class="top" class:invert={flow.invert} style={`--column-count: ${flow.columns.length};`}>
 	<div class="viewer">
-		<div class="content" class:customScrollbar={settings.data.customScrollbar.value} on:scroll={fixScroll}>
+		<div
+			class="content"
+			class:customScrollbar={settings.data.customScrollbar.value}
+			on:scroll={fixScroll}
+		>
 			<Box id={flowId} />
 		</div>
 		<div class="headers">

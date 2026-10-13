@@ -15,6 +15,22 @@
 <div class="top palette-plain">
 	<div class="scroll">
 		<section>
+			<div class="above"><h2>v1.2.2</h2></div>
+			<ul>
+				<li>Join a shared room by scanning QR codes, alongside link and manual connect.</li>
+				<li>
+					Much smaller room and confirmation QR codes, making them easier to show through a phone
+					photo.
+				</li>
+				<li>
+					Improved collaboration across Firefox and Chromium, including connections through TURN
+					relays.
+				</li>
+				<li>Clearer camera and invalid QR code messages.</li>
+				<li>Sharing now shows when you are offline.</li>
+			</ul>
+		</section>
+		<section>
 			<div class="above">
 				<h2>v1.2.1</h2>
 			</div>
@@ -35,33 +51,23 @@
 				Pacing:
 				<ul>
 					<li>
-						Pacing is a feature that can be enabled in settings which will look at all non blank cells in your flow for the currently focused column, and when you start the timer, show a secondary timer for the current focused cell. If you read that cell in the time it gives you and move to the next one by pushing the down arrow, you should finish the speech with exactly the amount of seconds in the 'Grace Period' setting remaining to recap arguments, etc.
+						Pacing is a feature that can be enabled in settings which will look at all non blank
+						cells in your flow for the currently focused column, and when you start the timer, show
+						a secondary timer for the current focused cell. If you read that cell in the time it
+						gives you and move to the next one by pushing the down arrow, you should finish the
+						speech with exactly the amount of seconds in the 'Grace Period' setting remaining to
+						recap arguments, etc.
 					</li>
 				</ul>
+				<li>Added Cut/Copy/Paste. How did we live without it!</li>
+				<li>Added selection, Shift + Click/Arrows to use</li>
+				<li>Cell focus now wraps</li>
+				<li>Added optionally dotted lines</li>
+				<li>Added fun mode setting (EPILEPSY WARNING)</li>
 				<li>
-					Added Cut/Copy/Paste. How did we live without it!
+					Manual save button and shortcut (<Shortcut keys={['control', 's']} inline />)
 				</li>
-				<li>
-					Added selection, Shift + Click/Arrows to use
-				</li>
-				<li>
-					Cell focus now wraps 
-				</li>
-				<li>
-					Added optionally dotted lines
-				</li>
-				<li>
-					Added fun mode setting (EPILEPSY WARNING)
-				</li>
-				<li>
-					Manual save button and shortcut (<Shortcut
-						keys={['control', 's']}
-						inline
-					/>)
-				</li>
-				<li>
-					Prevents extinction
-				</li>
+				<li>Prevents extinction</li>
 				look at me mom, i can write normal patch notes!
 			</ul>
 		</section>
@@ -72,16 +78,23 @@
 			<ul>
 				<li>
 					this is where the fork happend!!!!!!! everything before this is from
-					<a href="https://github.com/Ashwagandhae/debate-flow"> https://github.com/Ashwagandhae/debate-flow</a>
+					<a href="https://github.com/Ashwagandhae/debate-flow">
+						https://github.com/Ashwagandhae/debate-flow</a
+					>
 				</li>
 				<li>
-					basically, i found this legal loophole called gpl3 which allows me to take this code for myself and then add my github to it and stuff and then improve apon it and offer it for free for the purposes of public good, that ?dude? (no pronouns on the other ?guys? github this is why i have to take over) must be so pissed 
+					basically, i found this legal loophole called gpl3 which allows me to take this code for
+					myself and then add my github to it and stuff and then improve apon it and offer it for
+					free for the purposes of public good, that ?dude? (no pronouns on the other ?guys? github
+					this is why i have to take over) must be so pissed
 				</li>
 				<li>
-					thought really hard about what i want to do and decided to move to netlify (if ya didnt know: vercel is tight with the big benny yahu)
+					thought really hard about what i want to do and decided to move to netlify (if ya didnt
+					know: vercel is tight with the big benny yahu)
 				</li>
 				<li>
-					oh my god bruh i talk like im an idiot when im trying to write stupid stuff to procrastinate doing actual work :// i swear im a normal person.
+					oh my god bruh i talk like im an idiot when im trying to write stupid stuff to
+					procrastinate doing actual work :// i swear im a normal person.
 				</li>
 			</ul>
 		</section>

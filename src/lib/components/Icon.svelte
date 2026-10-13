@@ -136,6 +136,19 @@
 <path d="M37.2721 37.2721L63.0815 63.0815" stroke-width="10" stroke-linecap="round"/>`
 		},
 		{
+			name: 'qr',
+			svg: `<rect x="10" y="10" width="32" height="32" stroke-width="7"/>
+<rect x="20" y="20" width="12" height="12" fill="currentColor" stroke="none"/>
+<rect x="58" y="10" width="32" height="32" stroke-width="7"/>
+<rect x="68" y="20" width="12" height="12" fill="currentColor" stroke="none"/>
+<rect x="10" y="58" width="32" height="32" stroke-width="7"/>
+<rect x="20" y="68" width="12" height="12" fill="currentColor" stroke="none"/>
+<rect x="58" y="58" width="10" height="10" fill="currentColor" stroke="none"/>
+<rect x="76" y="58" width="14" height="10" fill="currentColor" stroke="none"/>
+<rect x="58" y="76" width="10" height="14" fill="currentColor" stroke="none"/>
+<rect x="76" y="76" width="14" height="14" fill="currentColor" stroke="none"/>`
+		},
+		{
 			name: 'copy',
 			svg: `<path d="M20 73V73C17.2386 73 15 70.7614 15 68L15 19C15 13.4772 19.4772 9 25 9H60C62.7614 9 65 11.2386 65 14V14" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M35 38V82C35 87.5228 39.4772 92 45 92H75C80.5228 92 85 87.5228 85 82V38C85 32.4772 80.5228 28 75 28H45C39.4772 28 35 32.4772 35 38Z" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>`
@@ -144,6 +157,12 @@
 			name: 'file',
 			svg: `<path d="M17 20L17 80C17 85.5228 21.4772 90 27 90H72C77.5228 90 82 85.5228 82 80V35L57 10H27C21.4772 10 17 14.4771 17 20Z" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M52 10V40H82" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>`
+		},
+		{
+			name: 'offline',
+			svg: `<circle cx="50" cy="50" r="38" stroke="currentColor" stroke-width="8"/>
+<path d="M12 50H88M50 12C62 24 68 37 68 50C68 63 62 76 50 88M50 12C38 24 32 37 32 50C32 63 38 76 50 88" stroke="currentColor" stroke-width="7" stroke-linecap="round"/>
+<path d="M20 80L80 20" stroke="currentColor" stroke-width="10" stroke-linecap="round"/>`
 		},
 		{
 			name: 'people',

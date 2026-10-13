@@ -1,3 +1,13 @@
+# 1.2.2 changes
+- added optional TURN relay configuration for cross-network sharing; the Metered credential still needs to be set in the deploy environment
+- disabled the Share control while offline and added a crossed-out globe indicator
+- added QR scanning and display to the existing link handshake; chose this over room codes because it requires no separate signaling room service
+- reduced sharing QR payloads with lossless binary packing and a shared static dictionary, preserving all ICE candidates; added isolated browser tests for both scans and live collaboration
+- further reduced QR codes with fingerprint-derived credentials and session IDs, short candidate group labels, and compression of replies against the scanned offer; native credential fallback remains available
+- made QR codes smaller by selecting a verified TLS TURN endpoint when available, with full candidate fallback; added relay-only and delayed photo handoff tests
+- fixed guest QR generation stalling during Firefox-to-Chromium pairing; tested both mixed-browser directions and forced credential-override rejection
+- reduced verified relay QR codes to 29×29 modules using a compact data-channel template; both codes retain the full SHA-256 fingerprint and actual relay endpoint
+
 # 1.2.1 changes
 - manual save button now shows a checkmark and "saved!" tooltip when you save
 - fixed description of shift + arrow setting to say "Shift + arrow selects cells"
@@ -36,10 +46,8 @@
 
 ## Big features (.X. releases probably)
 - Panels: Actually dockable re-organizable windows like godot does, this already has a branch called panels
-    - star args to keep them in a panel
-    - speechdrop panel
+    - work being done on panels branch
     - link with cardmirror here
-    - this is probably our 2.0.0
 - Theming engine:
     - Transparency
     - Image background
@@ -79,21 +87,25 @@
     - view only guests (for opponents?) locked to only speeches that have already been given
     - im unsure how small of a feature this is, webrtc code based sharing? instead of copy paste? could be part of flew share
     - an easier way to do quick webrtc handshake is you scan a qr code on your phone, it brings up that same qr code on your phone which you can scan into another computer since it would be awkward doing it with just 2 computers pointing webcam at screen
-    - clear indicator that when you are offline and running from cached serviceworker assets that things are NOT going to work!, switch sharing icon to globe crossed out to indicate no internet, grey out, and tooltip that says youre offline, sharing disabled
+
 - history changes
     - make it so you can undo deleting a flow page
     - complete google docs style version history
 
 
 ## Small features/fixes (..X releases)
-- evaluate if switching to the AGPL is possible, if so do it, actually tell me to do it since it would be a waste of tokens to write it out yourself (gpl kind of does not work for this project to ensure free-ness since its served over web)
+high priority for collaboration:
+- set the Metered TURN app name and credential API key in Netlify (`VITE_METERED_APP_NAME` and `VITE_METERED_TURN_API_KEY`) so the relay is available to the deployed app
+
+
+- evaluate if switching to the AGPL is possible, if so do it,  do it  (gpl kind of does not work for this project to ensure free-ness since its served over web)
+- simple editable title for flow, put it above the tabscroll bit with the list of flows, maybe make the font size a litle larger for the title, and make it light colored with a placeholder text "new flow" so you know its a title, and make all of that save and syncronize and stuff, make file downloads have that name by default
+- fix save button having save shortcut which doesnt work on zen because control s is compact mode, and on chrome it doesnt work because its captured by saving the html of the page, google docs can capture control s just fine. you should be able to as well
+
+## dont work on yet
+
+- set folder for flows to save at persistantly using filesystem api in chrome... ugh it sux this wont work in firefox, some way to work around this?
+- Extemp debate preset
 - a good way to group cards to respond
     - could be you select cards and then push shift enter/ the button to make argument right
     - how does this get saved
-- both shift enter and enter can navigate and make new boxes at any pace, alt enter for making a box above can navigate them fast but cant make them fast instead it seemingly waits for the animation to finish
-- simple editable title for flow, put it above the tabscroll bit with the list of flows, maybe make the font size a litle larger for the title, and make it white with a placeholder text "new flow" so you know its a title, and make all of that save and syncronize and stuff, make file downloads have that name by default
-
-## dont work on yet
-- fix save button having save shortcut which doesnt work on zen because control s is compact mode, ensure the shortcut is actually implemented? im not sure it is
-- set folder for flows to save at persistantly using filesystem api in chrome... ugh it sux this wont work in firefox, some way to work around this?
-- Extemp debate preset

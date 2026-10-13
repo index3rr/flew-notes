@@ -16,16 +16,18 @@
 	} from '$lib/models/sharingConnection';
 	import ConnectManual from './ConnectManual.svelte';
 	import ConnectLink from './ConnectLink.svelte';
+	import ConnectQR from './ConnectQR.svelte';
 	import ConnectStatus from './ConnectStatus.svelte';
 	import { openPopup } from '$lib/models/popup';
 	import Changelog from './Changelog.svelte';
 	import Help from './Help.svelte';
 	import { onMount } from 'svelte';
 	import { connections } from '$lib/models/store';
+	import { hasTurnServerConfigured } from '$lib/models/iceServers';
 
 	export let closePopup = () => {};
 
-	let connectionMode: 'manual' | 'link' = 'link';
+	let connectionMode: 'manual' | 'link' | 'qr' = 'link';
 
 	let buildingConnection: Host | Guest | null = null;
 	$: {
@@ -48,13 +50,13 @@
 	});
 </script>
 
-<div class="top palette-plain">
+<div class="top palette-plain" class:qrMode={connectionMode == 'qr'}>
 	{#if $connections.tag == 'empty'}
 		<div class="start">
 			<div class="explain">
 				<p>
-					Flew Notes allows sharing through <a href="https://en.wikipedia.org/wiki/WebRTC">WebRTC</a>.
-					You can either
+					Flew Notes allows sharing through <a href="https://en.wikipedia.org/wiki/WebRTC">WebRTC</a
+					>. You can either
 					<span class="usePalette palette-accent">host</span>
 					a room to share your current flow, or edit someone else's flow as a
 					<span class="usePalette palette-accent-secondary">guest</span>.
@@ -81,6 +83,12 @@
 						inline
 					/> for more info.
 				</p>
+				{#if !hasTurnServerConfigured()}
+					<p class="turnWarning">
+						Cross-network sharing may need a TURN relay. Add the Metered settings documented in the
+						README to enable it.
+					</p>
+				{/if}
 			</div>
 			<div class="hostGuestButtons">
 				<div class="buttons">
@@ -114,6 +122,15 @@
 						/>
 					{/if}
 				</div>
+				{#if connectionMode == 'qr'}
+					<ConnectQR
+						connection={null}
+						on:join={(event) => {
+							initGuestConnection();
+							giveGuestHostKey(event.detail);
+						}}
+					/>
+				{/if}
 			</div>
 		</div>
 	{:else if $connections.tag == 'host' || $connections.tag == 'guest'}
@@ -166,19 +183,36 @@
 			{/if}
 		{:else if connectionMode == 'manual'}
 			<ConnectManual connection={buildingConnection} />
+		{:else if connectionMode == 'qr'}
+			<ConnectQR connection={buildingConnection} />
 		{:else}
 			<ConnectLink connection={buildingConnection} />
 		{/if}
 	{/if}
 	<div class="controls">
-		<Button
-			icon={connectionMode == 'manual' ? 'angleBrackets' : 'link'}
-			text={connectionMode == 'manual' ? 'using manual connect' : 'using link connect (default)'}
-			tooltip={connectionMode == 'manual' ? 'switch to link connect' : 'switch to manual connect'}
-			on:click={() => {
-				connectionMode = connectionMode == 'manual' ? 'link' : 'manual';
-			}}
-		/>
+		<div class="connectionModes" aria-label="Connection method">
+			<Button
+				icon="link"
+				text="link connect"
+				toggled={connectionMode == 'link'}
+				tooltip="connect by sharing links"
+				on:click={() => (connectionMode = 'link')}
+			/>
+			<Button
+				icon="qr"
+				text="QR code"
+				toggled={connectionMode == 'qr'}
+				tooltip="connect by scanning QR codes"
+				on:click={() => (connectionMode = 'qr')}
+			/>
+			<Button
+				icon="angleBrackets"
+				text="manual connect"
+				toggled={connectionMode == 'manual'}
+				tooltip="connect by copying and pasting keys"
+				on:click={() => (connectionMode = 'manual')}
+			/>
+		</div>
 		{#if $connections.tag != 'empty'}
 			{#if buildingConnection == null}
 				<Button
@@ -216,6 +250,12 @@
 		align-items: center;
 		gap: var(--padding);
 	}
+	.top.qrMode {
+		width: min(calc(100vw - var(--padding) * 2), 840px);
+	}
+	.turnWarning {
+		color: var(--text-weak);
+	}
 
 	.hostGuestButtons {
 		display: flex;
@@ -246,6 +286,13 @@
 		flex-direction: row;
 		gap: var(--padding);
 		justify-content: space-between;
+		flex-wrap: wrap;
+	}
+
+	.connectionModes {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--padding-small);
 	}
 
 	.buttons {
