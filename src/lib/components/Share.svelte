@@ -85,8 +85,16 @@
 				</p>
 				{#if !hasTurnServerConfigured()}
 					<p class="turnWarning">
-						Cross-network sharing may need a TURN relay. Add the Metered settings documented in the
-						README to enable it.
+						Cross-network sharing may be broken at the moment, please <Button
+						icon="delta"
+						text="Contact me!"
+						on:click={() => {
+							closePopup();
+							openPopup(Help, 'Contact');
+						}}
+						target="_blank"
+						inline
+					/>
 					</p>
 				{/if}
 			</div>
