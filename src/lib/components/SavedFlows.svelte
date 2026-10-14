@@ -1,12 +1,27 @@
 <script lang="ts">
-	import { MAX_SAVED_FLOWS, type SavedNodesDatas } from '$lib/models/autoSave';
+	import { type SavedNodesDatas } from '$lib/models/autoSave';
 	import { settings } from '$lib/models/settings';
 	import Button from './Button.svelte';
 	import SavedFlow from './SavedFlow.svelte';
+	import FlowLibrary from './FlowLibrary.svelte';
+	import { library, refreshLibrary, directFolderAccess } from '$lib/models/flowLibrary';
+	export let busy = false;
+	export let error = '';
 
 	export let savedFlowsDatas: SavedNodesDatas;
-	export let showTutorial: boolean = false;
 
+	async function up() {
+		if (busy) return;
+		busy = true;
+		error = '';
+		try {
+			await refreshLibrary($library.path.slice(0, -1));
+		} catch (e) {
+			error = (e as Error).message;
+		} finally {
+			busy = false;
+		}
+	}
 	$: sortedSavedFlowsDatas = Object.entries(savedFlowsDatas).sort(
 		(a, b) => new Date(b[1].modified).getTime() - new Date(a[1].modified).getTime()
 	);
@@ -15,23 +30,32 @@
 <div class="top">
 	<div class="above">
 		<div class="title">
-			<h1>saved flows</h1>
-			<Button
-				text="tutorial"
-				icon="undo"
-				tooltip="start tutorial"
-				on:click={() => (showTutorial = true)}
-			/>
+			<h1 title={[$library.name, ...$library.path].join(' / ')}>
+				{#if directFolderAccess && $library.name}Flows in {$library.path[
+						$library.path.length - 1
+					] ?? $library.name}{:else if !directFolderAccess}Local flows{:else}saved flows{/if}
+			</h1>
+			{#if directFolderAccess && $library.connected && $library.path.length}
+				<Button
+					icon="undo"
+					text="Up one folder"
+					tooltip="Go to the parent folder"
+					disabled={busy}
+					on:click={up}
+				/>
+			{/if}
 		</div>
-		<p>
-			up to {MAX_SAVED_FLOWS} flows saved in your browser but lost when you clear cookies
-		</p>
 	</div>
 	<div class="view" class:customScrollbar={settings.data.customScrollbar.value}>
 		<div class="flows">
-			{#each sortedSavedFlowsDatas as [key, flowData] (key)}
-				<SavedFlow {flowData} {key} />
-			{/each}
+			{#if directFolderAccess && $library.name}
+				<FlowLibrary bind:busy bind:error />
+			{/if}
+			{#if !$library.name || !directFolderAccess}
+				{#each sortedSavedFlowsDatas as [key, flowData], index (key)}
+					<SavedFlow {flowData} {key} alternate={index % 2 === 1} />
+				{/each}
+			{/if}
 		</div>
 	</div>
 </div>
@@ -62,7 +86,7 @@
 	.flows {
 		display: flex;
 		flex-direction: column;
-		gap: var(--padding);
+		gap: var(--padding-big);
 		padding: 0 var(--padding) 50vh var(--padding);
 	}
 	h1 {
@@ -70,16 +94,6 @@
 		padding: 0;
 		line-height: 1em;
 		white-space: nowrap;
-	}
-	p {
-		margin: 0;
-		padding: 0;
-		line-height: 1em;
-		white-space: nowrap;
-		/* ellipses overflow */
-		overflow: hidden;
-		text-overflow: ellipsis;
-		color: var(--text-weak);
 	}
 	.above {
 		display: flex;

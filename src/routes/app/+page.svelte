@@ -1,4 +1,19 @@
 <script lang="ts">
+	import Button from '$lib/components/Button.svelte';
+	import FlowLibrarySetup from '$lib/components/FlowLibrarySetup.svelte';
+	import { documentTitle } from '$lib/models/document';
+	import { restoreLibrary } from '$lib/models/flowLibrary';
+	import {
+		saveStatus,
+		dirty,
+		maybeSaveNodes,
+		saveNodes,
+		saveDocument,
+		openDocument,
+		documentOpen,
+		createDocument,
+		closeDocument
+	} from '$lib/models/autoSave';
 	import Flow from '$lib/components/Flow.svelte';
 	import Title from '$lib/components/Title.svelte';
 	import BoxControl from '$lib/components/BoxControl.svelte';
@@ -14,7 +29,7 @@
 	import { openPopup } from '$lib/models/popup';
 	import type { FlowId, Nodes } from '$lib/models/node';
 	import { onDestroy, onMount } from 'svelte';
-	import { activeMouse, flowsChange, nodes, pendingAction } from '$lib/models/store';
+	import { activeMouse, nodes, pendingAction, frozen } from '$lib/models/store';
 	import { createKeyDownHandler } from '$lib/models/key';
 	import Prelude from '$lib/components/Prelude.svelte';
 	import { loadNodes, importSettingsJson } from '$lib/models/file';
@@ -27,12 +42,45 @@
 	import { history } from '$lib/models/history';
 	import { focusId, lastFocusIds, selectedFlowId } from '$lib/models/focus';
 	import { isChangelogVersionCurrent } from '$lib/models/version';
-	import { addNewFlow, deleteFlow, moveFlow, replaceNodes } from '$lib/models/nodeDecorateAction';
+	import { addNewFlow, deleteFlow, moveFlow } from '$lib/models/nodeDecorateAction';
 	import { getDebateStyleFlow, type DebateStyleFlow } from '$lib/models/debateStyle';
 
 	$: unsavedChanges = $nodes.root.children.length > 0;
 	let isOnline = true;
+	let libraryBusy = false;
+	let libraryError = '';
+	async function toggleDocument() {
+		if (libraryBusy) return;
+		libraryBusy = true;
+		libraryError = '';
+		try {
+			if ($documentOpen) await closeDocument();
+			else await createDocument();
+		} catch (error) {
+			libraryError = (error as Error).message;
+		} finally {
+			libraryBusy = false;
+		}
+	}
 
+	onMount(() => {
+		libraryBusy = true;
+		void restoreLibrary().finally(() => {
+			libraryBusy = false;
+		});
+		const saveOnHide = () => {
+			if (document.visibilityState === 'hidden') void saveNodes();
+		};
+		const saveOnExit = () => {
+			void saveNodes();
+		};
+		window.addEventListener('pagehide', saveOnExit);
+		document.addEventListener('visibilitychange', saveOnHide);
+		return () => {
+			window.removeEventListener('pagehide', saveOnExit);
+			document.removeEventListener('visibilitychange', saveOnHide);
+		};
+	});
 	onMount(() => {
 		const updateOnlineStatus = () => (isOnline = navigator.onLine);
 		updateOnlineStatus();
@@ -61,7 +109,8 @@
 		);
 		// changes you made may not be saved
 		window.addEventListener('beforeunload', function (e) {
-			if (unsavedChanges && !dev) {
+			void saveNodes();
+			if ($dirty && !dev) {
 				let confirmationMessage = 'Are you sure you want to leave?';
 				e.returnValue = confirmationMessage;
 				return confirmationMessage;
@@ -69,6 +118,12 @@
 		});
 	});
 
+	let showSaveButton = settings.data.showSaveButton.value as boolean;
+	onDestroy(
+		settings.subscribe(['showSaveButton'], (key) => {
+			showSaveButton = settings.data[key].value as boolean;
+		})
+	);
 	let showSideDoc: boolean = settings.data['showSideDoc'].value as boolean;
 
 	onDestroy(
@@ -95,6 +150,7 @@
 	}
 
 	function addFlow(style: DebateStyleFlow) {
+		if (!$documentOpen || libraryBusy || $frozen) return;
 		blurFlow();
 		let id = addNewFlow($nodes.root.children.length, style, switchSpeakers);
 		if (id != null) {
@@ -144,7 +200,7 @@
 					if (style == null) return;
 					addFlow(style);
 				},
-				require: () => getDebateStyleFlow('primary') != null
+				require: () => $documentOpen && getDebateStyleFlow('primary') != null
 			}
 		},
 		'control shift': {
@@ -154,7 +210,7 @@
 					if (style == null) return;
 					addFlow(style);
 				},
-				require: () => getDebateStyleFlow('secondary') != null
+				require: () => $documentOpen && getDebateStyleFlow('secondary') != null
 			}
 		},
 		'commandControl shift': {
@@ -172,6 +228,13 @@
 			}
 		},
 		commandControl: {
+			s: {
+				handle: () => {
+					void saveDocument();
+				},
+				require: () => $documentOpen && !$frozen && !libraryBusy,
+				preventDefault: 'always'
+			},
 			z: {
 				handle: () => {
 					if ($selectedFlowId == null) return;
@@ -211,6 +274,18 @@
 			}
 		}
 	});
+	function handleDocumentTitleKeydown(e: KeyboardEvent) {
+		if (e.key !== 'Enter' || e.isComposing || e.repeat || $documentOpen || libraryBusy || $frozen)
+			return;
+		e.preventDefault();
+		e.stopPropagation();
+		void toggleDocument();
+	}
+	function handleEditorInput(e: Event) {
+		const target = e.target as HTMLElement;
+		if (target.matches('.document-title') || target.closest('.flow, .title, .side-doc'))
+			maybeSaveNodes();
+	}
 	function handleKeydown(e: KeyboardEvent) {
 		$activeMouse = false;
 		keyDownHandler(e);
@@ -262,7 +337,13 @@
 	}
 
 	async function handleUpload(data: string) {
-		let dataObj = JSON.parse(data);
+		let dataObj;
+		try {
+			dataObj = JSON.parse(data);
+		} catch {
+			openPopup(Message, 'File Message', { message: 'Invalid file', error: true });
+			return;
+		}
 		if (dataObj['isSettings']) {
 			importSettingsJson(dataObj);
 			return;
@@ -270,7 +351,7 @@
 
 		let newNodes: Nodes | null = null;
 		try {
-			newNodes = loadNodes(dataObj);
+			newNodes = loadNodes(dataObj, false);
 		} catch (e) {
 			openPopup(Message, 'File Message', {
 				message: 'Invalid file',
@@ -279,9 +360,7 @@
 		}
 		if (newNodes != null) {
 			if (!unsavedChanges || confirm('Are you sure you want to overwrite your current flows?')) {
-				replaceNodes(newNodes);
-				$selectedFlowId = null;
-				flowsChange();
+				await openDocument(data);
 				trackFileImported('json', newNodes.root.children.length);
 			}
 		}
@@ -323,6 +402,7 @@
 
 <svelte:body
 	on:keydown={handleKeydown}
+	on:input={handleEditorInput}
 	on:mousemove={handleMouseMove}
 	on:dragenter={preventDefault}
 	on:drop={readUploadDragged}
@@ -337,6 +417,7 @@
 					buttons={[
 						{
 							icon: 'link',
+							ariaLabel: 'Help',
 							onclick: () => openPopup(Help, 'Help'),
 							tooltip: $isChangelogVersionCurrent ? 'help' : 'new updates',
 							tutorialHighlight: 1,
@@ -350,6 +431,7 @@
 						},
 						{
 							icon: 'file',
+							ariaLabel: 'File',
 							onclick: () => openPopup(DownloadUpload, 'File'),
 							tooltip: 'file',
 							tutorialHighlight: 3
@@ -367,6 +449,52 @@
 					]}
 				/>
 			</div>
+			<div class="document-heading">
+				{#if showSaveButton}
+					<Button
+						icon={$saveStatus.startsWith('Saved') && !$dirty ? 'check' : 'save'}
+						ariaLabel="Save flow"
+						inline
+						tooltip={$saveStatus.startsWith('Saved') && !$dirty ? 'saved!' : 'save flow'}
+						disabled={!$documentOpen || $frozen || libraryBusy}
+						disabledReason="create a flow first"
+						shortcut={['commandControl', 's']}
+						on:click={() => saveDocument()}
+					/>
+				{/if}
+				<div class="document-name">
+					<input
+						class="document-title"
+						aria-label="Flow document title"
+						placeholder="new flow"
+						title={$documentTitle || 'new flow'}
+						disabled={$frozen}
+						bind:value={$documentTitle}
+						on:keydown={handleDocumentTitleKeydown}
+					/>
+				</div>
+				<Button
+					icon={$documentOpen ? 'delete' : 'add'}
+					ariaLabel={$documentOpen ? 'Close flow' : 'New flow'}
+					inline
+					tutorialHighlight={5}
+					tooltip={$documentOpen ? 'Close flow' : 'New flow'}
+					disabled={libraryBusy || $frozen}
+					disabledReason="library is busy"
+					on:click={toggleDocument}
+				/>
+			</div>
+			<p
+				class="save-status"
+				class:save-error={$saveStatus &&
+					$saveStatus !== 'Unsaved changes' &&
+					$saveStatus !== 'Saving…' &&
+					!$saveStatus.startsWith('Saved')}
+				role="status"
+			>
+				{$saveStatus}
+			</p>
+			{#if libraryError && $nodes.root.children.length}<p role="alert">{libraryError}</p>{/if}
 			<div class="tabs" class:customScrollbar={settings.data.customScrollbar.value}>
 				<div class="tabScroll">
 					<SortableList list={$nodes.root.children} on:sort={handleSort} let:index>
@@ -376,7 +504,11 @@
 							selected={$selectedFlowId == $nodes.root.children[index]}
 						/>
 					</SortableList>
-					<AddTab {addFlow} bind:switchSpeakers />
+					<AddTab
+						{addFlow}
+						disabled={!$documentOpen || libraryBusy || $frozen}
+						bind:switchSpeakers
+					/>
 				</div>
 			</div>
 			<div class="timer">
@@ -408,7 +540,10 @@
 			{/if}
 		{:else}
 			<div class="prelude">
-				<Prelude />
+				<FlowLibrarySetup bind:busy={libraryBusy} bind:error={libraryError} />
+				<div class="prelude-content">
+					<Prelude bind:busy={libraryBusy} bind:error={libraryError} />
+				</div>
 			</div>
 		{/if}
 	</div>
@@ -457,9 +592,48 @@
 		height: auto;
 		padding-bottom: var(--padding);
 	}
+	.document-heading {
+		display: flex;
+		align-items: center;
+	}
+	.document-name {
+		display: flex;
+		align-items: center;
+		gap: var(--padding-small);
+		flex: 1;
+		min-width: 0;
+	}
+
+	.document-title {
+		min-width: 0;
+		flex: 1;
+		font: inherit;
+		font-size: 1.2em;
+		color: var(--text);
+		background: none;
+		border: none;
+		padding: var(--padding) 0;
+		width: 100%;
+		box-sizing: border-box;
+	}
+	.document-title::placeholder {
+		color: var(--text-weak);
+	}
+	.save-status {
+		display: none;
+		font-size: 0.8em;
+		color: var(--text-weak);
+		margin: 0;
+		padding: 0 var(--padding);
+		overflow-wrap: anywhere;
+	}
+	.save-status.save-error {
+		display: block;
+	}
 	.tabs {
 		overflow-y: auto;
 		height: var(--main-height);
+		scrollbar-width: none;
 		box-sizing: border-box;
 		position: relative;
 	}
@@ -470,6 +644,9 @@
 		padding-bottom: calc(var(--view-height) * 0.6);
 	}
 
+	.tabs::-webkit-scrollbar {
+		display: none;
+	}
 	.title {
 		background: var(--background);
 		border-radius: var(--border-radius);
@@ -494,7 +671,19 @@
 		grid-area: flow;
 		height: var(--view-height);
 	}
+	.prelude-content {
+		display: flex;
+		flex-direction: column;
+		gap: var(--padding-big);
+		flex: 1;
+		min-height: 0;
+		overflow: auto;
+		position: relative;
+	}
 	.prelude {
+		display: flex;
+		flex-direction: column;
+		gap: var(--gap);
 		position: relative;
 		width: calc(100vw - var(--sidebar-width) - var(--gap) * 3);
 		height: var(--main-height);

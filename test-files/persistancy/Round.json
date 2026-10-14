@@ -1,0 +1,36 @@
+{
+	"version": 1,
+	"nodes": {
+		"root": {
+			"value": {
+				"tag": "root"
+			},
+			"level": -1,
+			"parent": null,
+			"children": ["flow-a"]
+		},
+		"flow-a": {
+			"value": {
+				"tag": "flow",
+				"content": "aff",
+				"invert": false,
+				"columns": ["1AC", "1NC"]
+			},
+			"level": 0,
+			"parent": "root",
+			"children": ["box-a"]
+		},
+		"box-a": {
+			"value": {
+				"tag": "box",
+				"content": "Original argument",
+				"flowId": "flow-a"
+			},
+			"level": 1,
+			"parent": "flow-a",
+			"children": []
+		}
+	},
+	"title": "Round",
+	"sideDocText": "Round notes"
+}

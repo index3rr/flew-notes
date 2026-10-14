@@ -1,3 +1,11 @@
+# 1.3.0 changes
+## persistancy update
+- chrome lets you set a folder for autosaving flows 
+- firefox import folder list 
+- flow titles
+- autosave and saving now work frfrfr
+- more tests....
+
 # 1.2.2 changes
 - fixed collaboration
 - qr code based connecting to rooms (side note: insane absurdly small qr codes for what they are)
@@ -43,6 +51,19 @@
 - 
 
 ## Big features (.X. releases probably)
+- Persistancy (completed in 1.3.0):
+    - set folder for flows to save at persistantly using filesystem api in chrome... ugh it sux this wont work in firefox, some way to work around this?
+    - essentially, i should be able to select some folder and when i open flew itll read all the flows there and let me select them, and also let me navigate folders and stuff so i can have a folder for my preflows at the top. i think the buttons that are in the 3 dots menu should be pulled out so its open, open copy (maybe call this duplicate), and deletee
+    - for this we need a simple editable title for flow, put it above the tabscroll bit with the list of tabs/flow pages, maybe make the font size a litle larger for the title, and make it light colored with a placeholder text "new flow" so you know its a title, and make that be the filename for the thing, when its empty name it something with the date and time in it by default i think
+    - add tests for this if you can which im unsure if you can
+    - implementation checklist: remember the selected folder, restore it on startup, and offer reconnect when browser permissions expire
+    - Firefox/Safari fallback: import a folder into a persistent browser library, keep its subfolders, and download edited JSON files back to disk
+    - protect existing files with unique filenames for new flows and duplicates; detect outside edits before overwriting
+    - save the final edit after typing stops, including the title and notes; flush pending text before manual saves and document switches
+    - show save/error status, keep browser recovery copies, and verify folder navigation, reopen, rename, duplicate, delete, and permission failures in browser tests
+    - completed: all items above, including manual-save and immediate-reload recovery, quota/write failures, legacy imports, Unicode filenames, and saving an existing browser flow when a folder is chosen
+    - browser tests use real directory/file handles with an automated chooser; native-handle reload tests use a regular isolated Chromium profile
+
 - Panels: Actually dockable re-organizable windows like godot does, this already has a branch called panels
     - work being done on panels branch
     - link with cardmirror here
@@ -58,7 +79,6 @@
 - Tutorial that is good
     - explains timers
     - explains uuuh more stuff
-    - video tutorial
 - an editor to customize debate formats 
 - Transcript panel
     - local transcription
@@ -92,17 +112,15 @@
 
 
 ## Small features/fixes (..X releases)
-high priority for collaboration:
-- set the Metered TURN app name and credential API key in Netlify (`VITE_METERED_APP_NAME` and `VITE_METERED_TURN_API_KEY`) so the relay is available to the deployed app
 
 
 - evaluate if switching to the AGPL is possible, if so do it,  do it  (gpl kind of does not work for this project to ensure free-ness since its served over web)
-- simple editable title for flow, put it above the tabscroll bit with the list of flows, maybe make the font size a litle larger for the title, and make it light colored with a placeholder text "new flow" so you know its a title, and make all of that save and syncronize and stuff, make file downloads have that name by default
+
 - fix save button having save shortcut which doesnt work on zen because control s is compact mode, and on chrome it doesnt work because its captured by saving the html of the page, google docs can capture control s just fine. you should be able to as well
 
 ## dont work on yet
 
-- set folder for flows to save at persistantly using filesystem api in chrome... ugh it sux this wont work in firefox, some way to work around this?
+
 - Extemp debate preset
 - a good way to group cards to respond
     - could be you select cards and then push shift enter/ the button to make argument right

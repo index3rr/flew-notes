@@ -137,23 +137,21 @@ export const addNewBox = decorate(function (
 	return result;
 });
 
-export const addNewExtension = decorate(function (
-	nodes: Nodes,
-	parent: FlowId | BoxId
-) {
+export const addNewExtension = decorate(function (nodes: Nodes, parent: FlowId | BoxId) {
 	const flowId = getParentFlowId(nodes, parent).unwrap();
 	const extensionId = newBoxId();
 	return {
 		action: [newExtensionAction(parent, flowId, extensionId), newBoxAction(extensionId, flowId, 0)],
 		owner: flowId
-	}
+	};
 });
 
 export const addNewFlow = decorate(function (
 	nodes: Nodes,
 	index: number,
 	style: DebateStyleFlow,
-	switchSpeakers = false
+	switchSpeakers = false,
+	content?: string
 ) {
 	const starterBoxes = style.starterBoxes;
 	let columns;
@@ -170,7 +168,7 @@ export const addNewFlow = decorate(function (
 		index,
 		value: {
 			tag: 'flow',
-			content: '',
+			content: content ?? '',
 			invert: style.invert,
 			columns
 		}
