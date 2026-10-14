@@ -1,12 +1,10 @@
 # 1.2.2 changes
-- added optional TURN relay configuration for cross-network sharing; the Metered credential still needs to be set in the deploy environment
-- disabled the Share control while offline and added a crossed-out globe indicator
-- added QR scanning and display to the existing link handshake; chose this over room codes because it requires no separate signaling room service
-- reduced sharing QR payloads with lossless binary packing and a shared static dictionary, preserving all ICE candidates; added isolated browser tests for both scans and live collaboration
-- further reduced QR codes with fingerprint-derived credentials and session IDs, short candidate group labels, and compression of replies against the scanned offer; native credential fallback remains available
-- made QR codes smaller by selecting a verified TLS TURN endpoint when available, with full candidate fallback; added relay-only and delayed photo handoff tests
-- fixed guest QR generation stalling during Firefox-to-Chromium pairing; tested both mixed-browser directions and forced credential-override rejection
-- reduced verified relay QR codes to 29×29 modules using a compact data-channel template; both codes retain the full SHA-256 fingerprint and actual relay endpoint
+- fixed collaboration
+- qr code based connecting to rooms (side note: insane absurdly small qr codes for what they are)
+- sharing icon now shows when you are offline
+- lots of tests added
+- fix cross browser sharing (firefox-chrome, safari-firefox, etc.)
+- fix cross network sharing
 
 # 1.2.1 changes
 - manual save button now shows a checkmark and "saved!" tooltip when you save

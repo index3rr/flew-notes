@@ -17,17 +17,10 @@
 		<section>
 			<div class="above"><h2>v1.2.2</h2></div>
 			<ul>
-				<li>Join a shared room by scanning QR codes, alongside link and manual connect.</li>
-				<li>
-					Much smaller room and confirmation QR codes, making them easier to show through a phone
-					photo.
-				</li>
-				<li>
-					Improved collaboration across Firefox and Chromium, including connections through TURN
-					relays.
-				</li>
-				<li>Clearer camera and invalid QR code messages.</li>
-				<li>Sharing now shows when you are offline.</li>
+				<li>live flow collaboration works again, cross browser and cross network!</li>
+				<li>you can now start collaboration using a QR code</li>
+				<li>collaboration menu will no longer let you try and fail to share your flows while offline</li>
+				<li>prevents extinction</li>
 			</ul>
 		</section>
 		<section>
