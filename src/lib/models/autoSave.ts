@@ -1,6 +1,6 @@
 import { nodes, subscribeFlowsChange, sideDocText, newNodes, frozen } from '$lib/models/store';
 import { writable, derived, get } from 'svelte/store';
-import { getJson, loadNodes, downloadString } from './file';
+import { getJson, loadNodes, downloadString, downloadXlsx } from './file';
 import { getNode, type Nodes } from './node';
 import { getDebateStyleFlow } from './debateStyle';
 import { replaceNodes, addNewFlow } from './nodeDecorateAction';
@@ -170,7 +170,7 @@ export async function saveNodes(value = get(nodes)): Promise<boolean> {
 			saveStatus.set(
 				recoveryError ||
 					(pendingLocation
-						? 'Unsaved changes'
+						? 'Not saved to disk — save to choose a file'
 						: directFolderAccess && file
 						? get(library).imported
 							? 'Saved in browser library'
@@ -201,6 +201,11 @@ export async function saveDocument(): Promise<boolean> {
 		void saveNodes();
 		const file = await chosen;
 		if (session !== savedSession) return false;
+		if (file.name.toLowerCase().endsWith('.xlsx')) {
+			resolvePendingAction(get(nodes));
+			await downloadXlsx(get(nodes), file.handle);
+			return true;
+		}
 		bindLibraryFile(file);
 		lastSavedRaw = null;
 		return await saveNodes();

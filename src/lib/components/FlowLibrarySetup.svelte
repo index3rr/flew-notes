@@ -65,7 +65,11 @@
 		<h1>Flow library</h1>
 		<Button
 			icon={directFolderAccess && $library.name ? 'delete' : 'upload'}
-			text={directFolderAccess ? ($library.name ? 'Disconnect' : 'Choose folder') : 'Import folder'}
+			ariaLabel={directFolderAccess
+				? $library.name
+					? 'Disconnect'
+					: 'Choose folder'
+				: 'Import folder'}
 			tooltip={directFolderAccess && $library.name
 				? 'Disconnect this folder'
 				: directFolderAccess
@@ -78,7 +82,7 @@
 		{#if directFolderAccess && $library.name}
 			<Button
 				icon="undo"
-				text={$library.needsPermission ? 'Reconnect folder' : 'Refresh'}
+				ariaLabel={$library.needsPermission ? 'Reconnect folder' : 'Refresh'}
 				tooltip={$library.needsPermission
 					? 'Allow access to this folder'
 					: 'Refresh folder contents'}

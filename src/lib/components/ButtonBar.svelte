@@ -7,7 +7,8 @@
 	export let buttons: ComponentProps<Button>[];
 	export let showCount: number = buttons.length;
 
-	export let resize: boolean = false;
+	export let resize = false;
+	export let wrap = false;
 
 	let element: HTMLDivElement;
 
@@ -49,13 +50,13 @@
 		}
 	}
 
-	$: showButtons = buttons.slice(0, showCount);
-	$: hiddenButtons = buttons.slice(showCount);
+	$: showButtons = wrap ? buttons : buttons.slice(0, showCount);
+	$: hiddenButtons = wrap ? [] : buttons.slice(showCount);
 
 	let show = false;
 </script>
 
-<div class="top" bind:this={element} class:allButtonsHidden={showButtons.length == 0}>
+<div class="top" bind:this={element} class:wrap class:allButtonsHidden={showButtons.length == 0}>
 	<div class="buttons">
 		<div class="showButtons">
 			{#each showButtons as button}
@@ -100,6 +101,9 @@
 		flex-direction: row;
 		align-items: center;
 		gap: var(--padding);
+	}
+	.wrap .showButtons {
+		flex-wrap: wrap;
 	}
 	.hideButtons {
 		position: relative;

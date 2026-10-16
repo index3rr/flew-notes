@@ -31,14 +31,13 @@
 	<div class="above">
 		<div class="title">
 			<h1 title={[$library.name, ...$library.path].join(' / ')}>
-				{#if directFolderAccess && $library.name}Flows in {$library.path[
-						$library.path.length - 1
-					] ?? $library.name}{:else if !directFolderAccess}Local flows{:else}saved flows{/if}
+				{#if directFolderAccess && $library.name}{$library.path[$library.path.length - 1] ??
+						$library.name}{:else if !directFolderAccess}Local flows{:else}saved flows{/if}
 			</h1>
 			{#if directFolderAccess && $library.connected && $library.path.length}
 				<Button
 					icon="undo"
-					text="Up one folder"
+					ariaLabel="Up one folder"
 					tooltip="Go to the parent folder"
 					disabled={busy}
 					on:click={up}
@@ -81,6 +80,7 @@
 		gap: var(--padding);
 	}
 	.view {
+		min-height: 0;
 		overflow-y: auto;
 	}
 	.flows {
@@ -93,15 +93,16 @@
 		margin: 0;
 		padding: 0;
 		line-height: 1em;
-		white-space: nowrap;
+		overflow-wrap: anywhere;
 	}
 	.above {
 		display: flex;
 		flex-direction: row;
 		align-items: center;
 		justify-content: space-between;
-		height: calc(var(--button-size) + var(--padding) * 4);
-		padding: 0 var(--padding);
+		min-height: calc(var(--button-size) + var(--padding) * 4);
+		flex-shrink: 0;
+		padding: var(--padding) var(--padding);
 		gap: var(--padding);
 		box-sizing: border-box;
 	}

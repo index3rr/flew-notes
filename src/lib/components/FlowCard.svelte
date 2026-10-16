@@ -41,8 +41,8 @@
 				<strong class="info">{flowData.title || 'Untitled flow'}</strong>
 				<time
 					class="time"
-					datetime={flowData.created}
-					title={new Date(flowData.created).toLocaleString()}>{prettyDate(flowData.created)}</time
+					datetime={flowData.modified}
+					title={new Date(flowData.modified).toLocaleString()}>{prettyDate(flowData.modified)}</time
 				>
 			</div>
 			{#each flowData.flowInfos as info}

@@ -23,12 +23,18 @@
 </script>
 
 <FlowCard {flowData} {alternate}>
-	<Button icon="open" text="open" on:click={() => open()} />
-	<Button icon="copy" text="duplicate" on:click={() => open(true)} />
-	<Button icon="download" text="download" on:click={() => downloadSavedNodes(key)} />
+	<Button icon="open" ariaLabel="open" tooltip="Open" on:click={() => open()} />
+	<Button icon="copy" ariaLabel="duplicate" tooltip="Duplicate" on:click={() => open(true)} />
+	<Button
+		icon="download"
+		ariaLabel="download"
+		tooltip="Download"
+		on:click={() => downloadSavedNodes(key)}
+	/>
 	<Button
 		icon="trash"
-		text="delete"
+		ariaLabel="delete"
+		tooltip="Delete"
 		on:click={() => {
 			if (confirm('Delete this browser save? This cannot be undone.')) deleteNodes(key);
 		}}

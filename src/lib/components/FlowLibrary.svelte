@@ -9,7 +9,6 @@
 		deleteLibraryFile
 	} from '$lib/models/flowLibrary';
 	import { openDocument, saveBeforeSwitch } from '$lib/models/autoSave';
-	import { downloadString } from '$lib/models/file';
 	import { frozen } from '$lib/models/store';
 	export let busy = false;
 	export let error = '';
@@ -47,33 +46,22 @@
 				<FlowCard flowData={$library.fileInfos[name]} filename={name} alternate={index % 2 === 1}>
 					<Button
 						icon="open"
-						text="open"
+						tooltip="Open"
 						ariaLabel="Open"
 						disabled={busy || $frozen}
 						on:click={() => run(() => open(name))}
 					/>
 					<Button
 						icon="copy"
-						text="duplicate"
+						tooltip="Duplicate"
 						ariaLabel="Duplicate"
 						disabled={busy || $frozen}
 						on:click={() => run(() => open(name, true))}
 					/>
-					<Button
-						icon="download"
-						text="download"
-						ariaLabel="Download"
-						disabled={busy}
-						on:click={() =>
-							run(async () => {
-								const file = await readLibraryFile(name);
-								downloadString(file.raw, name);
-							})}
-					/>
 					{#if directFolderAccess}
 						<Button
 							icon="trash"
-							text="delete"
+							tooltip="Delete"
 							ariaLabel="Delete"
 							disabled={busy}
 							on:click={() => {

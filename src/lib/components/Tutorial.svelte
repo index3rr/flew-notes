@@ -47,7 +47,7 @@
 				{/if}
 				{#if $tutorialStep > 2}
 					<span in:tutorialSpan>
-						to <span class="secondary">download/upload</span>,
+						to <span class="secondary">save your flow</span>,
 					</span>
 				{/if}
 				{#if $tutorialStep > 3}

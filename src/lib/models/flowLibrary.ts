@@ -46,6 +46,7 @@ export type FileTarget = {
 	handle?: FileSystemFileHandle;
 	outside?: boolean;
 };
+export const hasDiskFile = writable(false);
 let target: FileTarget | null = null;
 let queue = Promise.resolve();
 let revision = 0;
@@ -144,6 +145,7 @@ export async function chooseLibrary(beforeChange: () => Promise<unknown> = async
 	root = handle;
 	imported = null;
 	target = null;
+	hasDiskFile.set(false);
 	library.set({
 		name: handle.name,
 		path: [],
@@ -215,6 +217,7 @@ export async function importLibrary(files: FileList) {
 	importedName = name;
 	importedId = id;
 	target = null;
+	hasDiskFile.set(false);
 	library.set({
 		name,
 		path: [],
@@ -237,15 +240,16 @@ export async function refreshLibrary(path = get(library).path) {
 	let nextDirectory: DirectoryHandle | null = null;
 	const fileDates: Record<string, string> = {};
 	const fileInfos: Record<string, SavedNodesData> = {};
-	function describe(name: string, raw: string, fallbackDate = new Date().toISOString()) {
+	function describe(name: string, raw: string, fallbackDate?: string) {
 		const data = JSON.parse(raw);
 		const nodes: Nodes = loadNodes(data, false);
-		const created = data.created ?? fallbackDate;
-		fileDates[name] = created;
+		const created = data.created ?? fallbackDate ?? new Date().toISOString();
+		const modified = fallbackDate ?? data.modified ?? created;
+		fileDates[name] = modified;
 		fileInfos[name] = {
 			title: data.title || name.replace(/\.json$/i, ''),
 			created,
-			modified: created,
+			modified,
 			flowInfos: nodes.root.children.map((id) => {
 				const flow = nodes[id]!.value;
 				return { content: flow.content, invert: flow.invert };
@@ -287,7 +291,9 @@ export async function refreshLibrary(path = get(library).path) {
 			...s,
 			path,
 			folders: folders.sort(),
-			files: files.sort(),
+			files: files.sort(
+				(a, b) => Date.parse(fileDates[b]) - Date.parse(fileDates[a]) || a.localeCompare(b)
+			),
 			fileDates,
 			fileInfos,
 			warning: skipped ? `Skipped ${skipped} invalid JSON file(s).` : s.warning
@@ -308,6 +314,7 @@ export async function readLibraryFile(name: string) {
 }
 export function bindLibraryFile(file: FileTarget | null) {
 	target = file;
+	hasDiskFile.set(!!file?.name && !imported);
 }
 export function libraryTarget() {
 	return target;
@@ -332,14 +339,20 @@ export async function chooseNewLibraryFile(title: string): Promise<FileTarget> {
 	const handle = await picker.call(window, {
 		startIn: target?.directory ?? currentDirectory ?? root,
 		suggestedName: documentFilename(title),
-		types: [{ description: 'Flew flow', accept: { 'application/json': ['.json'] } }]
+		types: [
+			{ description: 'Flew flow', accept: { 'application/json': ['.json'] } },
+			{
+				description: 'Excel workbook',
+				accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] }
+			}
+		]
 	});
 	const relative = await root.resolve(handle);
 	return {
 		directory: null,
 		path: relative?.slice(0, -1) ?? [],
 		name: handle.name,
-		raw: await (await handle.getFile()).text(),
+		raw: handle.name.toLowerCase().endsWith('.xlsx') ? null : await (await handle.getFile()).text(),
 		handle,
 		outside: relative === null
 	};
@@ -441,7 +454,7 @@ export async function deleteLibraryFile(name: string) {
 		imported = next;
 	} else await (await directory()).removeEntry(name);
 	if (target?.name === name && !target.outside && target.path.join('/') === state.path.join('/'))
-		target = null;
+		bindLibraryFile(null);
 	await refreshLibrary();
 }
 export async function disconnectLibrary() {
@@ -451,6 +464,7 @@ export async function disconnectLibrary() {
 	currentDirectory = null;
 	imported = null;
 	target = null;
+	hasDiskFile.set(false);
 	revision++;
 	library.set({
 		name: '',

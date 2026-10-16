@@ -2,7 +2,12 @@
 	import Button from '$lib/components/Button.svelte';
 	import FlowLibrarySetup from '$lib/components/FlowLibrarySetup.svelte';
 	import { documentTitle } from '$lib/models/document';
-	import { restoreLibrary } from '$lib/models/flowLibrary';
+	import {
+		restoreLibrary,
+		library,
+		hasDiskFile,
+		directFolderAccess
+	} from '$lib/models/flowLibrary';
 	import {
 		saveStatus,
 		dirty,
@@ -45,10 +50,19 @@
 	import { addNewFlow, deleteFlow, moveFlow } from '$lib/models/nodeDecorateAction';
 	import { getDebateStyleFlow, type DebateStyleFlow } from '$lib/models/debateStyle';
 
+	$: unsavedToDisk = $documentOpen && $library.connected && !$library.imported && !$hasDiskFile;
+	$: closeLabel = unsavedToDisk ? 'Close without saving' : 'Close flow';
 	$: unsavedChanges = $nodes.root.children.length > 0;
 	let isOnline = true;
 	let libraryBusy = false;
 	let libraryError = '';
+	function saveFlow() {
+		if (!directFolderAccess || !$library.name || $library.imported) {
+			void saveNodes();
+			openPopup(DownloadUpload, 'Save flow');
+		} else void saveDocument();
+	}
+
 	async function toggleDocument() {
 		if (libraryBusy) return;
 		libraryBusy = true;
@@ -230,7 +244,7 @@
 		commandControl: {
 			s: {
 				handle: () => {
-					void saveDocument();
+					saveFlow();
 				},
 				require: () => $documentOpen && !$frozen && !libraryBusy,
 				preventDefault: 'always'
@@ -413,7 +427,7 @@
 		<div class="sidebar">
 			<div class="header">
 				<ButtonBar
-					resize
+					wrap
 					buttons={[
 						{
 							icon: 'link',
@@ -429,13 +443,24 @@
 							tooltip: 'settings',
 							tutorialHighlight: 2
 						},
-						{
-							icon: 'file',
-							ariaLabel: 'File',
-							onclick: () => openPopup(DownloadUpload, 'File'),
-							tooltip: 'file',
-							tutorialHighlight: 3
-						},
+						...(showSaveButton
+							? [
+									{
+										icon:
+											$saveStatus.startsWith('Saved') && !$dirty && !unsavedToDisk
+												? 'check'
+												: 'save',
+										ariaLabel: 'Save flow',
+										tutorialHighlight: 3,
+										tooltip: 'Save flow',
+										shortcut: ['commandControl', 's'],
+										disabled: !$documentOpen || $frozen || libraryBusy,
+										onclick: () => {
+											saveFlow();
+										}
+									}
+							  ]
+							: []),
 						{
 							icon: isOnline ? 'people' : 'offline',
 							onclick: () => {
@@ -450,18 +475,6 @@
 				/>
 			</div>
 			<div class="document-heading">
-				{#if showSaveButton}
-					<Button
-						icon={$saveStatus.startsWith('Saved') && !$dirty ? 'check' : 'save'}
-						ariaLabel="Save flow"
-						inline
-						tooltip={$saveStatus.startsWith('Saved') && !$dirty ? 'saved!' : 'save flow'}
-						disabled={!$documentOpen || $frozen || libraryBusy}
-						disabledReason="create a flow first"
-						shortcut={['commandControl', 's']}
-						on:click={() => saveDocument()}
-					/>
-				{/if}
 				<div class="document-name">
 					<input
 						class="document-title"
@@ -474,25 +487,31 @@
 					/>
 				</div>
 				<Button
-					icon={$documentOpen ? 'delete' : 'add'}
-					ariaLabel={$documentOpen ? 'Close flow' : 'New flow'}
-					inline
-					tutorialHighlight={5}
-					tooltip={$documentOpen ? 'Close flow' : 'New flow'}
+					icon={$documentOpen ? (unsavedToDisk ? 'undo' : 'delete') : 'add'}
+					ariaLabel={$documentOpen ? closeLabel : 'New flow'}
+					tooltip={$documentOpen ? closeLabel : 'New flow'}
 					disabled={libraryBusy || $frozen}
 					disabledReason="library is busy"
+					tutorialHighlight={5}
 					on:click={toggleDocument}
 				/>
 			</div>
 			<p
 				class="save-status"
-				class:save-error={$saveStatus &&
+				class:unsaved-to-disk={unsavedToDisk}
+				class:save-error={!unsavedToDisk &&
+					$saveStatus &&
 					$saveStatus !== 'Unsaved changes' &&
 					$saveStatus !== 'Saving…' &&
 					!$saveStatus.startsWith('Saved')}
 				role="status"
 			>
-				{$saveStatus}
+				{unsavedToDisk &&
+				(!$saveStatus ||
+					$saveStatus === 'Unsaved changes' ||
+					$saveStatus.startsWith('Not saved to disk'))
+					? 'Not saved to disk'
+					: $saveStatus}
 			</p>
 			{#if libraryError && $nodes.root.children.length}<p role="alert">{libraryError}</p>{/if}
 			<div class="tabs" class:customScrollbar={settings.data.customScrollbar.value}>
@@ -627,7 +646,8 @@
 		padding: 0 var(--padding);
 		overflow-wrap: anywhere;
 	}
-	.save-status.save-error {
+	.save-status.save-error,
+	.save-status.unsaved-to-disk {
 		display: block;
 	}
 	.tabs {

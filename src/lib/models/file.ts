@@ -201,7 +201,7 @@ function fixXlsxWorkbookName(name: string) {
 	return name;
 }
 
-export function downloadXlsx(nodes: Nodes) {
+export async function downloadXlsx(nodes: Nodes, handle?: FileSystemFileHandle) {
 	const wb: Workbook = new Workbook();
 
 	let unnamedIterator = 1;
@@ -263,29 +263,36 @@ export function downloadXlsx(nodes: Nodes) {
 		// bold headers
 		ws.getRow(1).font = { bold: true };
 	}
-	wb.xlsx
-		.writeBuffer()
-		.then(function (value: Buffer) {
-			// build anchor tag and attach file (works in chrome)
-			const a: HTMLAnchorElement = document.createElement('a');
-			const data: Blob = new Blob([value], {
-				type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-			});
-
-			const url: string = URL.createObjectURL(data);
-			a.href = url;
-			a.download = documentFilename().replace(/\.json$/, '.xlsx');
-			document.body.appendChild(a);
-			a.click();
-			setTimeout(function () {
-				document.body.removeChild(a);
-				window.URL.revokeObjectURL(url);
-			}, 0);
+	return wb.xlsx.writeBuffer().then(async function (value: Buffer) {
+		if (handle) {
+			const stream = await handle.createWritable();
+			try {
+				await stream.write(new Blob([value]));
+				await stream.close();
+			} catch (error) {
+				await stream.abort().catch(() => undefined);
+				throw error;
+			}
 			trackFileExported('xlsx', nodes.root.children.length);
-		})
-		.catch(function (error) {
-			console.log(error.message);
+			return;
+		}
+		// build anchor tag and attach file (works in chrome)
+		const a: HTMLAnchorElement = document.createElement('a');
+		const data: Blob = new Blob([value], {
+			type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 		});
+
+		const url: string = URL.createObjectURL(data);
+		a.href = url;
+		a.download = documentFilename().replace(/\.json$/, '.xlsx');
+		document.body.appendChild(a);
+		a.click();
+		setTimeout(function () {
+			document.body.removeChild(a);
+			window.URL.revokeObjectURL(url);
+		}, 0);
+		trackFileExported('xlsx', nodes.root.children.length);
+	});
 }
 
 const upgrade: {
