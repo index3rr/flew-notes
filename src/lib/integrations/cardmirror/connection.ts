@@ -73,6 +73,7 @@ export class Rpc {
 		{ texts: string[]; total: number; timer: ReturnType<typeof setTimeout> }
 	>();
 	private requests = new Map<string, Promise<unknown>>();
+	private activeRequests = new Set<string>();
 	private queue = Promise.resolve();
 	private stopped = false;
 	constructor(
@@ -102,15 +103,22 @@ export class Rpc {
 				reject(new Error('CardMirror request timed out. Check the connection before retrying.'));
 			}, 20_000);
 			this.pending.set(id, { resolve, reject, timer });
-			void this.send({ version: 1, id, method, params }).catch((error) => {
-				clearTimeout(timer);
-				this.pending.delete(id);
-				reject(error);
-			});
+			void this.send({ version: 1, id, method, params }, () => this.pending.has(id)).catch(
+				(error) => {
+					clearTimeout(timer);
+					this.pending.delete(id);
+					reject(error);
+				}
+			);
 		});
 	}
-	private send(message: unknown): Promise<void> {
-		const text = JSON.stringify(message);
+	private send(message: unknown, active = () => true): Promise<void> {
+		let text: string;
+		try {
+			text = JSON.stringify(message);
+		} catch {
+			return Promise.reject(new Error('Invalid CardMirror message.'));
+		}
 		if (text.length > maxMessage)
 			return Promise.reject(new Error('Selection is too large. Send fewer items.'));
 		const job = this.queue.then(async () => {
@@ -120,6 +128,10 @@ export class Rpc {
 			for (let part = 0; part < total; part++) {
 				while (this.channel.bufferedAmount > 256_000 && !this.stopped && Date.now() < deadline)
 					await new Promise((r) => setTimeout(r, 25));
+				if (!active()) {
+					if (part > 0) this.close();
+					throw new Error('CardMirror request expired before it was sent.');
+				}
 				if (this.stopped || this.channel.readyState !== 'open' || Date.now() >= deadline)
 					throw new Error('Connection closed or stalled. Reconnect CardMirror.');
 				this.channel.send(
@@ -172,10 +184,15 @@ export class Rpc {
 		if (typeof message.method === 'string') {
 			let result = this.requests.get(id);
 			if (!result) {
-				if (this.requests.size >= 32) this.requests.delete(this.requests.keys().next().value!);
-				result = Promise.resolve().then(() =>
-					this.handler(message.method as string, message.params)
-				);
+				if (this.activeRequests.size >= 16) throw new Error('Too many active requests.');
+				if (this.requests.size >= 32) {
+					const completed = [...this.requests.keys()].find((key) => !this.activeRequests.has(key));
+					if (completed) this.requests.delete(completed);
+				}
+				this.activeRequests.add(id);
+				result = Promise.resolve()
+					.then(() => this.handler(message.method as string, message.params))
+					.finally(() => this.activeRequests.delete(id));
 				this.requests.set(id, result);
 			}
 			void result
@@ -213,6 +230,7 @@ export class Rpc {
 		this.pending.clear();
 		this.parts.clear();
 		this.requests.clear();
+		this.activeRequests.clear();
 		this.channel.close();
 		this.onClose();
 	}
@@ -264,7 +282,10 @@ export class Connection {
 				return;
 			}
 			clearTimeout(this.deadline);
-			this.rpc = new Rpc(channel, this.handler, () => this.close());
+			const rpc = new Rpc(channel, this.handler, () => {
+				if (this.rpc === rpc) this.close();
+			});
+			this.rpc = rpc;
 			this.changed('connected');
 		};
 		if (channel.readyState === 'open') opened();

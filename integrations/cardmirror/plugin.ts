@@ -1,6 +1,7 @@
 import { Connection } from '../../src/lib/integrations/cardmirror/connection';
 import { record, string } from '../../src/lib/integrations/cardmirror/protocol';
 import type { Api, Definition } from './api';
+import { DocumentReceiver } from '../../src/lib/integrations/cardmirror/documents';
 
 // CardMirror permits loading the same bundle again. Release the previous peer
 // before replacing its command handlers so Flew cannot stay paired to old code.
@@ -9,13 +10,45 @@ let host: Api | null = null;
 let dialog: HTMLDialogElement | null = null;
 let status: HTMLParagraphElement | null = null;
 let connected = false;
+// The native preload already exposes this document-opening path. No disk path
+// is accepted, no file is overwritten, and the received copy starts unsaved.
+const desktop = (
+	window as unknown as {
+		electronAPI?: {
+			spawnWindow?: (payload: {
+				filename: string;
+				bytes: Uint8Array;
+				handle: null;
+				format: 'docx';
+				uid: null;
+				markDirty: true;
+			}) => Promise<void>;
+		};
+	}
+).electronAPI;
+const documents = new DocumentReceiver(
+	typeof desktop?.spawnWindow === 'function'
+		? (name, bytes) =>
+				desktop.spawnWindow!({
+					filename: name,
+					bytes,
+					handle: null,
+					format: 'docx',
+					uid: null,
+					markDirty: true
+				})
+		: null
+);
 const peer = new Connection(
 	async (method, params) => {
+		if (method === 'integration.capabilities' || method.startsWith('document.'))
+			return documents.handle(method, params);
 		if (method !== 'source.jump' || !record(params) || !string(params.token) || !host)
 			throw new Error('Invalid source request.');
 		return host.jumpToSource(params.token);
 	},
 	(state, error) => {
+		if (state === 'disconnected') documents.clear();
 		connected = state === 'connected';
 		if (status)
 			status.textContent =
@@ -29,6 +62,7 @@ const peer = new Connection(
 	}
 );
 function dispose() {
+	documents.clear();
 	peer.close();
 	dialog?.close();
 	window.removeEventListener('pagehide', dispose);
@@ -153,13 +187,19 @@ function extract(api: Api) {
 		);
 	return selection;
 }
-async function send(api: Api, mode?: 'column' | 'cell') {
+async function send(api: Api, mode?: 'column' | 'cell', placement?: 'responses') {
 	await invoke(
 		api,
-		() => {
+		async () => {
 			const selection = extract(api);
+			if (placement) {
+				const capabilities = await peer.request('integration.capabilities', {}).catch(() => null);
+				if (!record(capabilities) || capabilities.responses !== true)
+					throw new Error('Update Flew before sending responses into the next column.');
+			}
 			const setting = api.settings.get('space');
 			return peer.request('flow.insert', {
+				placement,
 				mode: mode ?? (api.settings.get('mode') === 'Everything in one cell' ? 'cell' : 'column'),
 				docTitle: selection.docTitle,
 				space:
@@ -198,6 +238,13 @@ export const definition: Definition = {
 		}
 	],
 	commands: [
+		{
+			id: 'cardmirror-flew.sendResponses',
+			label: 'Send to Flew as responses',
+			keywords: ['flew', 'reply', 'next column'],
+			defaultKey: null,
+			run: (api) => send(api, 'column', 'responses')
+		},
 		{
 			id: 'cardmirror-flew.connect',
 			label: 'Connect to Flew',

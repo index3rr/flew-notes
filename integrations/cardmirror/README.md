@@ -20,6 +20,7 @@ Keep pairing keys private: they include the connection's SDP and any temporary T
 | Send to Flew                      | Mod+Alt+F        | Send in the configured layout.                                        |
 | Send to Flew (one cell per line)  | —                | One cell per extracted item.                                          |
 | Send to Flew (single cell)        | —                | Join the selection into one multiline cell.                           |
+| Send to Flew as responses         | —                | Add replies in the next column of the selected argument.              |
 | Toggle Flew Send Mode             | —                | Change the send-mode setting.                                         |
 | Reveal in Flew                    | Mod+Alt+E        | Find sent cells across the current document; repeat to cycle matches. |
 | Choose Flew Page                  | —                | Cycle destination pages in the connected Flew document.               |
@@ -29,11 +30,21 @@ Disable or remap Ebb's matching shortcuts when using both plugins. The companion
 
 Flew fills the selected blank cell or inserts siblings below the selected argument, preserving existing arguments and responses. With no selected cell it appends to the first column. It never creates a document implicitly. Headings are bold, tags carry a card icon, citations append to the preceding item, and analytics remain plain. Each send is one undo step and uses normal autosave and collaboration. Source references survive JSON save/load, undo/redo, page import, and cell copying. Select an imported cell and use **Jump to source** in the panel to return to its CardMirror document (which must still be open).
 
+## During a round
+
+Use **Receive in** and **Speech column** to pin incoming blocks to a page and speech while browsing another flow. Choose **Follow selected cell** to return to normal insertion. **Send to Flew as responses** requires an unpinned, selected argument; existing replies are preserved. **Copy argument text** supplies plain text for a speech document. Collaboration's **Send selected argument** lets your partner jump to the same argument, including folded responses.
+
+While an updated native companion is connected, SpeechDrop provides **Open in CardMirror** and an **Open DOCX downloads in CardMirror** option (on by default). Downloads are kept even if the handoff fails. One download is reused for opening and transcript comparison. The comparison document is named and stays an explicit choice.
+
+Documents open as unsaved copies in a **new CardMirror window**, preserving existing work. The current plugin API cannot route bytes into an existing workspace slot. Developer-loaded plugin commands are window-local: load and pair the companion in a document's window to send directly from that window. Restart CardMirror before loading this plugin update because its command set has changed.
+
+See the [two-person policy workflow and review findings](round-workflow.md).
+
 ## Networking and limits
 
 Pairing is manual rather than an always-running signaling service. Flew's existing STUN/TURN configuration is used; temporary ICE server credentials are passed to the companion, never the TURN API key. Local connections usually work without TURN. Restrictive or different networks may require Flew's configured TURN service, whose own usage limits still apply. There is no automatic fallback through Netlify. CardMirror web has no supported plugin loader; this plugin targets the desktop app.
 
-The versioned `FLEWCM1.` key format is independent of Flew's collaboration QR formats. Requests are `flow.insert`, `flow.reveal`, `flow.pages`, `flow.select`, and `source.jump`. Payloads follow Ebb's extracted-item layout (`kind`, `text`, `source`, `key`, `docTitle`, `mode`, `space`). They contain extracted headings/analytics/citations, not arbitrary card-body text. A send accepts at most 500 items and two million JSON characters. Messages use bounded small data-channel frames, assembly deadlines and request timeouts. Source tokens are opaque and passed only to CardMirror's public `jumpToSource` API.
+The versioned `FLEWCM1.` key format is independent of Flew's collaboration QR formats. Requests include `flow.insert`, `flow.reveal`, `flow.pages`, `flow.select`, `source.jump`, and `integration.capabilities`. Optional response placement is capability-checked. Documents use separate `document.begin`, `document.chunk`, `document.finish`, and `document.cancel` requests, capped at 50 MB with bounded chunks and cleanup deadlines. Payloads follow Ebb's extracted-item layout (`kind`, `text`, `source`, `key`, `docTitle`, `mode`, `space`). They contain extracted headings/analytics/citations, not arbitrary card-body text. A send accepts at most 500 items and two million JSON characters. Messages use bounded small data-channel frames, assembly deadlines and request timeouts. Source tokens are opaque and passed only to CardMirror's public `jumpToSource` API.
 
 ## Build and verification
 

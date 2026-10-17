@@ -1,14 +1,15 @@
 <script lang="ts">
 	import PanelPlaceholder from './PanelPlaceholder.svelte';
 	export let available = true;
-	import { nodes, pendingAction } from '$lib/models/store';
-	import { focusId } from '$lib/models/focus';
-	import { getParentFlowId, type Box, type BoxId, type FlowId, type Node } from '$lib/models/node';
+	import { nodes, pendingAction, frozen } from '$lib/models/store';
+	import { type Box, type BoxId, type FlowId, type Node } from '$lib/models/node';
 	import { newUpdateAction, toggleBoxFormat } from '$lib/models/nodeDecorateAction';
 	import Button from '$lib/components/Button.svelte';
+	import { resolvePendingAction, type PendingAction } from '$lib/models/nodePendingAction';
+	import { showArgument } from '$lib/models/argumentNavigation';
 
 	export let selectedFlowId: FlowId | null = null;
-	export let clickTab: (id: FlowId) => void = () => {};
+	export let clickTab: (id: FlowId) => void = () => undefined;
 
 	$: starred = Object.entries($nodes)
 		.flatMap(([id, node]) => {
@@ -27,7 +28,7 @@
 
 	function goToBox(id: BoxId, flowId: FlowId) {
 		if (selectedFlowId !== flowId) clickTab(flowId);
-		$focusId = id;
+		showArgument(id);
 	}
 
 	function flowPalette(id: FlowId) {
@@ -35,31 +36,27 @@
 		return flow?.value.tag === 'flow' && flow.value.invert ? 'accent-secondary' : 'accent';
 	}
 
+	let editingNote: BoxId | null = null;
+	let ownPending: PendingAction | null = null;
 	function editNote(id: BoxId, value: string) {
+		if ($frozen) return;
 		const box = $nodes[id]?.value;
 		if (!box || box.tag !== 'box') return;
-		if ($pendingAction?.ownerId === box.flowId) {
-			const existing = $pendingAction;
-			$pendingAction = {
-				...existing,
-				action: (nodes) => {
-					const current = nodes[id]?.value;
-					if (!current || current.tag !== 'box') return { tag: 'identity' };
-					return newUpdateAction(id, { ...current, starNote: value });
-				}
-			};
-			return;
-		}
-		$pendingAction = {
-			beforeFocusId: null,
-			afterFocusId: null,
-			ownerId: getParentFlowId($nodes, id).unwrap(),
+		if ($pendingAction !== ownPending || editingNote !== id) resolvePendingAction($nodes);
+		const next: PendingAction = {
+			beforeFocusId: id,
+			afterFocusId: id,
+			ownerId: box.flowId,
 			action: (nodes) => {
 				const current = nodes[id]?.value;
-				if (!current || current.tag !== 'box') return { tag: 'identity' };
-				return newUpdateAction(id, { ...current, starNote: value });
+				return current?.tag === 'box'
+					? newUpdateAction(id, { ...current, starNote: value })
+					: { tag: 'identity' };
 			}
 		};
+		editingNote = id;
+		ownPending = next;
+		$pendingAction = next;
 	}
 </script>
 
@@ -80,6 +77,8 @@
 							icon="star"
 							palette={flowPalette(node.value.flowId)}
 							toggled={true}
+							disabled={$frozen}
+							disabledReason="Wait for synchronization"
 							tooltip="unstar argument"
 							onclick={() => toggleBoxFormat(id, 'starred')}
 						/>
@@ -88,6 +87,7 @@
 						value={node.value.starNote ?? ''}
 						placeholder="add note"
 						aria-label="Note for starred argument"
+						readonly={$frozen}
 						on:input={(event) => editNote(id, event.currentTarget.value)}
 					/>
 				</article>

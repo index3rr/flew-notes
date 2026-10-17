@@ -1,6 +1,6 @@
 import { test, expect, _electron, chromium, firefox, webkit, type Browser } from '@playwright/test';
 import { resolve } from 'node:path';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 
 // Opt-in: uses an existing CardMirror development checkout/server and Nix Electron.
 // No upstream source, normal CardMirror profile or installed plugins are modified.
@@ -71,16 +71,43 @@ test('desktop plugin loads through the real host, sends an extracted tag and jum
 			}, id);
 			expect(result).toBe(true);
 		};
-		const flew = await browser.newPage({ baseURL });
+		const flew = await browser.newPage({ baseURL, serviceWorkers: 'block' });
 		await flew.addInitScript(() =>
 			localStorage.setItem(
 				'settings',
 				JSON.stringify({
 					isSettings: true,
 					version: 2,
-					settings: { telemetryTier: 0, cardMirrorPanel: 2, timersPanel: 0, notesPanel: 0 }
+					settings: {
+						telemetryTier: 0,
+						cardMirrorPanel: 2,
+						timersPanel: 0,
+						notesPanel: 0,
+						speechDropPanel: 1
+					}
 				})
 			)
+		);
+		await flew.addInitScript(() => {
+			class RoomSocket extends EventTarget {
+				onmessage = null;
+				onclose = null;
+				onerror = null;
+				send() {
+					return undefined;
+				}
+				close() {
+					return undefined;
+				}
+			}
+			Object.defineProperty(window, 'WebSocket', { value: RoomSocket });
+		});
+		const docx = await readFile('test-files/cardmirror/1NC.docx');
+		await flew.route('**/api/speechdrop/round', (route) =>
+			route.fulfill({ json: { files: [{ index: 0, name: '1NC.docx' }] } })
+		);
+		await flew.route('**/api/speechdrop/round/0', (route) =>
+			route.fulfill({ body: docx, contentType: 'application/octet-stream' })
 		);
 		await flew.goto('/app');
 		await flew.getByRole('button', { name: 'New flow', exact: true }).click();
@@ -121,6 +148,22 @@ test('desktop plugin loads through the real host, sends an extracted tag and jum
 		await expect.poll(() => native.evaluate(() => getSelection()?.anchorOffset ?? -1)).toBe(0);
 		await command('reveal');
 		await expect(flew.locator('.box textarea').first()).toBeFocused();
+		await flew.getByLabel('SpeechDrop room code').fill('round');
+		await expect(flew.getByLabel('Open DOCX downloads in CardMirror')).toBeChecked();
+		const download = flew.waitForEvent('download');
+		await flew.getByRole('button', { name: '1NC.docx', exact: true }).click();
+		expect((await download).suggestedFilename()).toBe('1NC.docx');
+		await expect
+			.poll(() => app.windows().filter((page) => page.url().startsWith(url)).length, {
+				timeout: 20_000
+			})
+			.toBe(2);
+		const opened = app.windows().find((page) => page !== native && page.url().startsWith(url))!;
+		await expect(opened.locator('.ProseMirror').first()).toContainText('SpeechDrop 1NC evidence', {
+			timeout: 20_000
+		});
+		await expect(editor).toContainText('Native CardMirror evidence tag');
+		await opened.screenshot({ path: `${state}/speechdrop-document.png` });
 	} finally {
 		await browser?.close();
 		await app.evaluate(({ app }) => app.exit(0)).catch(() => undefined);

@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { partnerNotices } from '$lib/models/collaboration';
+	import ArgumentLink from './ArgumentLink.svelte';
+	import Button from './Button.svelte';
 	let dismissed = new Set<string>();
 </script>
 
@@ -8,10 +10,17 @@
 		.filter((item) => item.received && !dismissed.has(item.id))
 		.slice(-3) as notice}
 		<div class="notice">
-			<span>Partner: {notice.text}</span><button
-				aria-label="Dismiss partner notification"
-				on:click={() => (dismissed = new Set([...dismissed, notice.id]))}>×</button
-			>
+			<div>
+				<span>Partner: {notice.text}</span>{#if notice.argumentId}<ArgumentLink
+						id={notice.argumentId}
+					/>{/if}
+			</div>
+			<Button
+				icon="delete"
+				ariaLabel="Dismiss partner notification"
+				tooltip="Dismiss notification"
+				on:click={() => (dismissed = new Set([...dismissed, notice.id]))}
+			/>
 		</div>
 	{/each}
 </div>
@@ -36,11 +45,9 @@
 		gap: var(--gap);
 		overflow-wrap: anywhere;
 	}
-	button {
-		background: transparent;
-		color: inherit;
-		border: 0;
-		cursor: pointer;
-		font: inherit;
+	.notice > div:first-child {
+		min-width: 0;
+		flex: 1;
+		white-space: pre-wrap;
 	}
 </style>

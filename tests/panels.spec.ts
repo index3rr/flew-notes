@@ -401,3 +401,31 @@ for (const side of ['left', 'right'] as const) {
 		await expect(container.locator('.divider')).toHaveCount(0);
 	});
 }
+
+test('switching starred notes preserves both edits and starred links reveal folded ancestors', async ({
+	page
+}) => {
+	await settings(page, { starredPanel: 1, timersPanel: 0, notesPanel: 0 });
+	await page.goto('/app');
+	await page.getByRole('button', { name: 'New flow', exact: true }).click();
+	const cells = page.locator('.box textarea');
+	await cells.first().fill('Case advantage');
+	await page.getByRole('button', { name: 'Toggle starred argument', exact: true }).click();
+	await cells.first().press('Shift+Enter');
+	await cells.nth(1).fill('Their response');
+	await page.getByRole('button', { name: 'Toggle starred argument', exact: true }).click();
+	const notes = page.getByLabel('Note for starred argument');
+	await expect(notes).toHaveCount(2);
+	await notes.first().fill('Partner covers the case');
+	await notes.nth(1).fill('I cover this response');
+	await cells.first().press('Control+l');
+	await expect(page.locator('.children.isFolded')).toHaveCount(1);
+	await page
+		.locator('.starred-panel')
+		.getByRole('button', { name: 'Their response', exact: true })
+		.click();
+	await expect(page.locator('.children.isFolded')).toHaveCount(0);
+	await expect(cells.nth(1)).toBeFocused();
+	await expect(notes.first()).toHaveValue('Partner covers the case');
+	await expect(notes.nth(1)).toHaveValue('I cover this response');
+});

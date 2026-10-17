@@ -12,3 +12,11 @@ The integration checks exercise actual WebRTC between separate browser contexts,
 The native checks load the generated file through CardMirror's real Electron preload and registry. They create and extract a real tag, send it to Flew, move the editor cursor to the end, jump back through the opaque source token, verify the cursor returns to the source start without an error, and reveal the argument in Flew. They use disposable profiles under `.local/`; normal CardMirror profiles are untouched.
 
 Final browser tests ran with `--workers=1` and a 2 GiB Node heap cap. No deployment or CardMirror relay requests were needed for pairing. These are local Linux results; Windows-specific behavior and restrictive-network TURN routing have not been tested. The integration uses Flew's existing ICE configuration and does not change its collaboration QR protocol.
+
+## Round-workflow review (2026-10-17)
+
+The follow-up changes passed all **30 Chromium checks** in `cardMirror.spec.ts`, `cardMirrorDesktop.spec.ts`, `cardMirrorProtocol.spec.ts`, `collaboration.spec.ts`, and `panels.spec.ts`. The first Firefox integration check also passed; the remaining Firefox/WebKit matrix was stopped during the next test to hand the workspace back promptly. These follow-up changes are not fully verified across browsers.
+
+The native test additionally downloaded the DOCX fixture from a mocked SpeechDrop room, streamed its bytes through the real companion, and verified its text in a new native CardMirror window while preserving the original document. Browser checks verify byte hashes across multiple chunks, reuse for transcript comparison, opt-out from automatic opening, room-switch cancellation, pinned columns, response insertion, linked partner arguments, annotated blank cells, pending-text copying, and switching starred notes. Light/dark panel screenshots were inspected.
+
+The production build and type checking passed (zero errors or warnings). Focused ESLint passed with zero errors and existing non-null/type-style warnings. Repository-wide lint remains blocked by existing formatting issues; generated build output and disposable native profiles are now excluded from lint/format scans.

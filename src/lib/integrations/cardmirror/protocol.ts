@@ -2,6 +2,7 @@
 export const kinds = ['pocket', 'hat', 'block', 'tag', 'analytic', 'undertag', 'cite'] as const;
 export type Kind = (typeof kinds)[number];
 export interface Source {
+	kind?: Kind;
 	key: string;
 	token: string;
 	documentTitle: string;
@@ -12,6 +13,7 @@ export interface Provenance {
 	sources: Source[];
 }
 export interface FlowPayload {
+	placement?: 'below' | 'responses';
 	mode: 'column' | 'cell';
 	docTitle: string;
 	space: number;
@@ -39,7 +41,8 @@ export function validProvenance(value: unknown): value is Provenance {
 				string(s.key) &&
 				string(s.token) &&
 				string(s.documentTitle, 1000) &&
-				string(s.excerpt)
+				string(s.excerpt) &&
+				(s.kind === undefined || isKind(s.kind))
 		)
 	);
 }
@@ -48,6 +51,9 @@ export function parsePayload(value: unknown): FlowPayload {
 		!record(value) ||
 		!['column', 'cell'].includes(value.mode as string) ||
 		!string(value.docTitle, 1000) ||
+		(value.placement !== undefined &&
+			value.placement !== 'below' &&
+			value.placement !== 'responses') ||
 		!Number.isInteger(value.space) ||
 		(value.space as number) < 0 ||
 		(value.space as number) > 10 ||
@@ -79,6 +85,7 @@ export function layout(payload: FlowPayload): ImportedCell[] {
 	const cells: ImportedCell[] = [];
 	for (const item of payload.items) {
 		const source: Source = {
+			kind: item.kind,
 			key: item.key,
 			token: item.source,
 			documentTitle: payload.docTitle,

@@ -1,7 +1,7 @@
 {
 	"id": "cardmirror-flew",
 	"name": "Flew Notes integration",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"description": "Send arguments to Flew Notes and jump back to their CardMirror sources over a direct WebRTC connection.",
 	"apiVersion": 1,
 	"minAppVersion": "0.1.0-beta.22"

@@ -1,6 +1,6 @@
 import { get } from 'svelte/store';
 import { speechDropCode, addPartnerNotice } from './collaboration';
-import { isNodesWorthSaving, type Nodes } from './node';
+import { isNodesWorthSaving, type Nodes, type BoxId } from './node';
 import {
 	applyActionBundleAndSyncUi,
 	applyActionBundleBatchAndSyncUi,
@@ -26,7 +26,9 @@ export type SendAction = {
 	id: ActionId;
 	actionBundle: ActionBundle;
 };
-type PartnerMessage = { tag: 'partnerMessage'; text: string } | { tag: 'speechDrop'; code: string };
+type PartnerMessage =
+	| { tag: 'partnerMessage'; text: string; argumentId?: BoxId }
+	| { tag: 'speechDrop'; code: string };
 export type HostMessage =
 	| PartnerMessage
 	| {
@@ -57,10 +59,11 @@ export type GuestMessage =
 			action: SendAction;
 	  };
 
-export function sendPartnerMessage(text: string) {
+export function sendPartnerMessage(text: string, argumentId?: BoxId) {
 	const cleaned = text.trim().slice(0, 2000);
-	if (!cleaned || !broadcastPartner({ tag: 'partnerMessage', text: cleaned })) return false;
-	addPartnerNotice(cleaned, false);
+	if (!cleaned || !broadcastPartner({ tag: 'partnerMessage', text: cleaned, argumentId }))
+		return false;
+	addPartnerNotice(cleaned, false, argumentId);
 	return true;
 }
 function broadcastPartner(message: PartnerMessage, except?: ConnectionId) {
@@ -83,7 +86,13 @@ export function shareSpeechDropCode(code: string) {
 }
 function receivePartner(message: PartnerMessage) {
 	if (message.tag === 'partnerMessage' && typeof message.text === 'string')
-		addPartnerNotice(message.text.slice(0, 2000), true);
+		addPartnerNotice(
+			message.text.slice(0, 2000),
+			true,
+			typeof message.argumentId === 'string' && message.argumentId.length <= 200
+				? message.argumentId
+				: undefined
+		);
 	if (message.tag === 'speechDrop' && typeof message.code === 'string')
 		speechDropCode.set(message.code.slice(0, 100));
 }

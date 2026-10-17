@@ -1,16 +1,21 @@
 import { get, writable } from 'svelte/store';
 import { Connection, type ConnectionState } from '../integrations/cardmirror/connection';
 import { layout, parsePayload, record, string } from '../integrations/cardmirror/protocol';
-import { focusId, lastFocusIds, selectedFlowId } from './focus';
+import { focusId, selectedFlowId } from './focus';
 import { nodes, frozen } from './store';
 import { newBoxId, type BoxId, type FlowId, type Nodes } from './node';
 import { doActionBundle, type ActionBundle } from './nodeAction';
 import { resolvePendingAction } from './nodePendingAction';
 import { history } from './history';
 import { clearSelection } from './selection';
-import { folded } from './fold';
+import { currentArgument, showArgument } from './argumentNavigation';
 import { getIceServers } from './iceServers';
 import { settings } from './settings';
+import {
+	documentChunkBytes,
+	encodeBytes,
+	maxDocumentBytes
+} from '../integrations/cardmirror/documents';
 
 export const cardMirror = writable<{ state: ConnectionState; error: string; notice: string }>({
 	state: 'disconnected',
@@ -18,10 +23,46 @@ export const cardMirror = writable<{ state: ConnectionState; error: string; noti
 	notice: ''
 });
 export const cardMirrorOffer = writable('');
+export const cardMirrorDocuments = writable<{
+	supported: boolean;
+	checked: boolean;
+	sending: string;
+	progress: number;
+}>({ supported: false, checked: false, sending: '', progress: 0 });
+let session = 0;
+let documentAbort: AbortController | null = null;
+export function cancelCardMirrorDocument() {
+	documentAbort?.abort();
+}
+export const cardMirrorDestination = writable<{ flowId: FlowId; column: number } | null>(null);
+// Destination is round-local. A closed document must not keep targeting an old page.
+nodes.subscribe((tree) => {
+	if (!tree.root.children.length) cardMirrorDestination.set(null);
+});
 let offerGeneration = 0;
 const connection = new Connection(handleRequest, (state, error = '') => {
 	cardMirror.update((value) => ({ ...value, state, error }));
 	if (state === 'connected' || state === 'disconnected') cardMirrorOffer.set('');
+	if (state === 'disconnected') {
+		session++;
+		cardMirrorDocuments.set({ supported: false, checked: false, sending: '', progress: 0 });
+	}
+	if (state === 'connected') {
+		const current = session;
+		void connection
+			.request('integration.capabilities', {})
+			.then((value) => {
+				if (current === session)
+					cardMirrorDocuments.update((data) => ({
+						...data,
+						supported: record(value) && value.documentOpen === true,
+						checked: true
+					}));
+			})
+			.catch(() => {
+				if (current === session) cardMirrorDocuments.update((data) => ({ ...data, checked: true }));
+			});
+	}
 });
 
 // The connection belongs to the app, not a panel instance: moving/collapsing a
@@ -58,13 +99,63 @@ export async function jumpToCardMirror(token: string) {
 	}
 }
 
+export async function openCardMirrorDocument(name: string, blob: Blob, signal?: AbortSignal) {
+	const state = get(cardMirrorDocuments);
+	if (get(cardMirror).state !== 'connected' || !state.supported)
+		throw new Error('Connect the updated companion plugin in native CardMirror first.');
+	if (state.sending) throw new Error('Wait for the current document transfer to finish.');
+	if (!/\.docx$/i.test(name) || blob.size < 4 || blob.size > maxDocumentBytes)
+		throw new Error('Choose a DOCX document up to 50 MB.');
+	const id = crypto.randomUUID(),
+		current = session;
+	const abort = new AbortController();
+	documentAbort = abort;
+	const check = () => {
+		if (current !== session || signal?.aborted || abort.signal.aborted)
+			throw new Error('Document transfer cancelled.');
+	};
+	cardMirrorDocuments.update((value) => ({ ...value, sending: name, progress: 0 }));
+	try {
+		check();
+		await connection.request('document.begin', {
+			id,
+			name: name.replace(/[\\/\p{Cc}]/gu, '_'),
+			size: blob.size
+		});
+		for (let offset = 0; offset < blob.size; offset += documentChunkBytes) {
+			check();
+			const bytes = new Uint8Array(
+				await blob.slice(offset, offset + documentChunkBytes).arrayBuffer()
+			);
+			check();
+			await connection.request('document.chunk', { id, offset, data: encodeBytes(bytes) });
+			check();
+			cardMirrorDocuments.update((value) => ({
+				...value,
+				progress: Math.round((Math.min(offset + bytes.length, blob.size) / blob.size) * 100)
+			}));
+		}
+		check();
+		await connection.request('document.finish', { id });
+	} catch (error) {
+		if (current === session)
+			void connection.request('document.cancel', { id }).catch(() => undefined);
+		throw error;
+	} finally {
+		if (documentAbort === abort) documentAbort = null;
+		if (current === session)
+			cardMirrorDocuments.update((value) => ({ ...value, sending: '', progress: 0 }));
+	}
+}
+
 export function insertionActions(
 	tree: Nodes,
 	flowId: FlowId,
 	target: BoxId | FlowId | null,
 	payload: unknown
 ) {
-	const cells = layout(parsePayload(payload));
+	const parsed = parsePayload(payload);
+	const cells = layout(parsed);
 	const flow = tree[flowId];
 	if (!flow) throw new Error('Open a flow page in Flew first.');
 	const candidate = target ? tree[target] : null;
@@ -76,16 +167,27 @@ export function insertionActions(
 			? starter
 			: null;
 	const anchor = anchorId ? tree[anchorId]! : null;
-	const parent = anchor?.parent ?? flowId;
+	const responding = parsed.placement === 'responses';
+	if (responding && (!anchor || anchor.value.empty || anchor.value.isExtension))
+		throw new Error('Select an argument in Flew to receive responses.');
+	if (responding && anchor && anchor.level >= flow.value.columns.length)
+		throw new Error('There is no speech column after this argument.');
+	const parent = responding ? anchorId! : anchor?.parent ?? flowId;
 	const siblings = tree[parent]!.children as BoxId[];
 	const reuse =
 		anchor &&
 		!anchor.value.content.trim() &&
 		!anchor.value.isExtension &&
 		!anchor.value.cardMirrorSpacer &&
+		!anchor.value.starred &&
+		!anchor.value.starNote &&
+		!anchor.value.crossed &&
+		!anchor.value.bold &&
+		!anchor.value.empty &&
+		!responding &&
 		!anchor.children.length &&
 		!anchor.value.cardMirror;
-	let index = anchorId ? siblings.indexOf(anchorId) + 1 : siblings.length;
+	let index = !responding && anchorId ? siblings.indexOf(anchorId) + 1 : siblings.length;
 	const actions: ActionBundle = [];
 	let first: BoxId | null = null;
 	let last: BoxId | null = null;
@@ -109,9 +211,44 @@ export function insertionActions(
 	return { actions, first: first!, last: last! };
 }
 
+export function columnInsertionActions(
+	tree: Nodes,
+	flowId: FlowId,
+	column: number,
+	payload: unknown
+) {
+	const flow = tree[flowId];
+	if (!flow || !Number.isInteger(column) || column < 0 || column >= flow.value.columns.length)
+		throw new Error('Choose an available page and speech column in the CardMirror panel.');
+	const parsed = parsePayload(payload);
+	if (parsed.placement === 'responses')
+		throw new Error('Unpin the destination and select an argument before sending responses.');
+	if (column === 0) return insertionActions(tree, flowId, null, payload);
+	const actions: ActionBundle = [];
+	let parent: FlowId | BoxId = flowId;
+	for (let index = 0; index < column; index++) {
+		const id = newBoxId();
+		actions.push({
+			tag: 'add',
+			id,
+			parent,
+			index: index === 0 ? flow.children.length : 0,
+			value: { tag: 'box', content: '', flowId, empty: true }
+		});
+		parent = id;
+	}
+	const ids: BoxId[] = [];
+	layout(parsed).forEach((cell, index) => {
+		const id = newBoxId();
+		ids.push(id);
+		actions.push({ tag: 'add', id, parent, index, value: { tag: 'box', flowId, ...cell } });
+	});
+	return { actions, first: ids[0], last: ids[ids.length - 1] };
+}
+
 function destination() {
 	const tree = get(nodes),
-		id = get(selectedFlowId);
+		id = get(cardMirrorDestination)?.flowId ?? get(selectedFlowId);
 	if (!id || !tree[id]) throw new Error('Open a flow page in Flew first.');
 	return { tree, id };
 }
@@ -141,27 +278,17 @@ function reveal(params: unknown) {
 	const signature = JSON.stringify([...keys]);
 	revealIndex = signature === lastReveal ? (revealIndex + 1) % matches.length : 0;
 	lastReveal = signature;
-	const id = matches[revealIndex];
-	folded.update((values) => {
-		let parent: FlowId | BoxId | 'root' = tree[id]!.parent;
-		while (parent !== 'root') {
-			values.delete(parent as BoxId);
-			parent = tree[parent]!.parent;
-		}
-		return values;
-	});
-	clearSelection();
-	selectedFlowId.set(tree[id]!.value.flowId);
-	focusId.set(id);
+	showArgument(matches[revealIndex], tree);
 	return { matches: matches.length, position: revealIndex + 1 };
 }
 async function handleRequest(method: string, params: unknown): Promise<unknown> {
+	if (method === 'integration.capabilities') return { responses: true };
 	if (method === 'flow.pages') {
 		const tree = get(nodes);
 		return tree.root.children.map((id) => ({
 			id,
 			title: tree[id]!.value.content || 'Untitled page',
-			selected: id === get(selectedFlowId)
+			selected: id === (get(cardMirrorDestination)?.flowId ?? get(selectedFlowId))
 		}));
 	}
 	if (method === 'flow.select') {
@@ -171,6 +298,16 @@ async function handleRequest(method: string, params: unknown): Promise<unknown> 
 			!get(nodes).root.children.includes(params.id as FlowId)
 		)
 			throw new Error('That flow page is no longer open.');
+		const pin = get(cardMirrorDestination);
+		if (pin) {
+			const tree = get(nodes),
+				next = params.id as FlowId;
+			const speech = tree[pin.flowId]?.value.columns[pin.column];
+			cardMirrorDestination.set({
+				flowId: next,
+				column: Math.max(0, tree[next]!.value.columns.indexOf(speech ?? ''))
+			});
+		}
 		selectedFlowId.set(params.id as FlowId);
 		focusId.set(params.id as FlowId);
 		return { ok: true };
@@ -180,13 +317,23 @@ async function handleRequest(method: string, params: unknown): Promise<unknown> 
 	if (get(frozen)) throw new Error('Wait for Flew to finish syncing before sending.');
 	resolvePendingAction(get(nodes));
 	const { tree, id } = destination();
-	const target = get(focusId) ?? get(lastFocusIds)[id] ?? tree[id]!.children[0] ?? null;
-	const result = insertionActions(tree, id, target, params);
+	const pinned = get(cardMirrorDestination);
+	const target = currentArgument(tree, id)?.id ?? null;
+	const result = pinned
+		? columnInsertionActions(tree, id, pinned.column, params)
+		: insertionActions(tree, id, target, params);
 	history.setNextBeforeFocus(target ?? id, id);
 	doActionBundle(result.actions, id);
 	history.setPrevAfterFocus(result.last, id);
-	clearSelection();
-	focusId.set(result.last);
-	cardMirror.update((value) => ({ ...value, notice: 'Received selection from CardMirror.' }));
+	if (!pinned) {
+		clearSelection();
+		focusId.set(result.last);
+	}
+	cardMirror.update((value) => ({
+		...value,
+		notice: `Received selection in ${tree[id]!.value.content || 'Untitled page'}${
+			pinned ? ' · ' + tree[id]!.value.columns[pinned.column] : ''
+		}.`
+	}));
 	return { cells: result.actions.length, page: tree[id]!.value.content || 'Untitled page' };
 }

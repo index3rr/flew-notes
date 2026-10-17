@@ -2,12 +2,15 @@ import { test, expect, type Page } from '@playwright/test';
 import { layout, parsePayload } from '../src/lib/integrations/cardmirror/protocol';
 import type { Api, Definition } from '../integrations/cardmirror/api';
 
+test.use({ serviceWorkers: 'block' });
+
 type Host = Window & {
 	testDefinition: Definition;
 	testApi: Api;
 	toasts: string[];
 	jumps: string[];
 	selection: ReturnType<Api['extractSelection']>;
+	documents: { name: string; size: number; hash: string }[];
 };
 async function run(page: Page, name: string) {
 	await page.evaluate(async (name) => {
@@ -27,6 +30,19 @@ async function mockHost(page: Page) {
 	await page.goto('/cardmirror-test');
 	await page.evaluate(() => {
 		const w = window as unknown as Host;
+		w.documents = [];
+		Object.assign(w, {
+			electronAPI: {
+				spawnWindow: async (payload: { filename: string; bytes: Uint8Array }) => {
+					const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', payload.bytes));
+					w.documents.push({
+						name: payload.filename,
+						size: payload.bytes.length,
+						hash: Array.from(digest, (byte) => byte.toString(16).padStart(2, '0')).join('')
+					});
+				}
+			}
+		});
 		w.toasts = [];
 		w.jumps = [];
 		w.selection = {
@@ -95,9 +111,9 @@ async function pair(flew: Page, host: Page) {
 	});
 	await host.getByRole('button', { name: 'Done', exact: true }).click();
 }
-async function configure(page: Page, position = 2) {
+async function configure(page: Page, position = 2, extra: Record<string, number | boolean> = {}) {
 	await page.addInitScript(
-		(position) =>
+		({ position, extra }) =>
 			localStorage.setItem(
 				'settings',
 				JSON.stringify({
@@ -106,13 +122,14 @@ async function configure(page: Page, position = 2) {
 					settings: {
 						telemetryTier: 0,
 						cardMirrorPanel: position,
+						...extra,
 						timersPanel: 0,
 						notesPanel: 0,
 						collaborationPanel: 0
 					}
 				})
 			),
-		position
+		{ position, extra }
 	);
 }
 
@@ -120,7 +137,7 @@ test('companion plugin exchanges real WebRTC messages with Flew, persists source
 	page,
 	browser,
 	baseURL
-}) => {
+}, testInfo) => {
 	test.setTimeout(120_000);
 	const errors: string[] = [];
 	page.on('pageerror', (error) => errors.push(error.message));
@@ -158,7 +175,16 @@ test('companion plugin exchanges real WebRTC messages with Flew, persists source
 		await expect(cells.nth(0)).toBeFocused();
 		await run(host, 'reveal');
 		await expect(cells.nth(1)).toBeFocused();
-		await expect(page.getByText('Evidence — café', { exact: true })).toHaveCount(2);
+		await expect(page.getByText('Evidence — café', { exact: true })).toHaveCount(1);
+		// Sources and connection controls must fit the sidebar in both themes.
+		const panel = page.locator('.cardmirror-panel');
+		await expect
+			.poll(() => panel.evaluate((el) => el.scrollWidth - el.clientWidth))
+			.toBeLessThanOrEqual(1);
+		for (const colorScheme of ['light', 'dark'] as const) {
+			await page.emulateMedia({ colorScheme });
+			await panel.screenshot({ path: testInfo.outputPath(`cardmirror-${colorScheme}.png`) });
+		}
 		await page.getByRole('button', { name: 'Jump to source', exact: true }).first().click();
 		await expect
 			.poll(() => host.evaluate(() => (window as unknown as Host).jumps))
@@ -378,4 +404,214 @@ test('source references survive JSON import/export, cell copying and page import
 	await expect(page.locator('.tabs li')).toHaveCount(1);
 	await expect(page.getByLabel('CardMirror card', { exact: true })).toHaveCount(2);
 	await expect(cells.last()).toHaveValue('Argument\nCitation');
+});
+
+test('pin the 2AC destination while browsing the neg flow, then send responses to an argument', async ({
+	page,
+	browser,
+	baseURL
+}) => {
+	test.setTimeout(120_000);
+	await configure(page);
+	await page.goto('/app');
+	await page.getByRole('button', { name: 'New flow', exact: true }).click();
+	await page.getByPlaceholder('type name here', { exact: true }).fill('Case');
+	await page.getByPlaceholder('type name here', { exact: true }).press('Enter');
+	await page.locator('.box textarea').first().fill('Existing 1AC argument');
+	const context = await browser.newContext({ baseURL }),
+		host = await context.newPage();
+	try {
+		await mockHost(host);
+		await pair(page, host);
+		const pages = page.getByLabel('CardMirror receiving page');
+		await pages.selectOption({ label: 'Case' });
+		await page.getByLabel('CardMirror receiving column').selectOption({ label: '2AC' });
+		await page.locator('.addTab').getByRole('button', { name: 'neg', exact: true }).click();
+		await page.getByPlaceholder('type name here', { exact: true }).fill('Politics');
+		await page.getByPlaceholder('type name here', { exact: true }).press('Enter');
+		const active = page.locator('.box textarea').first();
+		await active.fill('Politics DA');
+		await run(host, 'sendColumn');
+		await expect(active).toHaveValue('Politics DA');
+		await expect(active).toBeFocused();
+		await expect(
+			page.getByText('Received selection in Case · 2AC.', { exact: true })
+		).toBeVisible();
+		await page.locator('.tabs li').filter({ hasText: 'Case' }).getByRole('button').first().click();
+		const cells = page.locator('.box textarea');
+		await expect(cells.first()).toHaveValue('Existing 1AC argument');
+		await expect(cells.nth(1)).toHaveValue('Climate policy');
+		const level = await cells.nth(1).evaluate((el) => {
+			let parent = el.closest('.box')?.parentElement?.closest('.box');
+			let depth = 1;
+			while (parent) {
+				depth++;
+				parent = parent.parentElement?.closest('.box');
+			}
+			return depth;
+		});
+		expect(level).toBeGreaterThanOrEqual(3);
+		await pages.selectOption('');
+		await cells.first().click();
+		await run(host, 'sendResponses');
+		await expect
+			.poll(() => host.evaluate(() => (window as unknown as Host).toasts.at(-1)))
+			.toContain('Sent to Flew');
+		await expect(cells.first()).toHaveValue('Existing 1AC argument');
+		await expect(cells).toHaveCount(7);
+	} finally {
+		await context.close();
+	}
+});
+
+test('a SpeechDrop download streams to CardMirror once and remains usable for transcript comparison', async ({
+	page,
+	browser,
+	baseURL
+}) => {
+	test.setTimeout(120_000);
+	const { readFile } = await import('node:fs/promises');
+	const { createHash } = await import('node:crypto');
+	const docx = await readFile('test-files/cardmirror/1NC.docx');
+	await configure(page, 2, { speechDropPanel: 1, transcriptPanel: 3 });
+	await page.addInitScript(() => {
+		class RoomSocket extends EventTarget {
+			onmessage = null;
+			onclose = null;
+			onerror = null;
+			send() {
+				return undefined;
+			}
+			close() {
+				return undefined;
+			}
+		}
+		Object.defineProperty(window, 'WebSocket', { value: RoomSocket });
+	});
+	let downloads = 0;
+	await page.route('**/api/speechdrop/round', (route) =>
+		route.fulfill({ json: { files: [{ index: 0, name: '1NC.docx' }] } })
+	);
+	await page.route('**/api/speechdrop/round/0', (route) => {
+		downloads++;
+		return route.fulfill({ body: docx });
+	});
+	await page.goto('/app');
+	await page.getByRole('button', { name: 'New flow', exact: true }).click();
+	const context = await browser.newContext({ baseURL }),
+		host = await context.newPage();
+	try {
+		await mockHost(host);
+		await pair(page, host);
+		await page.getByLabel('SpeechDrop room code').fill('round');
+		await expect(page.getByLabel('Open DOCX downloads in CardMirror')).toBeChecked();
+		await expect(page.getByRole('button', { name: '1NC.docx', exact: true })).toBeVisible();
+		const downloaded = page.waitForEvent('download', { timeout: 10_000 });
+		await page.getByRole('button', { name: '1NC.docx', exact: true }).click();
+		expect((await downloaded).suggestedFilename()).toBe('1NC.docx');
+		await expect
+			.poll(() => host.evaluate(() => (window as unknown as Host).documents))
+			.toEqual([
+				{
+					name: '1NC.docx',
+					size: docx.length,
+					hash: createHash('sha256').update(docx).digest('hex')
+				}
+			]);
+		await page.getByRole('button', { name: 'Use for transcript', exact: true }).click();
+		await page.getByRole('button', { name: 'Transcript', exact: true }).click();
+		await expect(page.getByLabel('Opponent speech document')).toHaveValue(
+			/SpeechDrop 1NC evidence/
+		);
+		expect(downloads).toBe(1);
+		await page.getByLabel('Open DOCX downloads in CardMirror').uncheck();
+		const second = page.waitForEvent('download');
+		await page.getByRole('button', { name: '1NC.docx', exact: true }).click();
+		await second;
+		expect(await host.evaluate(() => (window as unknown as Host).documents.length)).toBe(1);
+	} finally {
+		await context.close();
+	}
+});
+
+test('switching SpeechDrop rooms cancels a late comparison and does not mark the new room with an old error', async ({
+	page
+}) => {
+	await configure(page, 2, { speechDropPanel: 1, transcriptPanel: 1 });
+	await page.addInitScript(() => {
+		class RoomSocket extends EventTarget {
+			onmessage = null;
+			onclose = null;
+			onerror = null;
+			send() {
+				return undefined;
+			}
+			close() {
+				return undefined;
+			}
+		}
+		Object.defineProperty(window, 'WebSocket', { value: RoomSocket });
+	});
+	let release: (() => void) | undefined;
+	const delayed = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	await page.route('**/api/speechdrop/old', (route) =>
+		route.fulfill({ json: { files: [{ index: 0, name: 'old.txt' }] } })
+	);
+	await page.route('**/api/speechdrop/new', (route) => route.fulfill({ json: { files: [] } }));
+	await page.route('**/api/speechdrop/old/0', async (route) => {
+		await delayed;
+		await route.fulfill({ body: 'Old speech document' }).catch(() => undefined);
+	});
+	await page.goto('/app');
+	await page.getByLabel('SpeechDrop room code').fill('old');
+	await page.getByRole('button', { name: 'Use for transcript', exact: true }).click();
+	await page.getByLabel('SpeechDrop room code').fill('new');
+	release?.();
+	await expect(page.getByText('This room has no files.', { exact: true })).toBeVisible();
+	await expect(page.getByLabel('Opponent speech document')).toHaveValue('');
+	await expect(page.locator('.speechdrop-panel .error')).toHaveCount(0);
+});
+
+test('incoming arguments preserve an annotated empty cell and plain-text copy flushes edits', async ({
+	page,
+	browser,
+	baseURL
+}) => {
+	test.setTimeout(90_000);
+	await configure(page, 2, { starredPanel: 1 });
+	await page.addInitScript(() =>
+		Object.defineProperty(navigator, 'clipboard', {
+			value: {
+				writeText: async (text: string) => {
+					(window as unknown as { copied: string }).copied = text;
+				}
+			}
+		})
+	);
+	await page.goto('/app');
+	await page.getByRole('button', { name: 'New flow', exact: true }).click();
+	await page.locator('.box textarea').first().click();
+	await page.getByRole('button', { name: 'Toggle starred argument', exact: true }).click();
+	const note = page.getByLabel('Note for starred argument');
+	await note.fill('Keep this CX question');
+	const context = await browser.newContext({ baseURL }),
+		host = await context.newPage();
+	try {
+		await mockHost(host);
+		await pair(page, host);
+		await run(host, 'sendColumn');
+		const cells = page.locator('.box textarea');
+		await expect(cells).toHaveCount(4);
+		await expect(cells.first()).toHaveValue('');
+		await expect(note).toHaveValue('Keep this CX question');
+		await cells.first().fill('Latest unanswered question');
+		await page.getByRole('button', { name: 'Copy argument text', exact: true }).click();
+		await expect
+			.poll(() => page.evaluate(() => (window as unknown as { copied: string }).copied))
+			.toBe('Latest unanswered question');
+	} finally {
+		await context.close();
+	}
 });

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
 	import Button from '../Button.svelte';
-	import { speechDocument, speechDetected } from '$lib/models/collaboration';
+	import { speechDocument, speechDetected, speechDocumentSource } from '$lib/models/collaboration';
 	import { compareSpeech } from '$lib/models/transcript';
 	import { downloadString } from '$lib/models/file';
 	let entries: { text: string; outside: boolean; seconds: number; tag: string }[] = [];
@@ -212,6 +212,9 @@
 			placeholder="Paste text or choose a SpeechDrop document"
 		/></label
 	>
+	{#if $speechDocumentSource}<p class="comparison-source">
+			Comparing with {$speechDocumentSource.name}
+		</p>{/if}
 	<p>“Outside document” marks phrases to review; transcription and matching can be inaccurate.</p>
 	<Button
 		icon="download"
@@ -246,6 +249,10 @@
 </div>
 
 <style>
+	.comparison-source {
+		color: var(--text-weak);
+		font-size: 0.85em;
+	}
 	.transcript {
 		overflow-y: auto;
 	}

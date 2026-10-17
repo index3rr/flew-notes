@@ -780,6 +780,12 @@ export const settings: Settings = new Settings({
 		type: 'radio',
 		detail: { options: ['Off', 'Left', 'Right', 'Left collapsed', 'Right collapsed'] }
 	},
+	cardMirrorOpenSpeechDrop: {
+		name: 'Open SpeechDrop DOCX downloads in connected CardMirror',
+		value: true,
+		auto: true,
+		type: 'toggle'
+	},
 	libraryPanel: {
 		name: 'Flow library',
 		value: 0,

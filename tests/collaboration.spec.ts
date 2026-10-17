@@ -1,5 +1,57 @@
 import { test, expect } from '@playwright/test';
 
+test('partner argument links reveal a folded response and disable when the response is removed', async ({
+	context
+}) => {
+	test.setTimeout(90_000);
+	await context.addInitScript(() =>
+		localStorage.setItem(
+			'settings',
+			JSON.stringify({
+				isSettings: true,
+				version: 2,
+				settings: { telemetryTier: 0, collaborationPanel: 1, timersPanel: 0, notesPanel: 0 }
+			})
+		)
+	);
+	const host = await context.newPage();
+	await host.goto('/app');
+	await host.getByRole('button', { name: 'New flow', exact: true }).click();
+	const cells = host.locator('.box textarea');
+	await cells.first().fill('Climate advantage');
+	await cells.first().press('Shift+Enter');
+	await cells.nth(1).fill('Please answer the warming impact');
+	await host.locator('.sidebar .header .buttons div:nth-child(4) > .top').first().click();
+	await host.getByRole('button', { name: 'host new room' }).click();
+	await host.getByRole('button', { name: 'add guest' }).click();
+	const join = await host.locator('.copyBox > .text').first().textContent();
+	const guest = await context.newPage();
+	await guest.goto(join!);
+	const confirmation = await guest.locator('.copyBox > .text').first().textContent();
+	const confirmationPage = await context.newPage();
+	await confirmationPage.goto(confirmation!);
+	await expect(guest.getByText('connected as guest 1')).toBeVisible();
+	for (const page of [host, guest]) await page.locator('.upper > .element > .top').click();
+	await guest.locator('.tabs li button').first().click();
+	await guest.locator('.box textarea').first().press('Control+l');
+	await expect(guest.locator('.children.isFolded')).toHaveCount(1);
+	await cells.nth(1).click();
+	await host.getByLabel('Message your partner').fill('Cover this during CX');
+	await host.getByRole('button', { name: 'Send selected argument', exact: true }).click();
+	const show = guest
+		.locator('.notifications')
+		.getByRole('button', { name: 'Show argument', exact: true });
+	await expect(show).toBeVisible();
+	await show.click();
+	await expect(guest.locator('.children.isFolded')).toHaveCount(0);
+	await expect(guest.locator('.box textarea').nth(1)).toHaveValue(
+		'Please answer the warming impact'
+	);
+	await expect(guest.locator('.box textarea').nth(1)).toBeFocused();
+	await guest.getByRole('button', { name: 'Delete selected cell', exact: true }).click();
+	await expect(show).toBeDisabled();
+});
+
 test('partner messages notify both ways and SpeechDrop codes sync on join and edits', async ({
 	context
 }) => {
@@ -24,8 +76,12 @@ test('partner messages notify both ways and SpeechDrop codes sync on join and ed
 			onmessage = null;
 			onclose = null;
 			onerror = null;
-			send() {}
-			close() {}
+			send() {
+				return undefined;
+			}
+			close() {
+				return undefined;
+			}
 		}
 		Object.defineProperty(window, 'WebSocket', { value: RoomSocket });
 	});
