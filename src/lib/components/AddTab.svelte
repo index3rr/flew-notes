@@ -1,12 +1,17 @@
 <script lang="ts">
 	import Button from './Button.svelte';
 	import TutorialHighlight from './TutorialHighlight.svelte';
-	import { getDebateStyleFlow, getAllDebateStyleFlows, type DebateStyleFlow} from '$lib/models/debateStyle';
+	import {
+		getDebateStyleFlow,
+		getAllDebateStyleFlows,
+		type DebateStyleFlow
+	} from '$lib/models/debateStyle';
 	import { settings } from '$lib/models/settings';
 	import { onDestroy } from 'svelte';
 
 	export let addFlow: (type: DebateStyleFlow) => void;
 	export let switchSpeakers: boolean;
+	export let disabled = false;
 
 	let primaryFlow: DebateStyleFlow | null;
 	let secondaryFlow: DebateStyleFlow | null;
@@ -14,10 +19,11 @@
 	let hasSwitch: boolean;
 
 	onDestroy(
-		settings.subscribe(['any'], (key: string) => { // This could be a specific subscribe, but it doesn't hurt performance much to subscribe to all and is easier
+		settings.subscribe(['any'], (key: string) => {
+			// This could be a specific subscribe, but it doesn't hurt performance much to subscribe to all and is easier
 			templates = getAllDebateStyleFlows();
-			primaryFlow = getDebateStyleFlow("primary");
-			secondaryFlow = getDebateStyleFlow("secondary");
+			primaryFlow = getDebateStyleFlow('primary');
+			secondaryFlow = getDebateStyleFlow('secondary');
 			if (primaryFlow != null) {
 				hasSwitch = primaryFlow.columnsSwitch != null;
 			}
@@ -40,38 +46,39 @@
 
 	$: flippedTemplates = flipPairs(templates);
 
-	$: currentStyleTemplates = (hasSwitch && switchSpeakers)
-    ? flippedTemplates
-    : templates;
-
+	$: currentStyleTemplates = hasSwitch && switchSpeakers ? flippedTemplates : templates;
 </script>
 
 <div class="addTab" class:hasSwitch class:switch={switchSpeakers}>
 	<div class="buttons">
 		{#each currentStyleTemplates as flow, index}
 			{#if index === 0 || index === 1}
-				<TutorialHighlight step={5 + index}> <!-- 5 is a magic number. It is the starting step when the add tab is shown  -->
+				<TutorialHighlight step={6 + index}>
+					<!-- Page controls follow the New flow button in the tutorial. -->
 					<!-- index % 2 === (switchSpeakers ? 1 : 0) can be used instead of !flow.invert for mandatory flip-flop colors -->
 					<Button
+						{disabled}
+						disabledReason="create a flow first"
 						text={flow.name}
-						palette={!flow.invert ? "accent" : "accent-secondary"}
+						palette={disabled ? null : !flow.invert ? 'accent' : 'accent-secondary'}
 						icon="add"
 						on:click={() => addFlow(flow)}
 						tooltip={`create new ${flow.name} flow`}
-						shortcut={
-							index === 0
-								? ['control', 'n']
-								: index === 1
-									? ['control', 'shift', 'n']
-									: null
-						}
+						shortcut={index === 0
+							? ['control', 'n']
+							: index === 1
+							? ['control', 'shift', 'n']
+							: null}
 					/>
 				</TutorialHighlight>
 			{/if}
-			{#if index > 1} <!-- Only use the first two buttons in the tutorial -->
+			{#if index > 1}
+				<!-- Only use the first two buttons in the tutorial -->
 				<Button
+					{disabled}
+					disabledReason="create a flow first"
 					text={flow.name}
-					palette={!flow.invert ? "accent" : "accent-secondary"}
+					palette={disabled ? null : !flow.invert ? 'accent' : 'accent-secondary'}
 					icon="add"
 					on:click={() => addFlow(flow)}
 					tooltip={`create new ${flow.name} flow`}
@@ -82,6 +89,8 @@
 	{#if primaryFlow != null && secondaryFlow != null && hasSwitch}
 		<div class="switch">
 			<Button
+				{disabled}
+				disabledReason="create a flow first"
 				text={'first'}
 				icon="arrowLeft"
 				palette={switchSpeakers ? 'accent-secondary' : 'accent'}

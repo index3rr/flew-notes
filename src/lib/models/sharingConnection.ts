@@ -8,6 +8,8 @@ import { openPopup } from './popup';
 import Message from '$lib/components/Message.svelte';
 import { connections } from './store';
 import { trackSharingStarted } from './telemetry';
+import { getIceServers } from './iceServers';
+import { setSharingLocalDescription, sharingRoomId, sharingLocalOffer } from './sharingIce';
 
 const MESSAGE_CHANNEL_NAME = 'messageChannel';
 
@@ -34,7 +36,11 @@ export class Channel<SendMessage, RecieveMessage> {
 		}
 	}
 	onOpen(fn: () => void) {
-		this.#channel.addEventListener('open', fn);
+		if (this.#channel.readyState == 'open') {
+			fn();
+			return;
+		}
+		this.#channel.addEventListener('open', fn, { once: true });
 	}
 	onClose(fn: () => void) {
 		this.#channel.addEventListener('close', fn);
@@ -47,11 +53,15 @@ export class Channel<SendMessage, RecieveMessage> {
 }
 
 export type GuestKey = {
+	qrRelayCandidate?: string;
+	qrRelayOnly?: boolean;
 	localOffer: string;
 	broadcastId: string;
 };
 
 export type HostKey = {
+	qrRelayCandidate?: string;
+	qrRelayOnly?: boolean;
 	localOffer: string;
 	broadcastId: string;
 };
@@ -107,6 +117,7 @@ export type GuestAwaitingChannel = {
 	tag: 'guestAwaitingChannel';
 	pc: RTCPeerConnection;
 	key: GuestKey;
+	hostKey: HostKey;
 };
 
 export type GuestConnected = {
@@ -183,7 +194,7 @@ export function addHostConnection(): ConnectionId {
 		addHostChannelHandler(channel, id);
 		oldConnections.holder[id] = { tag: 'hostCreatingKey', pc, channel };
 
-		const broadcastId = crypto.randomUUID();
+		let broadcastId = '';
 
 		const broadcastChannel = new BroadcastChannel('guestKeySend');
 		broadcastChannel.addEventListener('message', (event) => {
@@ -224,8 +235,8 @@ export function addHostConnection(): ConnectionId {
 						pc: connection.pc,
 						channel: connection.channel,
 						key: {
-							localOffer: JSON.stringify(pc.localDescription),
-							broadcastId
+							localOffer: sharingLocalOffer(pc.localDescription),
+							broadcastId: sharingRoomId(pc.localDescription!.sdp)
 						},
 						broadcastChannel
 					};
@@ -233,10 +244,15 @@ export function addHostConnection(): ConnectionId {
 				});
 			}
 		});
-		pc.createOffer()
+		getIceServers()
+			.then((iceServers) => {
+				pc.setConfiguration({ iceServers });
+				return pc.createOffer();
+			})
 			.then((des) => {
-				pc.setLocalDescription(des)
+				setSharingLocalDescription(pc, des)
 					.then(() => {
+						broadcastId = sharingRoomId(pc.localDescription!.sdp);
 						setTimeout(function () {
 							if (pc.iceGatheringState != 'complete') {
 								connections.update(function (connections) {
@@ -248,7 +264,7 @@ export function addHostConnection(): ConnectionId {
 										pc: connection.pc,
 										channel: connection.channel,
 										key: {
-											localOffer: JSON.stringify(pc.localDescription),
+											localOffer: sharingLocalOffer(pc.localDescription),
 											broadcastId
 										},
 										broadcastChannel
@@ -291,8 +307,11 @@ export function giveHostGuestKey(key: GuestKey) {
 		if (connection.tag != 'hostAwaitingGuestKey') return oldConnections;
 		if (connection.key.broadcastId != key.broadcastId) return oldConnections;
 		const _remoteOffer = new RTCSessionDescription(JSON.parse(key.localOffer));
-		connection.pc
-			.setRemoteDescription(_remoteOffer)
+		getIceServers()
+			.then((iceServers) => {
+				connection.pc.setConfiguration({ iceServers });
+				return connection.pc.setRemoteDescription(_remoteOffer);
+			})
 			.then(function () {
 				connections.update(function (oldConnections) {
 					if (oldConnections.tag != 'host') return oldConnections;
@@ -353,35 +372,93 @@ export function giveGuestHostKey(key: HostKey) {
 		if (oldConnections.tag != 'guest') return oldConnections;
 		const connection = oldConnections.connection;
 		if (connection.tag != 'guestAwaitingHostKey') return oldConnections;
-		// when offer is created, start waiting for channel
-		connection.pc.addEventListener('icecandidate', function (e) {
-			const cand = e.candidate;
-			if (!cand) {
-				connections.update(function (connections) {
-					if (connections.tag != 'guest') return connections;
-					const connection = connections.connection;
-					if (connection.tag != 'guestCreatingKey') return connections;
-					connections.connection = {
-						tag: 'guestAwaitingChannel',
-						pc: connection.pc,
-						key: {
-							localOffer: JSON.stringify(connection.pc.localDescription),
-							broadcastId: key.broadcastId
-						}
-					};
-					return connections;
+		let pendingDataChannel: RTCDataChannel | null = null;
+		let guestKeyReady = false;
+		let dataChannelConnected = false;
+
+		function connectGuestDataChannel() {
+			if (!guestKeyReady || pendingDataChannel == null || dataChannelConnected) return;
+			dataChannelConnected = true;
+			const rtcChannel = pendingDataChannel;
+			pendingDataChannel = null;
+			connections.update(function (currentConnections) {
+				if (
+					currentConnections.tag != 'guest' ||
+					currentConnections.connection.tag != 'guestAwaitingChannel'
+				) {
+					return currentConnections;
+				}
+				const connection = currentConnections.connection;
+				const channel = new Channel<GuestMessage, HostMessage>(rtcChannel);
+				addGuestChannelHandler(channel);
+				addConnectionStateUpdater(connection.pc, 'host', function () {
+					connections.update(function (connections) {
+						if (connections.tag != 'guest') return connections;
+						return { tag: 'empty' };
+					});
 				});
+				return {
+					...currentConnections,
+					building: false,
+					connection: {
+						tag: 'guestConnected',
+						pc: connection.pc,
+						channel,
+						name: null,
+						awaitingSync: true
+					}
+				};
+			});
+		}
+
+		function publishGuestKey() {
+			if (connection.pc.localDescription == null) return;
+			let published = false;
+			connections.update(function (current) {
+				if (
+					current.tag != 'guest' ||
+					current.connection.pc != connection.pc ||
+					!['guestCreatingKey', 'guestAwaitingChannel'].includes(current.connection.tag)
+				)
+					return current;
+				current.connection = {
+					tag: 'guestAwaitingChannel',
+					pc: connection.pc,
+					hostKey: key,
+					key: {
+						localOffer: sharingLocalOffer(connection.pc.localDescription),
+						broadcastId: key.broadcastId
+					}
+				};
+				published = true;
+				return current;
+			});
+			if (published) {
+				guestKeyReady = true;
+				connectGuestDataChannel();
 			}
+		}
+
+		connection.pc.addEventListener('icecandidate', function (event) {
+			// Gathering can stay pending even after a working relay/path exists.
+			// Publish that usable answer, and keep all later candidates in the reply.
+			if (!event.candidate || event.candidate.type == 'relay' || guestKeyReady) publishGuestKey();
+		});
+		connection.pc.addEventListener('iceconnectionstatechange', function () {
+			if (['connected', 'completed'].includes(connection.pc.iceConnectionState)) publishGuestKey();
 		});
 		// create offer
 		const _remoteOffer = new RTCSessionDescription(JSON.parse(key.localOffer));
-		connection.pc
-			.setRemoteDescription(_remoteOffer)
+		getIceServers()
+			.then((iceServers) => {
+				connection.pc.setConfiguration({ iceServers });
+				return connection.pc.setRemoteDescription(_remoteOffer);
+			})
 			.then(function () {
 				connection.pc
 					.createAnswer()
 					.then(function (description) {
-						connection.pc.setLocalDescription(description).then().catch(errHandler);
+						setSharingLocalDescription(connection.pc, description).catch(errHandler);
 					})
 					.catch(errHandler);
 			})
@@ -389,29 +466,8 @@ export function giveGuestHostKey(key: HostKey) {
 		// when channel is created, update connection
 		connection.pc.ondatachannel = function (e) {
 			if (e.channel.label != MESSAGE_CHANNEL_NAME) return;
-			connections.update(function (oldConnections) {
-				if (oldConnections.tag != 'guest') return oldConnections;
-				const connection = oldConnections.connection;
-				if (connection.tag != 'guestAwaitingChannel') return oldConnections;
-				const channel = new Channel<GuestMessage, HostMessage>(e.channel);
-				addGuestChannelHandler(channel);
-				oldConnections.connection = {
-					tag: 'guestConnected',
-					pc: connection.pc,
-					channel,
-					name: null,
-					awaitingSync: true
-				};
-				addConnectionStateUpdater(connection.pc, 'host', function () {
-					connections.update(function (connections) {
-						if (connections.tag != 'guest') return connections;
-						return {
-							tag: 'empty'
-						};
-					});
-				});
-				return { ...oldConnections, building: false };
-			});
+			pendingDataChannel = e.channel;
+			connectGuestDataChannel();
 		};
 		oldConnections.connection = {
 			tag: 'guestCreatingKey',
@@ -456,8 +512,13 @@ export function cancelBuilding() {
 	});
 }
 
-function errHandler(err: Message) {
-	console.log(err);
+function errHandler(err: unknown) {
+	console.error(err);
+	openPopup(Message, 'Could not connect', {
+		message: err instanceof Error ? err.message : 'The WebRTC connection setup failed.',
+		error: true
+	});
+	cancelBuilding();
 }
 
 function createLinkWithParam(param: string, value: string): string {

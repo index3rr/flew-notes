@@ -6,6 +6,7 @@
 	// TODO: add grouping
 
 	export let icon: string;
+	export let ariaLabel: string | null = null;
 	export let text: string | null = null;
 	export let tooltip: string | null = null;
 	export let disabled: boolean | string = false;
@@ -13,17 +14,17 @@
 	export let palette: string | null = null;
 	export let link: string | null = null;
 	export let target: string | null = null;
-	export let disabledReason: string = 'disabled';
-	export let tooltipLayout: string = 'bottom';
+	export let disabledReason = 'disabled';
+	export let tooltipLayout = 'bottom';
 	export let tutorialHighlight: number | null = null;
-	export let onclick: () => void = () => {};
+	export let onclick: () => void = () => undefined;
 
-	export let notification: boolean = false;
-	export let toggled: boolean = false;
+	export let notification = false;
+	export let toggled = false;
 
-	export let inline: boolean = false;
+	export let inline = false;
 
-	export let preventBlur: boolean = true;
+	export let preventBlur = true;
 	function handleMouseDown(e: MouseEvent) {
 		if (preventBlur) {
 			e.preventDefault();
@@ -48,6 +49,7 @@
 				on:click={onclick}
 				on:mousedown={handleMouseDown}
 				class:inline
+				aria-label={ariaLabel ?? undefined}
 				disabled={!!disabled}
 			>
 				{#if notification}

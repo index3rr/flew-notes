@@ -1,12 +1,18 @@
 <script lang="ts">
 	import './global.css';
+	import PartnerNotifications from '$lib/components/PartnerNotifications.svelte';
 	import { settings } from '$lib/models/settings';
-	import { dev } from '$app/environment';
 	import { popups, closePopup, openPopup, type Popup as PopupType } from '$lib/models/popup';
 	import { screenTransition } from '$lib/models/transition';
-	import { initTelemetry, shouldShowExtraPopup, markExtraPopupShown, type TelemetryTier } from '$lib/models/telemetry';
+	import {
+		initTelemetry,
+		shouldShowExtraPopup,
+		markExtraPopupShown,
+		type TelemetryTier
+	} from '$lib/models/telemetry';
 
 	import { onDestroy, onMount } from 'svelte';
+	import { dev } from '$app/environment';
 	import {
 		giveGuestHostKey,
 		initGuestConnection,
@@ -31,12 +37,13 @@
 
 	onDestroy(
 		settings.subscribe(['telemetry'], function () {
-			const tier = (settings.data.telemetry.value as number) as TelemetryTier;
+			const tier = settings.data.telemetry.value as number as TelemetryTier;
 			initTelemetry(tier, ref);
 			if (shouldShowExtraPopup()) {
 				markExtraPopupShown();
 				openPopup(Message, 'Extra Telemetry Enabled', {
-					message: 'so theres a button at the top left in the main flowing thign that looks liike a link, if you push it you can see my email and discord, i cant be bothered to collect any nefarious information so just go ahead and send it to my discord ok thanks'
+					message:
+						'so theres a button at the top left in the main flowing thign that looks liike a link, if you push it you can see my email and discord, i cant be bothered to collect any nefarious information so just go ahead and send it to my discord ok thanks'
 				});
 			}
 		})
@@ -122,123 +129,123 @@
 			unit: 'px'
 		},
 		customScrollbarWidth: {
-			name:'custom-scrollbar-width',
+			name: 'custom-scrollbar-width',
 			unit: 'px'
 		},
 		customBackgroundBack: {
-			name:'custom-background-back',
+			name: 'custom-background-back',
 			unit: ''
 		},
 		customBackground: {
-			name:'custom-background',
+			name: 'custom-background',
 			unit: ''
 		},
 		customBackgroundIndent: {
-			name:'custom-background-indent',
+			name: 'custom-background-indent',
 			unit: ''
 		},
 		customBackgroundActive: {
-			name:'custom-background-active',
+			name: 'custom-background-active',
 			unit: ''
 		},
 		customBackgroundSecondary: {
-			name:'custom-background-secondary',
+			name: 'custom-background-secondary',
 			unit: ''
 		},
 		customBackgroundSecondaryIndent: {
-			name:'custom-background-secondary-indent',
+			name: 'custom-background-secondary-indent',
 			unit: ''
 		},
 		customBackgroundSecondaryActive: {
-			name:'custom-background-secondary-active',
+			name: 'custom-background-secondary-active',
 			unit: ''
 		},
 		customBackgroundAccentIndent: {
-			name:'custom-background-accent-indent',
+			name: 'custom-background-accent-indent',
 			unit: ''
 		},
 		customBackgroundAccentActive: {
-			name:'custom-background-accent-active',
+			name: 'custom-background-accent-active',
 			unit: ''
 		},
 		customBackgroundAccentSecondaryIndent: {
-			name:'custom-background-accent-secondary-indent',
+			name: 'custom-background-accent-secondary-indent',
 			unit: ''
 		},
 		customBackgroundAccentSecondaryActive: {
-			name:'custom-background-accent-secondary-active',
+			name: 'custom-background-accent-secondary-active',
 			unit: ''
 		},
 		customText: {
-			name:'custom-text',
+			name: 'custom-text',
 			unit: ''
 		},
 		customTextSelect: {
-			name:'custom-text-select',
+			name: 'custom-text-select',
 			unit: ''
 		},
 		customTextWeak: {
-			name:'custom-text-weak',
+			name: 'custom-text-weak',
 			unit: ''
 		},
 		customTextAccent: {
-			name:'custom-text-accent',
+			name: 'custom-text-accent',
 			unit: ''
 		},
 		customTextAccentSelect: {
-			name:'custom-text-accent-select',
+			name: 'custom-text-accent-select',
 			unit: ''
 		},
 		customTextAccentWeak: {
-			name:'custom-background-weak',
+			name: 'custom-background-weak',
 			unit: ''
 		},
 		customTextAccentSecondary: {
-			name:'custom-text-accent-secondary',
+			name: 'custom-text-accent-secondary',
 			unit: ''
 		},
 		customTextAccentSecondarySelect: {
-			name:'custom-text-accent-secondary-select',
+			name: 'custom-text-accent-secondary-select',
 			unit: ''
 		},
 		customTextAccentSecondaryWeak: {
-			name:'custom-text-accent-secondary-weak',
+			name: 'custom-text-accent-secondary-weak',
 			unit: ''
 		},
 		customColor: {
-			name:'custom-color',
+			name: 'custom-color',
 			unit: ''
 		},
 		customColorFade: {
-			name:'custom-color-fade',
+			name: 'custom-color-fade',
 			unit: ''
 		},
 		customColorAccent: {
-			name:'custom-color-accent',
+			name: 'custom-color-accent',
 			unit: ''
 		},
 		customColorAccentFade: {
-			name:'custom-color-accent-fade',
+			name: 'custom-color-accent-fade',
 			unit: ''
 		},
 		customColorAccentSecondary: {
-			name:'custom-color-accent-secondary',
+			name: 'custom-color-accent-secondary',
 			unit: ''
 		},
 		customColorAccentSecondaryFade: {
-			name:'custom-color-accent-secondary-fade',
+			name: 'custom-color-accent-secondary-fade',
 			unit: ''
 		},
 		customScrollbarThumb: {
-			name:'custom-scrollbar-thumb',
+			name: 'custom-scrollbar-thumb',
 			unit: ''
 		},
 		customScrollbarThumbHover: {
-			name:'custom-scrollbar-thumb-hover',
+			name: 'custom-scrollbar-thumb-hover',
 			unit: ''
 		},
 		customScrollbarBackground: {
-			name:'custom-scrollbar-background',
+			name: 'custom-scrollbar-background',
 			unit: ''
 		}
 	};
@@ -272,9 +279,9 @@
 			const roundedPixelValue = Math.round(pixelValue); // Round to nearest px
 			const roundedRemFontSize = roundedPixelValue / rootFontSize;
 
-			document.body.style.setProperty('--font-size', roundedRemFontSize + "rem");
+			document.body.style.setProperty('--font-size', roundedRemFontSize + 'rem');
 		})
-	)
+	);
 	onDestroy(
 		settings.subscribe(Object.keys(cssVarIndex), function (key: string) {
 			const name = cssVarIndex[key].name;
@@ -366,6 +373,7 @@
 	<CloseWindow reason="confirm link information has been sent to host tab" />
 {:else}
 	<slot />
+	<PartnerNotifications />
 {/if}
 {#if $popups.length > 0}
 	<!-- we can ignore because pressing escape on window already has same functionality -->

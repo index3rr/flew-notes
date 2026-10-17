@@ -3,6 +3,8 @@
 	import AddTab from '$lib/components/AddTab.svelte';
 	import Tab from '$lib/components/Tab.svelte';
 	import { nodes } from '$lib/models/store';
+	import { documentOpen } from '$lib/models/autoSave';
+	import { frozen } from '$lib/models/store';
 	import { settings } from '$lib/models/settings';
 	import type { FlowId } from '$lib/models/node';
 
@@ -22,7 +24,7 @@
 				selected={selectedFlowId == $nodes.root.children[index]}
 			/>
 		</SortableList>
-		<AddTab {addFlow} bind:switchSpeakers />
+		<AddTab disabled={!$documentOpen || $frozen} {addFlow} bind:switchSpeakers />
 	</div>
 </div>
 

@@ -14,6 +14,8 @@ Flew Notes is a web-based note-taking app for competitive debate. It lets debate
 - **Result types**: `ts-results` (`Option`, `Some`, `None`)
 - **Animations**: anime.js
 - **Excel export**: exceljs
+- **Telemetry**: PostHog (cookieless, US region, tiers 0-4)
+- **PWA**: Service worker (`static/sw.js`) + manifest, network-first navigation, cache-first same-origin assets
 - **GraphQL**: `@urql/svelte` + `graphql` (present in deps, usage minimal)
 - **Testing**: Playwright (E2E)
 - **Linting**: ESLint + Prettier
@@ -24,6 +26,7 @@ Flew Notes is a web-based note-taking app for competitive debate. It lets debate
 - `npm run build` - production build
 - `npm run test` - Playwright E2E tests
 - `npm run check` - TypeScript/Svelte type checking
+- Use `nix-shell --run "npm run test"` for browser tests on Nix. `shell.nix` includes GStreamer plugins and sets `GST_PLUGIN_SYSTEM_PATH_1_0`; missing `appsink`/`appsrc` makes headless WebKit crash when a canvas camera starts. Keep these dependencies project-scoped; never use `nix-env`.
 - `npm run lint` - ESLint + Prettier check
 - `npm run format` - Prettier format
 
@@ -32,7 +35,7 @@ Flew Notes is a web-based note-taking app for competitive debate. It lets debate
 ```
 src/
   routes/
-    +layout.svelte          # Root layout (fonts, global styles)
+    +layout.svelte          # Root layout (fonts, global styles, service worker, telemetry init)
     +layout.ts              # SSR disabled
     +page.svelte            # Landing/prelude page (redirects to /app)
     global.css              # CSS variables, color themes, base styles
@@ -41,7 +44,11 @@ src/
   lib/
     models/                 # Business logic and state (no UI)
     components/             # Svelte UI components
+    components/scenes/      # Animated scene components for landing page
     svg/                    # SVG icon assets
+static/
+  sw.js                     # Service worker (network-first navigation, cache-first assets)
+  manifest.json             # PWA manifest
 tests/                      # Playwright E2E specs
 test-files/                 # Test fixture data (JSON)
 ```
@@ -118,6 +125,24 @@ Message protocol: `HostMessage` (sync, action, actionReceived, name) and `GuestM
 
 The `frozen` store is `true` when a guest is awaiting sync (prevents edits during sync).
 
+QR sharing (`sharingQr.ts`) exchanges offer and answer connection data without a signaling service. The `F2:` format uses Base45 in QR alphanumeric mode, raw DEFLATE, and a shared static dictionary shipped with the app. Header bit 0 identifies offer/answer; the remaining bits select literal UTF-8 (0), binary fields (2), binary fields plus static phrase tokens (4), or separated structure/field streams (6). The encoder measures all four forms with default and fixed Huffman compression and emits the shortest.
+
+The dictionary, grammar examples, token order, and tag meanings are part of the `F2:` wire format: freeze them once released; change the format prefix for future changes and keep the old decoder. Packing is reversible and must preserve every SDP character, candidate, and credential. IPv6 and base64 use binary encoding only when decoding reproduces the original spelling; unknown attributes and noncanonical values remain literal. Legacy `FLEW1.` codes and join/confirm URLs still decode. The lossless formats preserve every candidate. The separate F5 format may select a verified live TLS TURN allocation; do not remove every candidate or invent an endpoint. Never replace dynamic credentials with shared static values.
+
+
+QR format `F3:` additionally supports reconstructing ICE credentials (bit 3), omitted room identity (bit 4), a fingerprint-derived SDP session ID (bit 5), and packed priority preferences (bit 6; tags 250–254). `F3+` answers use the already-scanned host offer as an additional compression dictionary, with a four-byte FNV tag to reject mismatched offers before decoding. The offer dictionary and its construction are also versioned wire format. No shared server state is used; the first QR supplies the context needed for the second.
+
+`sharingIce.ts` tries a 22-character password and four-character username fragment derived from separate bytes of the fresh SHA-256 certificate fingerprint. Browsers that reject this local SDP override retry their original description; QR encoding then includes the actual native credentials. Derived ICE passwords are computable from the public fingerprint; DTLS fingerprint checks and encryption remain enabled. This approach requires a fresh certificate per peer connection: do not introduce certificate reuse without revisiting credential and room identity generation. Room IDs reuse the already-present ICE password instead of adding another UUID. Signaled SDP session IDs derive from other fingerprint bytes; long candidate foundation labels are renamed bijectively to short labels, preserving candidate groups, priorities, addresses, ports, and all routes. The QR codec exactly restores the published key, including these signaled identities.
+
+`F5:` offers signal one actual IPv4 UDP relay candidate whose local allocation is identified as TLS by `getStats()`. The full native local candidate list remains intact. `F5+` replies use that reduced offer as context; replies may also select their own verified TLS relay, otherwise they retain their complete candidate list. If stats or a matching allocation are unavailable, use the full F3 format. This reduces route redundancy and requires working TURN; it must be covered by a test forcing relay on both peers and verifying the selected candidate type. Candidate-free offers failed relay pairing because they did not supply the remote address needed for TURN permissions. Do not reintroduce them. Do not wait exclusively for completed host gathering to display a QR: Chromium may keep gathering indefinitely; the existing three-second snapshot remains a fallback.
+
+`F6:` is a fixed data-channel SDP template for verified IPv4 relay endpoints with derived credentials, MID 0, SCTP port 5000, and standard active/actpass roles. Unknown negotiated attributes use F5. Its binary payload is 43 bytes: flags (answer and message-size choice), full 32-byte SHA-256 fingerprint, IPv4 address, uint16 relay port, uint32 candidate priority. Answers append four bytes binding the room identity (47 bytes). Base45 produces 68/74 characters; both fit QR version 3 at L correction (29×29 modules). The template preserves fingerprint, credentials, endpoint, priority, SCTP port and max-message-size; it reconstructs otherwise unnecessary SDP metadata and a single foundation label. This is a transport-preserving template rather than exact SDP round trip. Native-credential and full-description fallbacks remain covered. F5 contextual decoding must accept both the previous full relay template and F6 reconstruction.
+
+Guest replies become available after a relay candidate, an established ICE path, or completed gathering, and update with subsequent candidates while waiting for confirmation. Waiting exclusively for the final gathering event can stall Firefox-host/Chromium-guest pairing. Keep mixed-browser tests in both directions, plus forced rejection of credential overrides.
+
+`tests/sharingQr.spec.ts` checks exact round trips, legacy decoding, malformed codes, Unicode, and QR module counts against the previous format. The QR collaboration test in `tests/share.spec.ts` feeds generated images into a canvas camera and uses separate browser contexts, preventing shared localStorage or BroadcastChannel from helping the handshake. It verifies edits travel both ways after the two scans. The fake camera must repaint continuously so WebKit can finish video startup; replace the mediaDevices getter with a consistent virtual device object, and bring the scanning page to the front.
+
+
 ### Focus & Selection (`focus.ts`, `selection.ts`)
 
 - `focusId` - currently focused node (FlowId or BoxId or null)
@@ -156,6 +181,28 @@ Timer state types for running/paused. `Timers` component manages per-flow speech
 
 A simple popup/modal system - `openPopup(component, title, props)` renders a component in an overlay.
 
+### Telemetry (`telemetry.ts`)
+
+Cookieless PostHog integration with 5 tiers (0-4): None, Errors, Usage, All (includes flow text content), Extra. Setting changes are batched into a single `settings_changed` event, flushed when the settings popup closes. All tracking is skipped during fun mode. `trackFlowDataUpload` recursively collects box text content for the "All" tier. The telemetry tier is a radio setting visible to users.
+
+### Service Worker (`static/sw.js`)
+
+Network-first for navigation and same-origin assets (with cache fallback), network-only for cross-origin (PostHog). Cache version is bumped in `CACHE_NAME` to force updates on release. Skipped in dev mode (`!dev` guard in `+layout.svelte`).
+
+### Version Management (`version.ts`)
+
+Single source of truth: `CURRENT_VERSION` constant (currently `'1.3.0'`). Imported by `telemetry.ts` for PostHog registration. `package.json` version and `sw.js` `CACHE_NAME` must be updated manually on release. `isChangelogVersionCurrent` store compares localStorage against `CURRENT_VERSION` to show update notifications.
+
+Every release must update all of these together:
+
+- `src/lib/models/version.ts`: `CURRENT_VERSION`.
+- `package.json`: the app `version`.
+- `package-lock.json`: the top-level version and `packages[""].version`; leave dependency versions alone.
+- `static/sw.js`: `CACHE_NAME` (`flew-notes-v<release>` with an optional cache revision suffix). Do not forget this when deploying changed app assets: changing the worker bytes triggers its update lifecycle, and activation deletes older caches so PWA users can receive the new assets.
+- `src/lib/components/Changelog.svelte`: the real user-facing release notes. Updating `changelog.md` alone does not update the in-app changelog.
+
+For a cache refresh within the same app release, increment only the cache revision suffix (for example, `flew-notes-v1.2.2-r1` to `flew-notes-v1.2.2-r2`). A cache revision does not require changing the app release version.
+
 ## Key Component Files
 
 | Component | Purpose |
@@ -173,6 +220,10 @@ A simple popup/modal system - `openPopup(component, title, props)` renders a com
 | `Shortcuts.svelte` | Keyboard shortcuts reference |
 | `SideDoc.svelte` | Notes sidebar panel |
 | `SortableList.svelte` | Drag-to-reorder list (used for tab ordering) |
+| `Flower.svelte` | Spinning circle-with-arrow animation (matches favicon) |
+| `PacingScene.svelte` | Animated pacing timer demo for landing page |
+| `FakeTimer.svelte` | Presentational timer display for scene components |
+| `FakeBox.svelte` | Presentational debate cell for scene components |
 
 ## CSS Variables
 
@@ -199,3 +250,13 @@ Use the existing theme tokens and component patterns when adding UI:
 - The `decorate()` pattern wraps action creators to handle pending action resolution, execution, and history recording
 - Branded types prevent mixing up FlowId/BoxId/NodeId at compile time
 - All mutations flow through `applyActionBundle` -> `applyAction` which returns inverse actions for undo
+
+## Panels
+
+`PanelContainer.svelte` places panels according to numeric settings: 0 off, 1 left, 2 right, 3 left collapsed, 4 right collapsed. Notes and Flow Library always keep their configured positions and show placeholder text when no flow page is open. Each side opens one collapsed panel at a time; hidden collapsed content stays mounted so timers and transcription keep their state.
+
+The Flow Library panel defaults to Off. `panels/LibraryPanel.svelte` displays compact `FlowCard` rows with names and colored page labels. Click a label to import its page; drag uses `application/x-flew-page`. Import with `importFlowPage` so IDs are regenerated and changes use the action/history/sharing pipeline. Keep file-management controls in the full library.
+
+`transcript.worker.ts` runs Whisper locally through Transformers.js, loaded only when transcription starts. AudioWorklet capture feeds 16 kHz PCM segments; no audio is sent to a transcription API. Models and runtime files download on first use. `transcript.ts` implements phrase comparison for review flags. SpeechDrop DOCX extraction uses Mammoth raw text, never injected HTML.
+
+`collaboration.ts` contains partner notices, SpeechDrop room/document state, and speech-detection events. `sharingChannel.ts` relays partner messages and room-code changes through existing WebRTC connections; notifications render globally even with the collaboration panel collapsed.

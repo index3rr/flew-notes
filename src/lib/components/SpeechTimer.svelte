@@ -1,8 +1,11 @@
 <script lang="ts">
 	import type { TimeState, TimerSpeech } from '$lib/models/timer';
-	import { onMount, tick } from 'svelte';
+	import { onMount, onDestroy, tick } from 'svelte';
 	import Button from './Button.svelte';
 	import Timer from './Timer.svelte';
+	import { get } from 'svelte/store';
+	import { speechDetected } from '$lib/models/collaboration';
+	import { settings } from '$lib/models/settings';
 
 	export let resetTimeIndex: number;
 
@@ -51,6 +54,31 @@
 	$: selectedButton, selectedButtonUpdate();
 	$: resetTimeIndex, resetTimeIndexUpdate();
 
+	let advance = settings.data.timerAutoAdvance.value as boolean;
+	onDestroy(
+		settings.subscribe(['timerAutoAdvance'], () => {
+			advance = settings.data.timerAutoAdvance.value as boolean;
+		})
+	);
+	$: if (advance && time <= 0 && state.name === 'running') {
+		pause?.();
+		state = { name: 'paused' };
+		if (resetTimeIndex < speeches.length - 1) resetTimeIndex += 1;
+	}
+	let start: () => void;
+	let previousDetection = get(speechDetected);
+	onDestroy(
+		speechDetected.subscribe((value) => {
+			if (
+				value > previousDetection &&
+				settings.data.timerStartOnSpeech.value &&
+				state.name === 'paused' &&
+				time > 0
+			)
+				start?.();
+			previousDetection = value;
+		})
+	);
 	let pause: () => void;
 	let reset: () => void;
 </script>
@@ -101,6 +129,7 @@
 			bind:state
 			bind:time
 			bind:pause
+			bind:start
 			bind:reset
 			resetTime={speeches[resetTimeIndex].time}
 		/>

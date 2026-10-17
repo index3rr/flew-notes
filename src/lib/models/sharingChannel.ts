@@ -1,3 +1,5 @@
+import { get } from 'svelte/store';
+import { speechDropCode, addPartnerNotice } from './collaboration';
 import { isNodesWorthSaving, type Nodes } from './node';
 import {
 	applyActionBundleAndSyncUi,
@@ -24,7 +26,9 @@ export type SendAction = {
 	id: ActionId;
 	actionBundle: ActionBundle;
 };
+type PartnerMessage = { tag: 'partnerMessage'; text: string } | { tag: 'speechDrop'; code: string };
 export type HostMessage =
+	| PartnerMessage
 	| {
 			tag: 'sync';
 			nodes: Nodes;
@@ -44,6 +48,7 @@ export type HostMessage =
 	  };
 
 export type GuestMessage =
+	| PartnerMessage
 	| {
 			tag: 'requestSync';
 	  }
@@ -51,6 +56,37 @@ export type GuestMessage =
 			tag: 'action';
 			action: SendAction;
 	  };
+
+export function sendPartnerMessage(text: string) {
+	const cleaned = text.trim().slice(0, 2000);
+	if (!cleaned || !broadcastPartner({ tag: 'partnerMessage', text: cleaned })) return false;
+	addPartnerNotice(cleaned, false);
+	return true;
+}
+function broadcastPartner(message: PartnerMessage, except?: ConnectionId) {
+	let sent = false;
+	if ($connections.tag === 'host') {
+		for (const id of Object.keys($connections.holder) as ConnectionId[]) {
+			if (id === except) continue;
+			$connections.holder[id].channel.send(message);
+			sent = true;
+		}
+	} else if ($connections.tag === 'guest' && $connections.connection.tag === 'guestConnected') {
+		$connections.connection.channel.send(message);
+		sent = true;
+	}
+	return sent;
+}
+export function shareSpeechDropCode(code: string) {
+	speechDropCode.set(code);
+	broadcastPartner({ tag: 'speechDrop', code });
+}
+function receivePartner(message: PartnerMessage) {
+	if (message.tag === 'partnerMessage' && typeof message.text === 'string')
+		addPartnerNotice(message.text.slice(0, 2000), true);
+	if (message.tag === 'speechDrop' && typeof message.code === 'string')
+		speechDropCode.set(message.code.slice(0, 100));
+}
 
 function newActionId(): ActionId {
 	return crypto.randomUUID() as ActionId;
@@ -105,6 +141,7 @@ export function addHostChannelHandler(
 	id: ConnectionId
 ) {
 	channel.onOpen(() => {
+		channel.send({ tag: 'speechDrop', code: get(speechDropCode) });
 		channel.send({
 			tag: 'sync',
 			nodes: $nodes,
@@ -113,6 +150,11 @@ export function addHostChannelHandler(
 	});
 	channel.onMessage((message) => {
 		switch (message.tag) {
+			case 'partnerMessage':
+			case 'speechDrop':
+				receivePartner(message);
+				broadcastPartner(message, id);
+				break;
 			case 'requestSync':
 				channel.send({
 					tag: 'sync',
@@ -143,6 +185,10 @@ export function addHostChannelHandler(
 export function addGuestChannelHandler(channel: Channel<GuestMessage, HostMessage>) {
 	channel.onMessage((message) => {
 		switch (message.tag) {
+			case 'partnerMessage':
+			case 'speechDrop':
+				receivePartner(message);
+				break;
 			case 'sync':
 				if (
 					!message.first ||

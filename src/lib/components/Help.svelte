@@ -4,6 +4,20 @@
 	import Shortcuts from './Shortcuts.svelte';
 	import Button from './Button.svelte';
 	import Changelog from './Changelog.svelte';
+	import { showTutorial } from '$lib/models/tutorial';
+	import { closeDocument } from '$lib/models/autoSave';
+	import { tutorialStep } from '$lib/models/store';
+	let error = '';
+	async function restartTutorial() {
+		try {
+			if (!(await closeDocument())) return;
+			tutorialStep.set(0);
+			showTutorial.set(true);
+			closePopup();
+		} catch (e) {
+			error = (e as Error).message;
+		}
+	}
 
 	export let closePopup: () => void;
 
@@ -19,6 +33,8 @@
 			<p>useful resources</p>
 		</div>
 		<ul>
+			<Button icon="undo" text="restart tutorial" on:click={restartTutorial} />
+			{#if error}<p role="alert">{error}</p>{/if}
 			<Button icon="home" text="home page" link="/" on:click={closePopup} />
 			<Button
 				icon="angleBrackets"
@@ -38,8 +54,8 @@
 				notification={!$isChangelogVersionCurrent}
 			/>
 			<Button
-				icon = "keyboard"
-				text = "shortcuts"
+				icon="keyboard"
+				text="shortcuts"
 				on:click={() => {
 					closePopup();
 					openPopup(Shortcuts, 'Shortcuts');
@@ -54,16 +70,19 @@
 			<p>send feedback</p>
 		</div>
 		<ul>
-			<Button icon="copy" text="email" on:click={() => copyText('striped_dibble_0j@icloud.com')} 
+			<Button
+				icon="copy"
+				text="email"
+				on:click={() => copyText('striped_dibble_0j@icloud.com')}
 				tooltip="contact me on disc, barely check this"
 			/>
 			<Button icon="copy" text="discord" on:click={() => copyText('indexerr')} />
 			<Button icon="link" text="github" link="https://github.com/index3rr/" target="_blank" />
 			<Button
-				icon="link"
-				text="reddit"
-				link="https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-				tooltip="look, i dont have a reddit but the visual space would feel really off if there wasnt a button here. forgive me for this button and what it does. direct your anger at me on discord"
+				icon="open"
+				text="suggest a feature"
+				link="https://github.com/index3rr/flew-notes/issues/new"
+				tooltip="open a GitHub issue to suggest a feature or report a bug"
 				target="_blank"
 			/>
 		</ul>

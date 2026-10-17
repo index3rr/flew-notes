@@ -15,6 +15,54 @@
 <div class="top palette-plain">
 	<div class="scroll">
 		<section>
+			<div class="above"><h2>v1.3.0</h2></div>
+			the flow library update
+			<ul>
+				<li>
+					on select browsers you can now link a folder to your 'flow library' (disablable in settings jsyk)
+				</li>
+				<li>
+					with this, autosaves are saved to the real file you opened
+				</li>
+				<li>
+					on unsupported browsers for this like firefox and safari you can mass import flows from a folder
+				</li>
+				<li>
+					you can now name flows (and when you do the file name changes as well!!! no more flow(98).json)
+				</li>
+				<li>
+					autosave is now waaay less likely to drop your changes, and its very clear what is being saved
+				</li>
+				<li>
+					you can now edit how many local saves you can have stored in the browser before it starts deleting old ones
+				</li>
+			</ul>
+		</section>
+		<section>
+			<div class="above"><h2>v1.2.2</h2></div>
+			<ul>
+				<li>live flow collaboration works again, cross browser and cross network!</li>
+				<li>you can now start collaboration using a QR code</li>
+				<li>
+					collaboration menu will no longer let you try and fail to share your flows while offline
+				</li>
+				<li>prevents extinction</li>
+			</ul>
+		</section>
+		<section>
+			<div class="above">
+				<h2>v1.2.1</h2>
+			</div>
+			<ul>
+				<li>Save button improvements</li>
+				<li>Changed setting description</li>
+				<li>The current focus will scroll into frame with padding</li>
+				<li>Fun mode will no longer persist upon refreshing</li>
+				<li>Offline usage improvements</li>
+				<li>All shortcuts now documented</li>
+				<li>Now 220% more GDPR compliant!</li>
+				<li>Prevents extinction</li>
+			</ul>
 			<div class="above">
 				<h2>v1.2.0</h2>
 			</div>
@@ -22,33 +70,23 @@
 				Pacing:
 				<ul>
 					<li>
-						Pacing is a feature that can be enabled in settings which will look at all non blank cells in your flow for the currently focused column, and when you start the timer, show a secondary timer for the current focused cell. If you read that cell in the time it gives you and move to the next one by pushing the down arrow, you should finish the speech with exactly the amount of seconds in the 'Grace Period' setting remaining to recap arguments, etc.
+						Pacing is a feature that can be enabled in settings which will look at all non blank
+						cells in your flow for the currently focused column, and when you start the timer, show
+						a secondary timer for the current focused cell. If you read that cell in the time it
+						gives you and move to the next one by pushing the down arrow, you should finish the
+						speech with exactly the amount of seconds in the 'Grace Period' setting remaining to
+						recap arguments, etc.
 					</li>
 				</ul>
+				<li>Added Cut/Copy/Paste. How did we live without it!</li>
+				<li>Added selection, Shift + Click/Arrows to use</li>
+				<li>Cell focus now wraps</li>
+				<li>Added optionally dotted lines</li>
+				<li>Added fun mode setting (EPILEPSY WARNING)</li>
 				<li>
-					Added Cut/Copy/Paste. How did we live without it!
+					Manual save button and shortcut (<Shortcut keys={['control', 's']} inline />)
 				</li>
-				<li>
-					Added selection, Shift + Click/Arrows to use
-				</li>
-				<li>
-					Cell focus now wraps 
-				</li>
-				<li>
-					Added optionally dotted lines
-				</li>
-				<li>
-					Added fun mode setting (EPILEPSY WARNING)
-				</li>
-				<li>
-					Manual save button and shortcut (<Shortcut
-						keys={['control', 's']}
-						inline
-					/>)
-				</li>
-				<li>
-					Prevents extinction
-				</li>
+				<li>Prevents extinction</li>
 				look at me mom, i can write normal patch notes!
 			</ul>
 		</section>
@@ -59,16 +97,23 @@
 			<ul>
 				<li>
 					this is where the fork happend!!!!!!! everything before this is from
-					<a href="https://github.com/Ashwagandhae/debate-flow"> https://github.com/Ashwagandhae/debate-flow</a>
+					<a href="https://github.com/Ashwagandhae/debate-flow">
+						https://github.com/Ashwagandhae/debate-flow</a
+					>
 				</li>
 				<li>
-					basically, i found this legal loophole called gpl3 which allows me to take this code for myself and then add my github to it and stuff and then improve apon it and offer it for free for the purposes of public good, that ?dude? (no pronouns on the other ?guys? github this is why i have to take over) must be so pissed 
+					basically, i found this legal loophole called gpl3 which allows me to take this code for
+					myself and then add my github to it and stuff and then improve apon it and offer it for
+					free for the purposes of public good, that ?dude? (no pronouns on the other ?guys? github
+					this is why i have to take over) must be so pissed
 				</li>
 				<li>
-					thought really hard about what i want to do and decided to move to netlify (if ya didnt know: vercel is tight with the big benny yahu)
+					thought really hard about what i want to do and decided to move to netlify (if ya didnt
+					know: vercel is tight with the big benny yahu)
 				</li>
 				<li>
-					oh my god bruh i talk like im an idiot when im trying to write stupid stuff to procrastinate doing actual work :// i swear im a normal person.
+					oh my god bruh i talk like im an idiot when im trying to write stupid stuff to
+					procrastinate doing actual work :// i swear im a normal person.
 				</li>
 			</ul>
 		</section>

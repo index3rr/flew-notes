@@ -139,23 +139,21 @@ export const addNewBox = decorate(function (
 	return result;
 });
 
-export const addNewExtension = decorate(function (
-	nodes: Nodes,
-	parent: FlowId | BoxId
-) {
+export const addNewExtension = decorate(function (nodes: Nodes, parent: FlowId | BoxId) {
 	const flowId = getParentFlowId(nodes, parent).unwrap();
 	const extensionId = newBoxId();
 	return {
 		action: [newExtensionAction(parent, flowId, extensionId), newBoxAction(extensionId, flowId, 0)],
 		owner: flowId
-	}
+	};
 });
 
 export const addNewFlow = decorate(function (
 	nodes: Nodes,
 	index: number,
 	style: DebateStyleFlow,
-	switchSpeakers = false
+	switchSpeakers = false,
+	content?: string
 ) {
 	const starterBoxes = style.starterBoxes;
 	let columns;
@@ -172,7 +170,7 @@ export const addNewFlow = decorate(function (
 		index,
 		value: {
 			tag: 'flow',
-			content: '',
+			content: content ?? '',
 			invert: style.invert,
 			columns
 		}
@@ -289,4 +287,40 @@ export const replaceNodes = decorate(function (nodes: Nodes, newNodes: Nodes) {
 		},
 		owner: 'root'
 	};
+});
+
+// Copy a page from a separate document through the normal undo and sharing pipeline.
+export const importFlowPage = decorate(function (
+	nodes: Nodes,
+	source: Nodes,
+	sourceId: FlowId,
+	index: number = nodes.root.children.length
+) {
+	const original = getNode(source, sourceId).unwrap();
+	const id = newFlowId();
+	const actions: ActionBundle = [
+		{
+			tag: 'add',
+			parent: 'root',
+			id,
+			index: Math.max(0, Math.min(index, nodes.root.children.length)),
+			value: structuredClone(original.value)
+		}
+	];
+	function copyChildren(parent: FlowId | BoxId, children: BoxId[]) {
+		children.forEach((child, index) => {
+			const node = getNode(source, child).unwrap();
+			const boxId = newBoxId();
+			actions.push({
+				tag: 'add',
+				parent,
+				id: boxId,
+				index,
+				value: { ...structuredClone(node.value), flowId: id }
+			});
+			copyChildren(boxId, node.children);
+		});
+	}
+	copyChildren(id, original.children);
+	return { action: actions, owner: 'root', ret: id };
 });

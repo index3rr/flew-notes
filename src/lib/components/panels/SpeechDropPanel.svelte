@@ -1,5 +1,7 @@
 <script lang="ts">
-	import { onDestroy } from 'svelte';
+	import { onDestroy, onMount } from 'svelte';
+	import { speechDropCode, speechDocument } from '$lib/models/collaboration';
+	import { shareSpeechDropCode } from '$lib/models/sharingChannel';
 	import Button from '$lib/components/Button.svelte';
 
 	type SpeechDropFile = { index: number; name: string; ctime?: number };
@@ -7,7 +9,14 @@
 
 	const fallbackRefreshIntervalMs = 10 * 60 * 1000;
 	const connectDebounceMs = 500;
-	let roomCode = '';
+	let roomCode = $speechDropCode;
+	const unsubscribeCode = speechDropCode.subscribe((code) => {
+		if (code !== roomCode) {
+			roomCode = code;
+			editRoomCode();
+		}
+	});
+	onDestroy(unsubscribeCode);
 	let loadedRoomCode = '';
 	let files: SpeechDropFile[] = [];
 	let error = '';
@@ -64,7 +73,10 @@
 			// SpeechDrop's SockJS endpoint exposes its WebSocket transport at this URL.
 			socket = new WebSocket(`wss://speechdrop.net/sock/000/${sessionId}/websocket`);
 		} catch {
-			reconnectTimeout = setTimeout(() => connectRoomSocket(code, currentRequest), reconnectDelayMs);
+			reconnectTimeout = setTimeout(
+				() => connectRoomSocket(code, currentRequest),
+				reconnectDelayMs
+			);
 			reconnectDelayMs = Math.min(reconnectDelayMs * 2, 30000);
 			return;
 		}
@@ -133,6 +145,7 @@
 	}
 
 	function editRoomCode() {
+		speechDocument.set('');
 		requestNumber++;
 		stopRoomConnections();
 		clearTimeout(connectTimeout);
@@ -149,6 +162,28 @@
 		}
 	}
 
+	async function useDocument(file: SpeechDropFile) {
+		const request = requestNumber;
+		try {
+			const response = await fetch(
+				`/api/speechdrop/${encodeURIComponent(loadedRoomCode)}/${file.index}`
+			);
+			if (!response.ok) throw new Error('Could not load speech document');
+			let text: string;
+			if (/\.docx$/i.test(file.name)) {
+				const { extractRawText } = await import('mammoth/mammoth.browser');
+				text = (await extractRawText({ arrayBuffer: await response.arrayBuffer() })).value;
+			} else if (/\.txt$/i.test(file.name)) text = await response.text();
+			else throw new Error('Use a DOCX or TXT speech document for comparison');
+			if (request === requestNumber) speechDocument.set(text);
+		} catch (cause) {
+			error = (cause as Error).message;
+		}
+	}
+
+	onMount(() => {
+		if (roomCode.trim()) editRoomCode();
+	});
 	onDestroy(() => {
 		clearTimeout(connectTimeout);
 		stopRoomConnections();
@@ -161,7 +196,10 @@
 			aria-label="SpeechDrop room code"
 			placeholder="SpeechDrop Code"
 			bind:value={roomCode}
-			on:input={editRoomCode}
+			on:input={() => {
+				shareSpeechDropCode(roomCode);
+				editRoomCode();
+			}}
 		/>
 	</div>
 	{#if loading}
@@ -179,6 +217,8 @@
 						tooltip="download this file from the room"
 						link={`/api/speechdrop/${encodeURIComponent(loadedRoomCode)}/${file.index}`}
 					/>
+
+					<Button icon="file" text="Use for transcript" on:click={() => useDocument(file)} />
 				</li>
 			{/each}
 		</ul>

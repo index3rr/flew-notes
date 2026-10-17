@@ -2,11 +2,10 @@
 	import Timer from './Timer.svelte';
 	import SpeechTimer from './SpeechTimer.svelte';
 	import PacingTimer from './PacingTimer.svelte';
-	import Button from './Button.svelte';
-	import type { TimerState, SpeechTimerState, TimerSpeech } from '$lib/models/timer';
+	import type { TimerState, SpeechTimerState } from '$lib/models/timer';
 	import { timer } from '$lib/models/transition';
 	import { settings } from '$lib/models/settings';
-	import { onDestroy, tick } from 'svelte';
+	import { onDestroy } from 'svelte';
 	import { debateStyles, debateStyleMap, type DebateStyle } from '$lib/models/debateStyle';
 	import { nodes } from '$lib/models/store';
 	import type { Nodes } from '$lib/models/node';
@@ -17,7 +16,7 @@
 		speech: SpeechTimerState;
 	};
 
-	let showTimers = false;
+	let showTimers = true;
 
 	let update = false;
 
@@ -30,6 +29,14 @@
 			debateStyleIndex = newDebateStyleIndex;
 			debateStyle = debateStyles[debateStyleMap[debateStyleIndex]];
 			resetStates();
+			update = !update;
+		})
+	);
+
+	let pacingEnabled = settings.data.pacingEnabled.value as boolean;
+	onDestroy(
+		settings.subscribe(['pacingEnabled'], (key: string) => {
+			pacingEnabled = settings.data[key].value as boolean;
 			update = !update;
 		})
 	);
@@ -60,11 +67,10 @@
 	resetStates();
 
 	let currentNodes: Nodes;
-	nodes.subscribe((n) => (currentNodes = n));
+	onDestroy(nodes.subscribe((n) => (currentNodes = n)));
 
 	$: currentSpeech = debateStyle.timerSpeeches[states.speech.resetTimeIndex];
 	$: pacingPalette = currentSpeech?.secondary ? 'accent-secondary' : 'accent';
-	$: pacingEnabled = settings.data.pacingEnabled.value as boolean;
 </script>
 
 <div class="top">
@@ -104,9 +110,6 @@
 			</div>
 		{/if}
 	{/key}
-	<div class="buttons">
-		<Button icon={showTimers ? 'delete' : 'clock'} on:click={() => (showTimers = !showTimers)} />
-	</div>
 </div>
 
 <style>
@@ -121,12 +124,5 @@
 		gap: var(--padding);
 		width: 100%;
 		height: auto;
-	}
-	.buttons {
-		display: flex;
-		flex-direction: row;
-		justify-content: space-between;
-		align-items: center;
-		width: 100%;
 	}
 </style>

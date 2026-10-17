@@ -6,13 +6,38 @@
 	import NotesPanel from './panels/NotesPanel.svelte';
 	import StarredPanel from './panels/StarredPanel.svelte';
 	import SpeechDropPanel from './panels/SpeechDropPanel.svelte';
+	import LibraryPanel from './panels/LibraryPanel.svelte';
+	import TranscriptPanel from './panels/TranscriptPanel.svelte';
+	import CollaborationPanel from './panels/CollaborationPanel.svelte';
+	import Button from './Button.svelte';
+	import { documentOpen } from '$lib/models/autoSave';
+	import { nodes } from '$lib/models/store';
 	import type { FlowId } from '$lib/models/node';
 
 	export let side: 'left' | 'right';
 
-	const panelIds = ['tabsPanel', 'notesPanel', 'starredPanel', 'speechDropPanel', 'timersPanel'] as const;
+	const panelIds = [
+		'tabsPanel',
+		'notesPanel',
+		'starredPanel',
+		'speechDropPanel',
+		'timersPanel',
+		'libraryPanel',
+		'transcriptPanel',
+		'collaborationPanel'
+	] as const;
 	type PanelId = (typeof panelIds)[number];
 
+	const panelIcons: Record<PanelId, string> = {
+		tabsPanel: 'dots',
+		notesPanel: 'file',
+		starredPanel: 'star',
+		speechDropPanel: 'download',
+		timersPanel: 'clock',
+		libraryPanel: 'folder',
+		transcriptPanel: 'keyboard',
+		collaborationPanel: 'people'
+	};
 	interface PanelConfig {
 		id: PanelId;
 		name: string;
@@ -23,16 +48,16 @@
 		{ id: 'notesPanel', name: 'Notes' },
 		{ id: 'starredPanel', name: 'Starred arguments' },
 		{ id: 'speechDropPanel', name: 'SpeechDrop' },
-		{ id: 'timersPanel', name: 'Timers' }
+		{ id: 'timersPanel', name: 'Timers' },
+		{ id: 'libraryPanel', name: 'Flow library' },
+		{ id: 'transcriptPanel', name: 'Transcript' },
+		{ id: 'collaborationPanel', name: 'Collaboration' }
 	];
 
-	let panelValues: Record<PanelId, number> = {
-		tabsPanel: settings.data['tabsPanel'].value as number,
-		notesPanel: settings.data['notesPanel'].value as number,
-		starredPanel: settings.data['starredPanel'].value as number,
-		timersPanel: settings.data['timersPanel'].value as number,
-		speechDropPanel: settings.data['speechDropPanel'].value as number
-	};
+	let expanded: PanelId | null = null;
+	let panelValues = Object.fromEntries(
+		panelIds.map((id) => [id, settings.data[id].value])
+	) as Record<PanelId, number>;
 
 	onDestroy(
 		settings.subscribe([...panelIds], (key: string) => {
@@ -43,10 +68,12 @@
 		})
 	);
 
+	$: documentPanelsAvailable = $documentOpen && $nodes.root.children.length > 0;
+
 	$: activePanels = allPanels
 		.filter((p) => {
 			const pos = panelValues[p.id];
-			return (side === 'left' && pos === 1) || (side === 'right' && pos === 2);
+			return side === 'left' ? pos === 1 || pos === 3 : pos === 2 || pos === 4;
 		})
 		.sort((a, b) => {
 			const orderA = panelIds.indexOf(a.id);
@@ -64,19 +91,28 @@
 {#if activePanels.length > 0}
 	<div class="panel-container" class:customScrollbar={settings.data.customScrollbar.value}>
 		{#each activePanels as panel, i}
-			{#if i > 0}
+			{#if i > 0 && (panelValues[panel.id] < 3 || expanded === panel.id)}
 				<div class="divider" />
 			{/if}
 			<div
 				class="panel"
-				class:auto-size={panel.id === 'timersPanel' || panel.id === 'starredPanel' || panel.id === 'speechDropPanel'}
+				class:collapsed={panelValues[panel.id] >= 3 && expanded !== panel.id}
+				class:auto-size={panel.id === 'timersPanel' ||
+					panel.id === 'starredPanel' ||
+					panel.id === 'speechDropPanel'}
 			>
-				{#if panel.id === 'tabsPanel'}
+				{#if panel.id === 'libraryPanel'}
+					<LibraryPanel available={documentPanelsAvailable} />
+				{:else if panel.id === 'transcriptPanel'}
+					<TranscriptPanel />
+				{:else if panel.id === 'collaborationPanel'}
+					<CollaborationPanel />
+				{:else if panel.id === 'tabsPanel'}
 					<TabsPanel {selectedFlowId} {clickTab} {addFlow} {handleSort} bind:switchSpeakers />
 				{:else if panel.id === 'timersPanel'}
 					<TimersPanel />
 				{:else if panel.id === 'notesPanel'}
-					<NotesPanel editable={selectedFlowId != null} />
+					<NotesPanel editable={documentPanelsAvailable} />
 				{:else if panel.id === 'starredPanel'}
 					<StarredPanel {selectedFlowId} {clickTab} />
 				{:else if panel.id === 'speechDropPanel'}
@@ -84,10 +120,29 @@
 				{/if}
 			</div>
 		{/each}
+		<div class="collapsed-buttons">
+			{#each activePanels.filter((panel) => panelValues[panel.id] >= 3) as panel}
+				<Button
+					icon={panelIcons[panel.id]}
+					toggled={expanded === panel.id}
+					tooltip={panel.name}
+					ariaLabel={panel.name}
+					on:click={() => (expanded = expanded === panel.id ? null : panel.id)}
+				/>
+			{/each}
+		</div>
 	</div>
 {/if}
 
 <style>
+	.panel.collapsed {
+		display: none;
+	}
+	.collapsed-buttons {
+		display: flex;
+		flex-shrink: 0;
+		margin-top: auto;
+	}
 	.panel-container {
 		background: var(--background);
 		width: 100%;

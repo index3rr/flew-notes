@@ -25,8 +25,8 @@
 	let overFirst: number | null = null;
 	let overSecond: number | null = null;
 	let dragSource: number | null = null;
-	const overHalf = (ev: DragEvent & { target: HTMLElement }) => {
-		let rect = ev.target.getBoundingClientRect();
+	const overHalf = (ev: DragEvent & { currentTarget: HTMLElement }) => {
+		let rect = ev.currentTarget.getBoundingClientRect();
 		let offset = ev.clientY - rect.top;
 		let half = rect.height / 2;
 		return offset > half;
@@ -62,6 +62,7 @@
 		overFirst = null;
 		overSecond = null;
 		dragSource = null;
+		if (ev.dataTransfer.types.includes('application/x-flew-page')) return;
 		let dragged = getDraggedParent(ev.target);
 		let from: number = parseInt(ev.dataTransfer.getData('source'));
 		let to: number = parseInt(dragged.index as string);

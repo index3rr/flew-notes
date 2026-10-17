@@ -78,6 +78,7 @@ class Settings {
 		this.setValue('colorTheme', 3);
 		for (const key in this.data) {
 			const s = this.data[key];
+			if (key === 'maxLocalSaves') continue;
 			if (s.type === 'slider') {
 				const speed = 0.5 + Math.random() * 2;
 				const min = s.detail.min;
@@ -144,6 +145,8 @@ class Settings {
 	convertSettingsToJson(includeDefaults?: boolean): string {
 		const jsonSettingsData: { [key: string]: number | boolean | string | Hexcode } = {};
 		for (const key of Object.keys(this.data)) {
+			// fun mode should never be saved
+			if (key === 'funMode') continue;
 			if (this.data[key].value != this.data[key].auto || includeDefaults) {
 				jsonSettingsData[key] = this.data[key].value;
 				if (this.data[key].type == 'radio') {
@@ -172,7 +175,9 @@ class Settings {
 		// In the panels fork, existing users who had Notes visible should find it on the right.
 		const migrateNotesPanel =
 			(settingsData.version ?? 0) < 2 &&
-			(settingsData.settings['notesPanel'] === 1 || settingsData.settings['notesPanel'] === 2);
+			(settingsData.settings['showSideDoc'] === true ||
+				settingsData.settings['notesPanel'] === 1 ||
+				settingsData.settings['notesPanel'] === 2);
 
 		try {
 			for (const key in settingsData.settings) {
@@ -187,10 +192,13 @@ class Settings {
 				}
 				this.setValue(key, settingsData['settings'][key] as number | boolean | Hexcode);
 			}
+			if ((settingsData.version ?? 0) < 2 && settingsData.settings['notesPanel'] == null) {
+				this.setValue('notesPanel', settingsData.settings['showSideDoc'] === true ? 2 : 0);
+			}
 			if (migrateNotesPanel) {
 				this.setValue('notesPanel', 2);
-				this.saveToLocalStorage();
 			}
+			if ((settingsData.version ?? 0) < SETTINGS_VERSION) this.saveToLocalStorage();
 		} catch (e) {
 			localStorage.setItem('settings', JSON.stringify({}));
 			this.resetToAuto();
@@ -215,6 +223,8 @@ class Settings {
 	}
 	randomize() {
 		for (const key in this.data) {
+			// never randomize fun mode or telemetry (gdpr)
+			if (key === 'funMode' || key === 'telemetry' || key === 'maxLocalSaves') continue;
 			const setting = this.data[key];
 			if (setting.type == 'slider') {
 				this.setValue(
@@ -737,11 +747,52 @@ export const settings: Settings = new Settings({
 		auto: true,
 		type: 'toggle'
 	},
+	showFlowLibraryBar: {
+		name: 'Show flow library top bar',
+		value: true,
+		auto: true,
+		type: 'toggle'
+	},
+	maxLocalSaves: {
+		name: 'Maximum browser saves',
+		value: 20,
+		auto: 20,
+		type: 'slider',
+		info:
+			typeof window !== 'undefined' &&
+			typeof (window as Window & { showDirectoryPicker?: unknown }).showDirectoryPicker ===
+				'function'
+				? "0 = unlimited, this doesn't effect flows in a linked folder"
+				: '0 = unlimited',
+		detail: { min: 0, max: 500, step: 1 }
+	},
+
 	showSaveButton: {
 		name: 'Manual save button',
 		value: true,
 		auto: true,
 		type: 'toggle'
+	},
+	libraryPanel: {
+		name: 'Flow library',
+		value: 0,
+		auto: 0,
+		type: 'radio',
+		detail: { options: ['Off', 'Left', 'Right', 'Left collapsed', 'Right collapsed'] }
+	},
+	transcriptPanel: {
+		name: 'Transcript',
+		value: 0,
+		auto: 0,
+		type: 'radio',
+		detail: { options: ['Off', 'Left', 'Right', 'Left collapsed', 'Right collapsed'] }
+	},
+	collaborationPanel: {
+		name: 'Collaboration',
+		value: 0,
+		auto: 0,
+		type: 'radio',
+		detail: { options: ['Off', 'Left', 'Right', 'Left collapsed', 'Right collapsed'] }
 	},
 	tabsPanel: {
 		name: 'Tabs',
@@ -749,7 +800,7 @@ export const settings: Settings = new Settings({
 		auto: 1,
 		type: 'radio',
 		detail: {
-			options: ['Hidden', 'Left', 'Right']
+			options: ['Off', 'Left', 'Right', 'Left collapsed', 'Right collapsed']
 		}
 	},
 	timersPanel: {
@@ -758,7 +809,7 @@ export const settings: Settings = new Settings({
 		auto: 1,
 		type: 'radio',
 		detail: {
-			options: ['Hidden', 'Left', 'Right']
+			options: ['Off', 'Left', 'Right', 'Left collapsed', 'Right collapsed']
 		}
 	},
 	notesPanel: {
@@ -767,7 +818,7 @@ export const settings: Settings = new Settings({
 		auto: 2,
 		type: 'radio',
 		detail: {
-			options: ['Hidden', 'Left', 'Right']
+			options: ['Off', 'Left', 'Right', 'Left collapsed', 'Right collapsed']
 		}
 	},
 	starredPanel: {
@@ -775,14 +826,14 @@ export const settings: Settings = new Settings({
 		value: 0,
 		auto: 0,
 		type: 'radio',
-		detail: { options: ['Hidden', 'Left', 'Right'] }
+		detail: { options: ['Off', 'Left', 'Right', 'Left collapsed', 'Right collapsed'] }
 	},
 	speechDropPanel: {
 		name: 'SpeechDrop',
 		value: 0,
 		auto: 0,
 		type: 'radio',
-		detail: { options: ['Hidden', 'Left', 'Right'] }
+		detail: { options: ['Off', 'Left', 'Right', 'Left collapsed', 'Right collapsed'] }
 	},
 	panelWidth: {
 		name: 'Right panel width',
@@ -829,7 +880,7 @@ export const settings: Settings = new Settings({
 		info: 'Reload for these changes to take effect'
 	},
 	shiftArrowThroughCells: {
-		name: 'Shift + arrow navigates cells (instead of selecting text)',
+		name: 'Shift + arrow selects cells',
 		value: true,
 		auto: true,
 		type: 'toggle'
@@ -840,12 +891,24 @@ export const settings: Settings = new Settings({
 		auto: true,
 		type: 'toggle'
 	},
+	timerAutoAdvance: {
+		name: 'Select next speech when time ends',
+		value: true,
+		auto: true,
+		type: 'toggle'
+	},
+	timerStartOnSpeech: {
+		name: 'Start speech timer on transcription',
+		info: 'Start the selected paused timer when speech matches the opponent document.',
+		value: false,
+		auto: false,
+		type: 'toggle'
+	},
 	pacingEnabled: {
 		name: 'Enable pacing',
 		type: 'toggle',
 		value: false,
-		auto: false,
-		info: 'Reload for these changes to take effect (will be fixed.. someday)'
+		auto: false
 	},
 	pacingGracePeriod: {
 		name: 'Grace period (seconds)',
@@ -901,6 +964,9 @@ export const settingsGroups: SettingsGroup[] = [
 		name: 'Panels',
 		settings: [
 			'tabsPanel',
+			'libraryPanel',
+			'transcriptPanel',
+			'collaborationPanel',
 			'notesPanel',
 			'starredPanel',
 			'timersPanel',
@@ -989,6 +1055,7 @@ export const settingsGroups: SettingsGroup[] = [
 			'showSaveButton'
 		]
 	},
+	{ name: 'Flow library', settings: ['showFlowLibraryBar', 'maxLocalSaves'] },
 	{
 		name: 'Scrollbars',
 		settings: ['customScrollbar', 'customScrollbarWidth']
@@ -998,8 +1065,8 @@ export const settingsGroups: SettingsGroup[] = [
 		settings: ['consistentEnterBehaviour', 'tabReturnsToParent', 'shiftArrowThroughCells']
 	},
 	{
-		name: 'Pacing',
-		settings: ['pacingEnabled', 'pacingGracePeriod']
+		name: 'Timers',
+		settings: ['timerAutoAdvance', 'timerStartOnSpeech', 'pacingEnabled', 'pacingGracePeriod']
 	},
 	{ name: 'Fun', settings: ['funMode'] }
 ];
