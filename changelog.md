@@ -51,22 +51,9 @@
 - 
 
 ## Big features (.X. releases probably)
-- Persistancy (completed in 1.3.0):
-    - set folder for flows to save at persistantly using filesystem api in chrome... ugh it sux this wont work in firefox, some way to work around this?
-    - essentially, i should be able to select some folder and when i open flew itll read all the flows there and let me select them, and also let me navigate folders and stuff so i can have a folder for my preflows at the top. i think the buttons that are in the 3 dots menu should be pulled out so its open, open copy (maybe call this duplicate), and deletee
-    - for this we need a simple editable title for flow, put it above the tabscroll bit with the list of tabs/flow pages, maybe make the font size a litle larger for the title, and make it light colored with a placeholder text "new flow" so you know its a title, and make that be the filename for the thing, when its empty name it something with the date and time in it by default i think
-    - add tests for this if you can which im unsure if you can
-    - implementation checklist: remember the selected folder, restore it on startup, and offer reconnect when browser permissions expire
-    - Firefox/Safari fallback: import a folder into a persistent browser library, keep its subfolders, and download edited JSON files back to disk
-    - protect existing files with unique filenames for new flows and duplicates; detect outside edits before overwriting
-    - save the final edit after typing stops, including the title and notes; flush pending text before manual saves and document switches
-    - show save/error status, keep browser recovery copies, and verify folder navigation, reopen, rename, duplicate, delete, and permission failures in browser tests
-    - completed: all items above, including manual-save and immediate-reload recovery, quota/write failures, legacy imports, Unicode filenames, and saving an existing browser flow when a folder is chosen
-    - browser tests use real directory/file handles with an automated chooser; native-handle reload tests use a regular isolated Chromium profile
 
-- Panels: Actually dockable re-organizable windows like godot does, this already has a branch called panels
+- Panels:
     - work being done on panels branch
-    - link with cardmirror here
 - Theming engine:
     - Transparency
     - Image background
