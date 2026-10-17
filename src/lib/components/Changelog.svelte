@@ -15,11 +15,37 @@
 <div class="top palette-plain">
 	<div class="scroll">
 		<section>
+			<div class="above"><h2>v1.3.0</h2></div>
+			<ul>
+				<li>
+					Choose a flow folder in Chrome or Edge to save directly to disk and reopen your library.
+				</li>
+				<li>
+					Browse subfolders for preflows, with Open, Duplicate, Download, and Delete always visible.
+				</li>
+				<li>
+					Firefox and Safari can import folders into a browser library; download edits to keep them
+					on disk.
+				</li>
+				<li>
+					Name the whole flow above its page tabs, then press + to create it with a starting page.
+					Save now sits beside the title.
+				</li>
+				<li>Autosave now includes the final typed argument, document title, and notes.</li>
+				<li>
+					Save status and browser recovery copies help when folder permission expires or a file
+					changes outside Flew.
+				</li>
+			</ul>
+		</section>
+		<section>
 			<div class="above"><h2>v1.2.2</h2></div>
 			<ul>
 				<li>live flow collaboration works again, cross browser and cross network!</li>
 				<li>you can now start collaboration using a QR code</li>
-				<li>collaboration menu will no longer let you try and fail to share your flows while offline</li>
+				<li>
+					collaboration menu will no longer let you try and fail to share your flows while offline
+				</li>
 				<li>prevents extinction</li>
 			</ul>
 		</section>

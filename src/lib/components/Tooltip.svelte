@@ -143,6 +143,7 @@
 		display: inline-block;
 	}
 	.tooltip {
+		pointer-events: none;
 		border: none;
 		padding: var(--padding);
 		color: var(--text);

@@ -78,6 +78,7 @@ class Settings {
 		this.setValue('colorTheme', 3);
 		for (const key in this.data) {
 			const s = this.data[key];
+			if (key === 'maxLocalSaves') continue;
 			if (s.type === 'slider') {
 				const speed = 0.5 + Math.random() * 2;
 				const min = s.detail.min;
@@ -106,9 +107,15 @@ class Settings {
 				} else if (s.type === 'radio') {
 					this.setValue(k, Math.floor(Math.random() * s.detail.options.length));
 				} else if (s.type === 'color') {
-					const r = Math.floor(Math.random() * 256).toString(16).padStart(2, '0');
-					const g = Math.floor(Math.random() * 256).toString(16).padStart(2, '0');
-					const b = Math.floor(Math.random() * 256).toString(16).padStart(2, '0');
+					const r = Math.floor(Math.random() * 256)
+						.toString(16)
+						.padStart(2, '0');
+					const g = Math.floor(Math.random() * 256)
+						.toString(16)
+						.padStart(2, '0');
+					const b = Math.floor(Math.random() * 256)
+						.toString(16)
+						.padStart(2, '0');
 					this.setValue(k, ('#' + r + g + b) as Hexcode);
 				}
 			}, 10)
@@ -204,7 +211,7 @@ class Settings {
 	randomize() {
 		for (const key in this.data) {
 			// never randomize fun mode or telemetry (gdpr)
-			if (key === 'funMode' || key === 'telemetry') continue;
+			if (key === 'funMode' || key === 'telemetry' || key === 'maxLocalSaves') continue;
 			const setting = this.data[key];
 			if (setting.type == 'slider') {
 				this.setValue(
@@ -727,6 +734,26 @@ export const settings: Settings = new Settings({
 		auto: true,
 		type: 'toggle'
 	},
+	showFlowLibraryBar: {
+		name: 'Show flow library top bar',
+		value: true,
+		auto: true,
+		type: 'toggle'
+	},
+	maxLocalSaves: {
+		name: 'Maximum browser saves',
+		value: 20,
+		auto: 20,
+		type: 'slider',
+		info:
+			typeof window !== 'undefined' &&
+			typeof (window as Window & { showDirectoryPicker?: unknown }).showDirectoryPicker ===
+				'function'
+				? "0 = unlimited, this doesn't effect flows in a linked folder"
+				: '0 = unlimited',
+		detail: { min: 0, max: 500, step: 1 }
+	},
+
 	showSaveButton: {
 		name: 'Manual save button',
 		value: true,
@@ -932,11 +959,15 @@ export const settingsGroups: SettingsGroup[] = [
 			'showSaveButton'
 		]
 	},
+	{ name: 'Flow library', settings: ['showFlowLibraryBar', 'maxLocalSaves'] },
 	{
 		name: 'Scrollbars',
 		settings: ['customScrollbar', 'customScrollbarWidth']
 	},
-	{ name: 'Controls', settings: ['consistentEnterBehaviour', 'tabReturnsToParent', 'shiftArrowThroughCells'] },
+	{
+		name: 'Controls',
+		settings: ['consistentEnterBehaviour', 'tabReturnsToParent', 'shiftArrowThroughCells']
+	},
 	{
 		name: 'Pacing',
 		settings: ['pacingEnabled', 'pacingGracePeriod']

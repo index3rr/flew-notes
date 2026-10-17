@@ -47,7 +47,7 @@
 				{/if}
 				{#if $tutorialStep > 2}
 					<span in:tutorialSpan>
-						to <span class="secondary">download/upload</span>,
+						to <span class="secondary">save your flow</span>,
 					</span>
 				{/if}
 				{#if $tutorialStep > 3}
@@ -63,11 +63,13 @@
 			<Icon name="arrowLeft" />
 			<p>
 				<span>
-					click to create a new flow on <span class="primary">aff</span>
+					name your flow above, then click <span class="primary">+</span> beside the title to open its
+					first page
 				</span>
 				{#if $tutorialStep > 5}
 					<span in:tutorialSpan>
-						or <span class="secondary">neg</span>
+						then use <span class="primary">+ aff</span> or <span class="secondary">+ neg</span> to add
+						pages
 					</span>
 				{/if}
 			</p>

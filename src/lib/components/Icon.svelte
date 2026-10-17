@@ -154,6 +154,10 @@
 <path d="M35 38V82C35 87.5228 39.4772 92 45 92H75C80.5228 92 85 87.5228 85 82V38C85 32.4772 80.5228 28 75 28H45C39.4772 28 35 32.4772 35 38Z" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>`
 		},
 		{
+			name: 'folder',
+			svg: `<path d="M10 30V78C10 84.6274 15.3726 90 22 90H78C84.6274 90 90 84.6274 90 78V38C90 31.3726 84.6274 26 78 26H50L40 14H22C15.3726 14 10 19.3726 10 26V30Z" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>`
+		},
+		{
 			name: 'file',
 			svg: `<path d="M17 20L17 80C17 85.5228 21.4772 90 27 90H72C77.5228 90 82 85.5228 82 80V35L57 10H27C21.4772 10 17 14.4771 17 20Z" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M52 10V40H82" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>`

@@ -127,17 +127,25 @@ async function installFakeQrCamera(
 test('share', async ({ context }) => {
 	const hostPage = await context.newPage();
 	await hostPage.goto('/app');
-	await hostPage.getByRole('button', { name: 'aff' }).click();
+	await hostPage.getByRole('button', { name: 'New flow', exact: true }).click();
 	await hostPage.getByPlaceholder('type name here').fill('test');
 	await hostPage.getByPlaceholder('type name here').press('Enter');
 	await hostPage.getByPlaceholder('type here').fill('test');
-	await hostPage.getByRole('button', { name: 'neg' }).click();
+	await hostPage.locator('.addTab').getByRole('button', { name: 'neg', exact: true }).click();
 	await hostPage.getByPlaceholder('type name here').fill('test 2');
 	await hostPage.getByPlaceholder('type name here').press('Enter');
 	await hostPage.getByPlaceholder('type here').fill('test 2');
 	await hostPage.getByPlaceholder('type here').press('Shift+Enter');
-	await hostPage.getByRole('textbox').nth(2).fill('test 3');
-	await hostPage.getByRole('textbox').nth(2).press('ArrowLeft');
+	await hostPage
+		.locator('.grid > .title, .grid > .flow')
+		.getByRole('textbox')
+		.nth(2)
+		.fill('test 3');
+	await hostPage
+		.locator('.grid > .title, .grid > .flow')
+		.getByRole('textbox')
+		.nth(2)
+		.press('ArrowLeft');
 	await hostPage.locator('.sidebar .header .buttons div:nth-child(4) > .top').first().click();
 	await hostPage.getByRole('button', { name: 'host new room' }).click();
 	await hostPage.getByRole('button', { name: 'add guest' }).click();
@@ -173,7 +181,9 @@ test('share', async ({ context }) => {
 		// second tab
 		await page.getByRole('button', { name: 'test 2' }).click();
 		await expect(page.getByPlaceholder('type here').first()).toHaveValue('test 2');
-		await expect(page.getByRole('textbox').nth(2)).toHaveValue('test 3');
+		await expect(
+			page.locator('.grid > .title, .grid > .flow').getByRole('textbox').nth(2)
+		).toHaveValue('test 3');
 	}
 	// see if edits go both ways
 	let i = 0;
@@ -182,7 +192,7 @@ test('share', async ({ context }) => {
 		[guestPage, hostPage]
 	]) {
 		// add tab on page
-		await page.getByRole('button', { name: 'aff' }).click();
+		await page.locator('.addTab').getByRole('button', { name: 'aff', exact: true }).click();
 		await page.getByPlaceholder('type name here').first().fill(`share test ${i}`);
 		await page.getByPlaceholder('type name here').first().press('Enter');
 		// check if otherPage has the new tab
@@ -205,8 +215,8 @@ async function verifyQrSharing(
 	const guestPage = await guestContext.newPage();
 	await installFakeQrCamera(hostPage, rejectIceOverrides, forceRelay);
 	await installFakeQrCamera(guestPage, rejectIceOverrides, forceRelay);
-	hostPage.on('pageerror', (error) => console.log('host page error:', error.message));
-	guestPage.on('pageerror', (error) => console.log('guest page error:', error.message));
+	hostPage.on('pageerror', (error) => console.log('host page error:', error.stack));
+	guestPage.on('pageerror', (error) => console.log('guest page error:', error.stack));
 	guestPage.on('console', (message) => {
 		if (message.type() == 'error') console.log('guest console error:', message.text());
 	});
@@ -374,7 +384,11 @@ async function verifyQrSharing(
 		[hostPage, guestPage, 'QR host edit'],
 		[guestPage, hostPage, 'QR guest edit']
 	] as const) {
-		await page.getByRole('button', { name: 'aff', exact: true }).click();
+		if (
+			await page.locator('.addTab').getByRole('button', { name: 'aff', exact: true }).isDisabled()
+		)
+			await page.getByRole('button', { name: 'New flow', exact: true }).click();
+		else await page.locator('.addTab').getByRole('button', { name: 'aff', exact: true }).click();
 		await page.getByPlaceholder('type name here').first().fill(name);
 		await page.getByPlaceholder('type name here').first().press('Enter');
 		await expect(partner.getByRole('button', { name, exact: true })).toBeVisible();

@@ -3,9 +3,10 @@ import { type BoxId, type FlowId, type Nodes, newFlowId, newBoxId, getNode } fro
 import type { OldBox, OldFlows } from './oldType';
 import { newNodes, sideDocText } from './store';
 import { applyActionBundle } from './nodeAction';
-import { settings, SETTINGS_VERSION, type SaveableSettings } from './settings';
+import { settings, SETTINGS_VERSION } from './settings';
 import { get } from 'svelte/store';
-import { trackFileImported, trackFileExported } from './telemetry';
+import { documentTitle, documentFilename, documentCreated } from './document';
+import { trackFileExported } from './telemetry';
 
 const CURRENT_SAVE_VERSION: Version = 1 as const;
 
@@ -15,19 +16,30 @@ type SaveableNodes = {
 	nodes: Nodes;
 	version: Version;
 	sideDocText?: string;
+	title?: string;
+	created?: string;
 };
-export function getJson(nodes: Nodes): string {
+export function getJson(nodes: Nodes, title = get(documentTitle)): string {
 	const saveable: SaveableNodes = {
 		nodes,
 		version: CURRENT_SAVE_VERSION,
-		sideDocText: get(sideDocText)
+		sideDocText: get(sideDocText),
+		title,
+		created: get(documentCreated) ?? undefined
 	};
 	return JSON.stringify(saveable);
 }
 
-export function loadNodes(data: {[key: string]: any}): Nodes {
+export function loadNodes(data: { [key: string]: any }, applyMetadata = true): Nodes {
+	if (
+		!data ||
+		typeof data !== 'object' ||
+		(data.version != null && data.version !== 1 && data.version !== 0)
+	)
+		throw new Error('Unsupported flow file');
 	let version: Version = data?.version ?? 0;
 	let upgraded = data;
+	if (version === 0 && !Array.isArray(data)) throw new Error('Invalid legacy flow file');
 	while (version < CURRENT_SAVE_VERSION) {
 		if (upgrade[version]) {
 			upgraded = upgrade[version](upgraded);
@@ -37,36 +49,102 @@ export function loadNodes(data: {[key: string]: any}): Nodes {
 		}
 	}
 	const ret: SaveableNodes = upgraded as SaveableNodes;
-	if (ret.sideDocText) {
-		sideDocText.set(ret.sideDocText);
+	validateNodes(ret.nodes);
+	if (ret.sideDocText != null && typeof ret.sideDocText !== 'string')
+		throw new Error('Invalid notes');
+	if (ret.title != null && typeof ret.title !== 'string') throw new Error('Invalid title');
+	if (
+		ret.created != null &&
+		(typeof ret.created !== 'string' || !Number.isFinite(Date.parse(ret.created)))
+	)
+		throw new Error('Invalid document date');
+	if (applyMetadata) {
+		sideDocText.set(ret.sideDocText ?? '');
+		documentTitle.set(ret.title ?? '');
+		documentCreated.set(ret.created ?? null);
 	}
 	return ret.nodes;
 }
 
+function validateNodes(nodes: Nodes) {
+	if (
+		!nodes?.root ||
+		nodes.root.value?.tag !== 'root' ||
+		nodes.root.parent !== null ||
+		nodes.root.level !== -1
+	)
+		throw new Error('Invalid flow tree');
+	const visited = new Set<string>();
+	const queue: { id: string; parent: string | null; level: number; flow?: string }[] = [
+		{ id: 'root', parent: null, level: -1 }
+	];
+	while (queue.length) {
+		const { id, parent, level, flow } = queue.pop()!;
+		const node = (nodes as unknown as Record<string, NodeData>)[id];
+		if (
+			!node ||
+			visited.has(id) ||
+			node.parent !== parent ||
+			node.level !== level ||
+			!Array.isArray(node.children)
+		)
+			throw new Error('Invalid flow tree');
+		visited.add(id);
+		const value = node.value;
+		if (id !== 'root') {
+			if (typeof value.content !== 'string' || value.tag !== (parent === 'root' ? 'flow' : 'box'))
+				throw new Error('Invalid flow node');
+			if (
+				value.tag === 'flow' &&
+				(!Array.isArray(value.columns) ||
+					!value.columns.every((c: unknown) => typeof c === 'string') ||
+					typeof value.invert !== 'boolean')
+			)
+				throw new Error('Invalid flow columns');
+			if (value.tag === 'box' && value.flowId !== flow) throw new Error('Invalid box flow');
+		}
+		for (const child of node.children) {
+			if (typeof child !== 'string') throw new Error('Invalid child');
+			queue.push({
+				id: child,
+				parent: id,
+				level: level + 1,
+				flow: value.tag === 'flow' ? id : flow
+			});
+		}
+	}
+	if (visited.size !== Object.keys(nodes).length) throw new Error('Unreachable flow nodes');
+}
+type NodeData = {
+	parent: string | null;
+	level: number;
+	children: string[];
+	value: { tag: string; content?: string; columns?: unknown[]; invert?: boolean; flowId?: string };
+};
+
 export function downloadJson(nodes: Nodes) {
 	const data: string = getJson(nodes);
-	downloadString(data, 'flow.json');
+	downloadString(data, documentFilename());
 	trackFileExported('json', nodes.root.children.length);
 }
 
 export function downloadSettingsJson() {
-	let data = settings.convertSettingsToJson(true);
+	const data = settings.convertSettingsToJson(true);
 	downloadString(data, 'settings.json');
 }
 
-export function importSettingsJson(data: {[key: string]: any}) {
-	if (!data["isSettings"]) {
+export function importSettingsJson(data: { [key: string]: any }) {
+	if (!data['isSettings']) {
 		return;
 	}
 
-	if (data["version"] != SETTINGS_VERSION) {
+	if (data['version'] != SETTINGS_VERSION) {
 		return; // Handle upgrading settings here if needed in the future
 	}
 
 	try {
 		settings.parseJsonToSettings(data);
-	}
-	catch (e) {
+	} catch (e) {
 		return;
 	}
 }
@@ -78,6 +156,41 @@ export function downloadString(data: string, filename: string) {
 	document.body.appendChild(element);
 	element.click();
 	document.body.removeChild(element);
+}
+
+export async function saveStringAs(
+	data: string,
+	filename: string,
+	contentForName?: (name: string) => string
+) {
+	const picker = (
+		window as Window & {
+			showSaveFilePicker?: (options: {
+				suggestedName: string;
+				types: { description: string; accept: Record<string, string[]> }[];
+			}) => Promise<FileSystemFileHandle>;
+		}
+	).showSaveFilePicker;
+	if (!picker) {
+		downloadString(data, filename);
+		return;
+	}
+	try {
+		const handle = await picker.call(window, {
+			suggestedName: filename,
+			types: [{ description: 'Flew flow (.JSON)', accept: { 'application/json': ['.json'] } }]
+		});
+		const stream = await handle.createWritable();
+		try {
+			await stream.write(contentForName ? contentForName(handle.name) : data);
+			await stream.close();
+		} catch (error) {
+			await stream.abort().catch(() => undefined);
+			throw error;
+		}
+	} catch (error) {
+		if ((error as DOMException).name !== 'AbortError') throw error;
+	}
 }
 
 function childToData(
@@ -104,8 +217,8 @@ function childToData(
 	// exclude root
 	if (x >= 0) {
 		const node = getNode(nodes, boxId).unwrap();
-		if (node.value.tag === "box" && node.value.isExtension) {
-			data[y][x] = "→ Extended →";
+		if (node.value.tag === 'box' && node.value.isExtension) {
+			data[y][x] = '→ Extended →';
 		} else {
 			data[y][x] = node.value.content;
 		}
@@ -123,8 +236,13 @@ function fixXlsxWorkbookName(name: string) {
 	return name;
 }
 
-export function downloadXlsx(nodes: Nodes) {
+export async function downloadXlsx(
+	nodes: Nodes,
+	handle?: FileSystemFileHandle,
+	title = get(documentTitle)
+) {
 	const wb: Workbook = new Workbook();
+	wb.title = title;
 
 	let unnamedIterator = 1;
 	for (const flowId of nodes.root.children) {
@@ -134,8 +252,9 @@ export function downloadXlsx(nodes: Nodes) {
 
 		let name: string = getNode(nodes, flowId).unwrap().value.content;
 
-		if (!name) { // Allows unnamed books to be downloaded
-			name = "Unnamed Flow " + unnamedIterator;
+		if (!name) {
+			// Allows unnamed books to be downloaded
+			name = 'Unnamed Flow ' + unnamedIterator;
 			unnamedIterator += 1;
 		}
 
@@ -184,38 +303,45 @@ export function downloadXlsx(nodes: Nodes) {
 		// bold headers
 		ws.getRow(1).font = { bold: true };
 	}
-	wb.xlsx
-		.writeBuffer()
-		.then(function (value: Buffer) {
-			// build anchor tag and attach file (works in chrome)
-			const a: HTMLAnchorElement = document.createElement('a');
-			const data: Blob = new Blob([value], {
-				type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-			});
-
-			const url: string = URL.createObjectURL(data);
-			a.href = url;
-			a.download = 'flow.xlsx';
-			document.body.appendChild(a);
-			a.click();
-			setTimeout(function () {
-				document.body.removeChild(a);
-				window.URL.revokeObjectURL(url);
-			}, 0);
+	return wb.xlsx.writeBuffer().then(async function (value: Buffer) {
+		if (handle) {
+			const stream = await handle.createWritable();
+			try {
+				await stream.write(new Blob([value]));
+				await stream.close();
+			} catch (error) {
+				await stream.abort().catch(() => undefined);
+				throw error;
+			}
 			trackFileExported('xlsx', nodes.root.children.length);
-		})
-		.catch(function (error) {
-			console.log(error.message);
+			return;
+		}
+		// build anchor tag and attach file (works in chrome)
+		const a: HTMLAnchorElement = document.createElement('a');
+		const data: Blob = new Blob([value], {
+			type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 		});
+
+		const url: string = URL.createObjectURL(data);
+		a.href = url;
+		a.download = documentFilename().replace(/\.json$/, '.xlsx');
+		document.body.appendChild(a);
+		a.click();
+		setTimeout(function () {
+			document.body.removeChild(a);
+			window.URL.revokeObjectURL(url);
+		}, 0);
+		trackFileExported('xlsx', nodes.root.children.length);
+	});
 }
 
 const upgrade: {
-	[key: number]: (saved: {[key: string]: any}) => SaveableNodes;
+	[key: number]: (saved: { [key: string]: any }) => SaveableNodes;
 } = {
 	0: upgrade_0_1
 };
 
-function upgrade_0_1(saved: {[key: string]: any}): SaveableNodes {
+function upgrade_0_1(saved: { [key: string]: any }): SaveableNodes {
 	const flows = saved as OldFlows;
 	const nodes: Nodes = newNodes();
 	for (let i = 0; i < flows.length; i++) {

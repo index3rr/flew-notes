@@ -187,11 +187,21 @@ Cookieless PostHog integration with 5 tiers (0-4): None, Errors, Usage, All (inc
 
 ### Service Worker (`static/sw.js`)
 
-Network-first for navigation requests (with cache fallback), cache-first for same-origin assets, network-only for cross-origin (PostHog). Cache version is bumped in `CACHE_NAME` to force updates on release. Skipped in dev mode (`!dev` guard in `+layout.svelte`).
+Network-first for navigation and same-origin assets (with cache fallback), network-only for cross-origin (PostHog). Cache version is bumped in `CACHE_NAME` to force updates on release. Skipped in dev mode (`!dev` guard in `+layout.svelte`).
 
 ### Version Management (`version.ts`)
 
 Single source of truth: `CURRENT_VERSION` constant (currently `'1.2.2'`). Imported by `telemetry.ts` for PostHog registration. `package.json` version and `sw.js` `CACHE_NAME` must be updated manually on release. `isChangelogVersionCurrent` store compares localStorage against `CURRENT_VERSION` to show update notifications.
+
+Every release must update all of these together:
+
+- `src/lib/models/version.ts`: `CURRENT_VERSION`.
+- `package.json`: the app `version`.
+- `package-lock.json`: the top-level version and `packages[""].version`; leave dependency versions alone.
+- `static/sw.js`: `CACHE_NAME` (`flew-notes-v<release>` with an optional cache revision suffix). Do not forget this when deploying changed app assets: changing the worker bytes triggers its update lifecycle, and activation deletes older caches so PWA users can receive the new assets.
+- `src/lib/components/Changelog.svelte`: the real user-facing release notes. Updating `changelog.md` alone does not update the in-app changelog.
+
+For a cache refresh within the same app release, increment only the cache revision suffix (for example, `flew-notes-v1.2.2-r1` to `flew-notes-v1.2.2-r2`). A cache revision does not require changing the app release version.
 
 ## Key Component Files
 

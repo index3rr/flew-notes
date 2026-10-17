@@ -7,31 +7,17 @@
 	import { history } from '$lib/models/history';
 	import { focusId, lastFocusIds, selectedFlowId } from '$lib/models/focus';
 	import { nodes, pendingAction } from '$lib/models/store';
-	import { addNewBox, addNewExtension, deleteBox, toggleBoxFormat } from '$lib/models/nodeDecorateAction';
-	import { saveNodes } from '$lib/models/autoSave';
+	import {
+		addNewBox,
+		addNewExtension,
+		deleteBox,
+		toggleBoxFormat
+	} from '$lib/models/nodeDecorateAction';
 	import { folded } from '$lib/models/fold';
 
 	export let flowId: FlowId;
 
-	let disabledReason: string = 'no cell selected';
-
-	let saved = false;
-	let savedTimer: ReturnType<typeof setTimeout> | null = null;
-	function handleSave() {
-		saveNodes($nodes);
-		saved = true;
-		if (savedTimer != null) {
-			clearTimeout(savedTimer);
-		}
-		savedTimer = setTimeout(() => {
-			saved = false;
-		}, 1500);
-	}
-	onDestroy(() => {
-		if (savedTimer != null) {
-			clearTimeout(savedTimer);
-		}
-	});
+	let disabledReason = 'no cell selected';
 
 	let targetId: BoxId | null = null;
 	async function setValidTargetId() {
@@ -132,7 +118,7 @@
 		if (target.level < currentFlow.value.columns.length - 1) {
 			addNewExtension(targetId);
 			const grandchildId = $nodes[target.children[0] as BoxId]?.children[0];
-			$focusId = grandchildId ? grandchildId as BoxId : targetId;
+			$focusId = grandchildId ? (grandchildId as BoxId) : targetId;
 			return;
 		}
 	}
@@ -194,8 +180,9 @@
 					disabled: targetId == null || targetBox()?.value.isExtension,
 					tooltip: 'add argument above',
 					shortcut: ['option', 'return'],
-					disabledReason:
-						targetBox()?.value.isExtension ? "can't add responses above extensions" : disabledReason
+					disabledReason: targetBox()?.value.isExtension
+						? "can't add responses above extensions"
+						: disabledReason
 				},
 				{
 					icon: 'addDown',
@@ -218,25 +205,19 @@
 				{
 					icon: 'arrowRightThroughCircle',
 					onclick: extendArgument,
-					disabled: targetId == null 
-						|| (targetBox()?.children[0] 
-							&& $nodes[targetBox()?.children[0] as BoxId]?.value.isExtension)
-					 	|| targetBox()?.value.isExtension,
+					disabled:
+						targetId == null ||
+						(targetBox()?.children[0] &&
+							$nodes[targetBox()?.children[0] as BoxId]?.value.isExtension) ||
+						targetBox()?.value.isExtension,
 					tooltip: 'extend selected',
 					shortcut: ['commandControl', 'e'],
-					disabledReason: 
-						(targetBox()?.children[0] && 
-						$nodes[targetBox()?.children[0] as BoxId]?.value.isExtension) ? "can't extend an extended argument" 
-						: targetBox()?.value.isExtension ? "can't extend an extension"
-						: disabledReason
-				}
-			],
-			showSaveButton: [
-				{
-					icon: saved ? 'check' : 'save',
-					onclick: handleSave,
-					tooltip: saved ? 'saved!' : 'save',
-					shortcut: ['commandControl', 's']
+					disabledReason:
+						targetBox()?.children[0] && $nodes[targetBox()?.children[0] as BoxId]?.value.isExtension
+							? "can't extend an extended argument"
+							: targetBox()?.value.isExtension
+							? "can't extend an extension"
+							: disabledReason
 				}
 			],
 			showBoxFormatButtons: [
@@ -247,7 +228,8 @@
 					tooltip: 'toggle crossed out',
 					shortcut: ['commandControl', 'shift', 'x'],
 					toggled: targetBox()?.value?.crossed,
-					disabledReason: targetBox()?.value.isExtension ? "can't cross out an extension"
+					disabledReason: targetBox()?.value.isExtension
+						? "can't cross out an extension"
 						: disabledReason
 				},
 				{
@@ -257,7 +239,8 @@
 					tooltip: 'toggle bold',
 					shortcut: ['commandControl', 'b'],
 					toggled: targetBox()?.value?.bold,
-					disabledReason: targetBox()?.value.isExtension ? "can't bold an extension"
+					disabledReason: targetBox()?.value.isExtension
+						? "can't bold an extension"
 						: disabledReason
 				},
 				{
@@ -276,7 +259,7 @@
 	function updateButtonGroups() {
 		buttonGroups = getButtonGroups();
 	}
-	$: targetId, $nodes, $pendingAction, $folded, saved, updateButtonGroups();
+	$: targetId, $nodes, $pendingAction, $folded, updateButtonGroups();
 
 	let buttonGroupsShow: { [key: string]: boolean } = {};
 	for (let key of Object.keys(buttonGroups)) {
