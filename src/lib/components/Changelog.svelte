@@ -16,25 +16,25 @@
 	<div class="scroll">
 		<section>
 			<div class="above"><h2>v1.3.0</h2></div>
+			the flow library update
 			<ul>
 				<li>
-					Choose a flow folder in Chrome or Edge to save directly to disk and reopen your library.
+					on select browsers you can now link a folder to your 'flow library' (disablable in settings jsyk)
 				</li>
 				<li>
-					Browse subfolders for preflows, with Open, Duplicate, Download, and Delete always visible.
+					with this, autosaves are saved to the real file you opened
 				</li>
 				<li>
-					Firefox and Safari can import folders into a browser library; download edits to keep them
-					on disk.
+					on unsupported browsers for this like firefox and safari you can mass import flows from a folder
 				</li>
 				<li>
-					Name the whole flow above its page tabs, then press + to create it with a starting page.
-					Save now sits beside the title.
+					you can now name flows (and when you do the file name changes as well!!! no more flow(98).json)
 				</li>
-				<li>Autosave now includes the final typed argument, document title, and notes.</li>
 				<li>
-					Save status and browser recovery copies help when folder permission expires or a file
-					changes outside Flew.
+					autosave is now waaay less likely to drop your changes, and its very clear what is being saved
+				</li>
+				<li>
+					you can now edit how many local saves you can have stored in the browser before it starts deleting old ones
 				</li>
 			</ul>
 		</section>
