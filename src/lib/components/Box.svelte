@@ -919,6 +919,9 @@
 				/>
 
 				<div class="text" class:crossed={box?.crossed} class:bold={box?.bold}>
+					{#if box?.cardMirror?.kind === 'tag'}
+						<span class="star-marker" aria-label="CardMirror card" title="CardMirror card"><Icon name="file" size="0.85rem" /></span>
+					{/if}
 					{#if box?.starred}
 						<span class="star-marker" aria-label="Starred argument"><Icon name="star" size="0.85rem" /></span>
 					{/if}
@@ -930,6 +933,7 @@
 							on:focus={handleFocus}
 							bind:value={content}
 							bold={box.bold ? true : false}
+							multiline={box.cardMirror != null}
 							bind:this={textarea}
 							on:beforeinput={handleBeforeInput}
 							bind:autoHeight={updateTextHeight}

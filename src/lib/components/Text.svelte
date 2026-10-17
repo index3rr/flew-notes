@@ -4,6 +4,7 @@
 
 	export let value: string;
 	export let placeholder: string = '';
+	export let multiline = false;
 	export let nowrap: boolean = false;
 	export let strikethrough: boolean = false;
 	export let readonly: boolean = false;
@@ -24,7 +25,7 @@
 	let lastBold: boolean | undefined;
 	export function autoHeight(force?: boolean) {
 		if (textarea && (lastValue !== value || lastBold !== bold || force)) {
-			textarea.value = textarea.value.replace(/\r?\n|\r/g, '');
+			if (!multiline) textarea.value = textarea.value.replace(/\r?\n|\r/g, '');
 			textarea.style.height = '0px';
 			textHeight = textarea.scrollHeight;
 			if (textHeight === 0) {

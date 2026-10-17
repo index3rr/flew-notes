@@ -10,6 +10,7 @@
 	import TranscriptPanel from './panels/TranscriptPanel.svelte';
 	import CollaborationPanel from './panels/CollaborationPanel.svelte';
 	import Button from './Button.svelte';
+	import CardMirrorPanel from './panels/CardMirrorPanel.svelte';
 	import { nodes, connections } from '$lib/models/store';
 	import type { FlowId } from '$lib/models/node';
 
@@ -23,14 +24,16 @@
 		'timersPanel',
 		'libraryPanel',
 		'transcriptPanel',
-		'collaborationPanel'
+		'collaborationPanel',
+		'cardMirrorPanel'
 	] as const;
 	type PanelId = (typeof panelIds)[number];
 	const documentPanelIds: readonly PanelId[] = [
 		'libraryPanel',
 		'notesPanel',
 		'starredPanel',
-		'collaborationPanel'
+		'collaborationPanel',
+		'cardMirrorPanel'
 	];
 
 	const panelIcons: Record<PanelId, string> = {
@@ -41,7 +44,8 @@
 		timersPanel: 'clock',
 		libraryPanel: 'folder',
 		transcriptPanel: 'keyboard',
-		collaborationPanel: 'people'
+		collaborationPanel: 'people',
+		cardMirrorPanel: 'link'
 	};
 	interface PanelConfig {
 		id: PanelId;
@@ -56,7 +60,8 @@
 		{ id: 'timersPanel', name: 'Timers' },
 		{ id: 'libraryPanel', name: 'Flow library' },
 		{ id: 'transcriptPanel', name: 'Transcript' },
-		{ id: 'collaborationPanel', name: 'Collaboration' }
+		{ id: 'collaborationPanel', name: 'Collaboration' },
+		{ id: 'cardMirrorPanel', name: 'CardMirror' }
 	];
 
 	let expanded: PanelId | null = null;
@@ -110,10 +115,13 @@
 				class:auto-size={panel.id === 'timersPanel' ||
 					panel.id === 'starredPanel' ||
 					panel.id === 'speechDropPanel' ||
+					panel.id === 'cardMirrorPanel' ||
 					(panel.id === 'collaborationPanel' && $connections.tag === 'empty') ||
 					(!documentPanelsAvailable && documentPanelIds.includes(panel.id))}
 			>
-				{#if panel.id === 'libraryPanel'}
+				{#if panel.id === 'cardMirrorPanel'}
+					<CardMirrorPanel available={documentPanelsAvailable} />
+				{:else if panel.id === 'libraryPanel'}
 					<LibraryPanel available={documentPanelsAvailable} />
 				{:else if panel.id === 'transcriptPanel'}
 					<TranscriptPanel />

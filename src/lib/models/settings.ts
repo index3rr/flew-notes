@@ -773,6 +773,13 @@ export const settings: Settings = new Settings({
 		auto: true,
 		type: 'toggle'
 	},
+	cardMirrorPanel: {
+		name: 'CardMirror',
+		value: 0,
+		auto: 0,
+		type: 'radio',
+		detail: { options: ['Off', 'Left', 'Right', 'Left collapsed', 'Right collapsed'] }
+	},
 	libraryPanel: {
 		name: 'Flow library',
 		value: 0,
@@ -967,6 +974,7 @@ export const settingsGroups: SettingsGroup[] = [
 			'libraryPanel',
 			'transcriptPanel',
 			'collaborationPanel',
+			'cardMirrorPanel',
 			'notesPanel',
 			'starredPanel',
 			'timersPanel',

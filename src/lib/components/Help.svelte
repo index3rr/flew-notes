@@ -29,6 +29,16 @@
 <div class="top">
 	<section class="palette-plain">
 		<div class="above">
+			<h2>CardMirror</h2>
+			<p>
+				Enable Settings → Panels → CardMirror to connect the desktop app. Open a flow, download the
+				companion plugin from the panel, then exchange connection keys using CardMirror’s “Connect
+				to Flew” command.
+			</p>
+		</div>
+	</section>
+	<section class="palette-plain">
+		<div class="above">
 			<h2>Links</h2>
 			<p>useful resources</p>
 		</div>

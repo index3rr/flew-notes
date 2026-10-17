@@ -1,3 +1,4 @@
+import type { Provenance } from '../integrations/cardmirror/protocol';
 import { derived, get } from 'svelte/store';
 import { type Option, Some, None } from 'ts-results';
 import { focusId, lastFocusIds, selectedFlowId } from './focus';
@@ -63,6 +64,8 @@ export type Box = {
 	starNote?: string;
 	bold?: boolean;
 	isExtension?: boolean;
+	cardMirror?: Provenance;
+	cardMirrorSpacer?: true;
 };
 
 export type Flow = {

@@ -1,3 +1,4 @@
+import { validProvenance } from '../integrations/cardmirror/protocol';
 import { Workbook, type Buffer } from 'exceljs';
 import { type BoxId, type FlowId, type Nodes, newFlowId, newBoxId, getNode } from './node';
 import type { OldBox, OldFlows } from './oldType';
@@ -101,6 +102,8 @@ function validateNodes(nodes: Nodes) {
 					typeof value.invert !== 'boolean')
 			)
 				throw new Error('Invalid flow columns');
+			if (value.cardMirror !== undefined && !validProvenance(value.cardMirror))
+				throw new Error('Invalid CardMirror source');
 			if (value.tag === 'box' && value.flowId !== flow) throw new Error('Invalid box flow');
 		}
 		for (const child of node.children) {
@@ -119,7 +122,14 @@ type NodeData = {
 	parent: string | null;
 	level: number;
 	children: string[];
-	value: { tag: string; content?: string; columns?: unknown[]; invert?: boolean; flowId?: string };
+	value: {
+		cardMirror?: unknown;
+		tag: string;
+		content?: string;
+		columns?: unknown[];
+		invert?: boolean;
+		flowId?: string;
+	};
 };
 
 export function downloadJson(nodes: Nodes) {

@@ -14,3 +14,6 @@ build
 CODEBASE_INDEX.md
 SHORTCUTS_DATABASE.json
 SHORTCUTS_REFERENCE.md
+
+/static/integrations/cardmirror/plugin.js
+/.local/

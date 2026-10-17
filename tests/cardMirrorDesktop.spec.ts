@@ -1,0 +1,129 @@
+import { test, expect, _electron, chromium, firefox, webkit, type Browser } from '@playwright/test';
+import { resolve } from 'node:path';
+import { mkdir } from 'node:fs/promises';
+
+// Opt-in: uses an existing CardMirror development checkout/server and Nix Electron.
+// No upstream source, normal CardMirror profile or installed plugins are modified.
+test('desktop plugin loads through the real host, sends an extracted tag and jumps back', async ({
+	baseURL,
+	browserName
+}) => {
+	test.skip(
+		!process.env.CARDMIRROR_DESKTOP_PATH || !process.env.PLAYWRIGHT_ELECTRON_EXECUTABLE_PATH,
+		'Set CARDMIRROR_DESKTOP_PATH and PLAYWRIGHT_ELECTRON_EXECUTABLE_PATH for native verification.'
+	);
+	test.setTimeout(120_000);
+	const state = resolve(`.local/cardmirror-native-${Date.now()}`);
+	await mkdir(state, { recursive: true });
+	const url = process.env.CARDMIRROR_DEV_URL || 'http://127.0.0.1:5174';
+	const app = await _electron.launch({
+		executablePath: process.env.PLAYWRIGHT_ELECTRON_EXECUTABLE_PATH,
+		args: [resolve(process.env.CARDMIRROR_DESKTOP_PATH!), '--no-sandbox', '--headless'],
+		env: {
+			...process.env,
+			CARDMIRROR_DEV_URL: url,
+			XDG_CONFIG_HOME: `${state}/config`,
+			XDG_DATA_HOME: `${state}/data`,
+			XDG_CACHE_HOME: `${state}/cache`
+		}
+	});
+	let browser: Browser | undefined;
+	try {
+		await expect
+			.poll(() => app.windows().map((page) => page.url()), { timeout: 20_000 })
+			.toContainEqual(expect.stringContaining(url));
+		const native = app.windows().find((page) => page.url().startsWith(url))!;
+		browser = await { chromium, firefox, webkit }[browserName].launch();
+		await native.addInitScript(() =>
+			localStorage.setItem(
+				'pmd-settings',
+				JSON.stringify({
+					pluginsEnabled: true,
+					pairingEnabled: false,
+					hasSeenUiTour: true,
+					showOnboardingStarter: false,
+					mobileLayout: 'desktop'
+				})
+			)
+		);
+		await native.reload();
+		await native.waitForSelector('.pmd-home-action:visible, .ProseMirror:visible');
+		if (await native.locator('.pmd-home-action:visible').count())
+			await native.locator('.pmd-home-action:visible').first().click();
+		const editor = native.locator('.ProseMirror').first();
+		await editor.fill('Native CardMirror evidence tag');
+		await editor.press('F7');
+		const loaded = await native.evaluate(async (path) => {
+			const host = (
+				window as unknown as {
+					electronAPI: { pluginLoadFile(path: string): Promise<{ ok: boolean; error?: string }> };
+				}
+			).electronAPI;
+			return host.pluginLoadFile(path);
+		}, resolve('static/integrations/cardmirror/plugin.js'));
+		expect(loaded).toMatchObject({ ok: true });
+		const command = async (id: string) => {
+			const result = await native.evaluate(async (id) => {
+				// Vite supplies CardMirror's real command registry, not a replacement plugin API.
+				const path = '/src/editor/plugin-registry.ts';
+				const registry = await import(/* @vite-ignore */ path);
+				return registry.runPluginCommand(`cardmirror-flew.${id}`);
+			}, id);
+			expect(result).toBe(true);
+		};
+		const flew = await browser.newPage({ baseURL });
+		await flew.addInitScript(() =>
+			localStorage.setItem(
+				'settings',
+				JSON.stringify({
+					isSettings: true,
+					version: 2,
+					settings: { telemetryTier: 0, cardMirrorPanel: 2, timersPanel: 0, notesPanel: 0 }
+				})
+			)
+		);
+		await flew.goto('/app');
+		await flew.getByRole('button', { name: 'New flow', exact: true }).click();
+		await flew.getByRole('button', { name: 'Create connection key', exact: true }).click();
+		await expect(flew.getByLabel('Flew connection key', { exact: true })).toHaveValue(/^FLEWCM1\./);
+		await command('connect');
+		await native.screenshot({ path: `${state}/native-connection.png` });
+		await native
+			.getByLabel('Flew connection key', { exact: true })
+			.fill(await flew.getByLabel('Flew connection key', { exact: true }).inputValue());
+		await native.getByRole('button', { name: 'Create reply key', exact: true }).click();
+		await expect(native.getByLabel('CardMirror reply key', { exact: true })).toHaveValue(
+			/^FLEWCM1\./,
+			{ timeout: 15_000 }
+		);
+		await flew
+			.getByLabel('CardMirror reply key', { exact: true })
+			.fill(await native.getByLabel('CardMirror reply key', { exact: true }).inputValue());
+		await flew.getByRole('button', { name: 'Connect CardMirror', exact: true }).click();
+		await expect(flew.getByText('Connected to CardMirror', { exact: true })).toBeVisible({
+			timeout: 20_000
+		});
+		await native.getByRole('button', { name: 'Done', exact: true }).click();
+		await editor.click();
+		await command('send');
+		await expect(flew.locator('.box textarea').first()).toHaveValue(
+			'Native CardMirror evidence tag'
+		);
+		await expect(flew.getByLabel('CardMirror card', { exact: true })).toBeVisible();
+		await flew.screenshot({ path: `${state}/flew-panel.png` });
+		// Move the real editor cursor; jumping must use CardMirror's opaque token resolver.
+		await editor.press('ControlOrMeta+End');
+		const endOffset = await native.evaluate(() => getSelection()?.anchorOffset ?? -1);
+		expect(endOffset).toBeGreaterThan(0);
+		await flew.getByRole('button', { name: 'Jump to source', exact: true }).click();
+		await expect(flew.getByRole('button', { name: 'Jump to source', exact: true })).toBeEnabled();
+		await expect(flew.getByRole('alert')).toHaveCount(0);
+		await expect.poll(() => native.evaluate(() => getSelection()?.anchorOffset ?? -1)).toBe(0);
+		await command('reveal');
+		await expect(flew.locator('.box textarea').first()).toBeFocused();
+	} finally {
+		await browser?.close();
+		await app.evaluate(({ app }) => app.exit(0)).catch(() => undefined);
+		await app.close().catch(() => undefined);
+	}
+});

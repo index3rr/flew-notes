@@ -113,6 +113,8 @@ export function buildPasteActions(
 		if (box.value.isExtension != null) value.isExtension = box.value.isExtension;
 		if (box.value.starred != null) value.starred = box.value.starred;
 		if (box.value.starNote != null) value.starNote = box.value.starNote;
+		if (box.value.cardMirror != null) value.cardMirror = structuredClone(box.value.cardMirror);
+		if (box.value.cardMirrorSpacer === true) value.cardMirrorSpacer = true;
 		if (box.value.placeholder != null) value.placeholder = box.value.placeholder;
 		actions.push({ tag: 'add', parent, id, index, value });
 		if (box.children.length > 0) {

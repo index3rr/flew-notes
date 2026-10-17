@@ -3,14 +3,15 @@
 	"version": "1.3.0",
 	"private": true,
 	"scripts": {
-		"dev": "vite dev",
-		"build": "vite build",
+		"dev": "npm run build:cardmirror && vite dev",
+		"build": "npm run build:cardmirror && vite build",
 		"preview": "vite preview",
 		"test": "playwright test",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"lint": "prettier --plugin-search-dir . --check . && eslint .",
-		"format": "prettier --plugin-search-dir . --write ."
+		"format": "prettier --plugin-search-dir . --write .",
+		"build:cardmirror": "node scripts/build-cardmirror-plugin.mjs"
 	},
 	"devDependencies": {
 		"@playwright/test": "^1.63.0",

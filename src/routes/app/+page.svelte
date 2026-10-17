@@ -30,6 +30,7 @@
 	import { dev } from '$app/environment';
 	import { openPopup } from '$lib/models/popup';
 	import type { FlowId, Nodes } from '$lib/models/node';
+	import { disconnectCardMirror } from '$lib/models/cardMirror';
 	import { onDestroy, onMount } from 'svelte';
 	import { activeMouse, nodes, pendingAction, frozen } from '$lib/models/store';
 	import { createKeyDownHandler } from '$lib/models/key';
@@ -138,7 +139,8 @@
 			'speechDropPanel',
 			'libraryPanel',
 			'transcriptPanel',
-			'collaborationPanel'
+			'collaborationPanel',
+			'cardMirrorPanel'
 		],
 		() => {
 			const leftVal = (k: string) => settings.data[k]?.value as number;
@@ -150,12 +152,14 @@
 				leftVal('speechDropPanel'),
 				leftVal('libraryPanel'),
 				leftVal('transcriptPanel'),
-				leftVal('collaborationPanel')
+				leftVal('collaborationPanel'),
+				leftVal('cardMirrorPanel')
 			].filter((v) => v === 2 || v === 4).length;
 			hasRightPanels = rightCount > 0;
 		}
 	);
 	onDestroy(panelSubUnsub);
+	onDestroy(disconnectCardMirror);
 	let showFlowLibraryBar = true;
 	onDestroy(
 		settings.subscribe(['showFlowLibraryBar'], () => {

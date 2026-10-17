@@ -9,6 +9,7 @@ pkgs.mkShell {
     coreutils
     git
     playwrightBrowsers
+    electron
     gst_all_1.gstreamer
     gst_all_1.gst-plugins-base
     gst_all_1.gst-plugins-good
@@ -23,8 +24,11 @@ pkgs.mkShell {
 
   PLAYWRIGHT_BROWSERS_PATH = "${playwrightBrowsers}";
   PLAYWRIGHT_HOST_PLATFORM_OVERRIDE = "ubuntu-24.04";
+  PLAYWRIGHT_ELECTRON_EXECUTABLE_PATH = "${pkgs.electron}/bin/electron";
 
   shellHook = ''
+    # CardMirror's optional native-plugin test loads Koffi's C++ runtime.
+    export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath [ pkgs.stdenv.cc.cc.lib pkgs.libX11 ]}:$LD_LIBRARY_PATH"
     echo "flew-notes dev shell"
     echo "node $(node --version)"
     echo ""
