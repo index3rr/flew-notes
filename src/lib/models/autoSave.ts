@@ -1,12 +1,18 @@
 import { nodes, subscribeFlowsChange, sideDocText, newNodes, frozen } from '$lib/models/store';
 import { writable, derived, get } from 'svelte/store';
-import { getJson, loadNodes, downloadString, downloadXlsx } from './file';
+import { getJson, loadNodes, saveStringAs, downloadXlsx } from './file';
 import { getNode, type Nodes } from './node';
 import { getDebateStyleFlow } from './debateStyle';
 import { replaceNodes, addNewFlow } from './nodeDecorateAction';
 import { resolvePendingAction } from './nodePendingAction';
 import { trackFlowDataUpload, getCurrentTier } from './telemetry';
-import { documentTitle, resetDocumentTitle, documentFilename, documentCreated } from './document';
+import {
+	documentTitle,
+	resetDocumentTitle,
+	documentFilename,
+	documentCreated,
+	documentTitleFromFilename
+} from './document';
 import {
 	directFolderAccess,
 	bindLibraryFile,
@@ -20,6 +26,7 @@ import {
 } from './flowLibrary';
 import { focusId, selectedFlowId, lastFocusIds } from './focus';
 import { history, History } from './history';
+import { settings } from './settings';
 
 export type NodeKey = string;
 export type SavedNodesData = {
@@ -29,7 +36,7 @@ export type SavedNodesData = {
 	flowInfos: { content: string; invert: boolean }[];
 };
 export type SavedNodesDatas = { [key: NodeKey]: SavedNodesData };
-export const MAX_SAVED_FLOWS = 20;
+
 const savedNodesDatasMut = writable<SavedNodesDatas>(getSavedNodesDatas());
 export const savedNodesDatas = derived(savedNodesDatasMut, (value) => value);
 export const saveStatus = writable('');
@@ -66,10 +73,24 @@ export function getSavedNodesDatas(): SavedNodesDatas {
 		return {};
 	}
 }
+function trimBrowserSaves(metadata: SavedNodesDatas): string[] {
+	const value = Number(settings.data.maxLocalSaves.value);
+	const limit = Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 20;
+	if (!limit) return [];
+	const candidates = Object.keys(metadata)
+		.filter((key) => key !== flowKey)
+		.sort((a, b) => metadata[a].modified.localeCompare(metadata[b].modified));
+	const removed = candidates.slice(0, Math.max(0, Object.keys(metadata).length - limit));
+	for (const key of removed) delete metadata[key];
+	return removed;
+}
+
 export function maybeSaveNodes() {
 	if (switching || saving || get(frozen) || !get(documentOpen)) return;
 	dirty.set(true);
-	saveStatus.set('Unsaved changes');
+	saveStatus.set(
+		libraryTarget()?.name && !get(library).imported ? 'Autosaving…' : 'Unsaved changes'
+	);
 	editRevision++;
 	if (timer) clearTimeout(timer);
 	timer = setTimeout(() => {
@@ -105,7 +126,7 @@ function worthSaving(value: Nodes) {
 	);
 }
 // localStorage is written synchronously, even when called during pagehide.
-export async function saveNodes(value = get(nodes)): Promise<boolean> {
+export async function saveNodes(value = get(nodes), renameFile = false): Promise<boolean> {
 	clearTimer();
 	if (switching || get(frozen) || !get(documentOpen)) return true;
 	if (!worthSaving(value)) {
@@ -120,11 +141,14 @@ export async function saveNodes(value = get(nodes)): Promise<boolean> {
 		saving = false;
 	}
 	const raw = getJson(value);
-	if (raw === lastSavedRaw && !get(dirty)) return true;
 	const title = get(documentTitle);
+	const currentFile = libraryTarget();
+	const needsRename =
+		renameFile && currentFile?.name && !currentFile.outside && title !== currentFile.filenameTitle;
+	if (raw === lastSavedRaw && !get(dirty) && !needsRename) return true;
 	const savedSession = session;
 	const savedRevision = editRevision;
-	saveStatus.set('Saving…');
+	saveStatus.set(libraryTarget()?.name && !get(library).imported ? 'Autosaving…' : 'Saving…');
 	let recoveryError = '';
 	try {
 		const metadata = getSavedNodesDatas();
@@ -139,17 +163,9 @@ export async function saveNodes(value = get(nodes)): Promise<boolean> {
 				return { content: flow.content, invert: flow.invert };
 			})
 		};
-		const keys = Object.keys(metadata).sort((a, b) =>
-			metadata[a].modified.localeCompare(metadata[b].modified)
-		);
-		while (directFolderAccess && keys.length > MAX_SAVED_FLOWS) {
-			const oldest = keys.shift()!;
-			if (oldest !== flowKey) {
-				localStorage.removeItem(oldest);
-				delete metadata[oldest];
-			}
-		}
+		const removed = trimBrowserSaves(metadata);
 		localStorage.setItem('savedFlows', JSON.stringify(metadata));
+		for (const key of removed) localStorage.removeItem(key);
 		savedNodesDatasMut.set(metadata);
 		lastDurableRaw = raw;
 	} catch {
@@ -161,7 +177,7 @@ export async function saveNodes(value = get(nodes)): Promise<boolean> {
 		bindLibraryFile(file);
 	}
 	try {
-		if (directFolderAccess) await saveLibraryFile(raw, title, file);
+		if (directFolderAccess) await saveLibraryFile(raw, title, file, renameFile);
 		const pendingLocation = directFolderAccess && needsFileLocation();
 		if (directFolderAccess && file && !pendingLocation) lastDurableRaw = raw;
 		if (session === savedSession && editRevision === savedRevision) {
@@ -174,7 +190,7 @@ export async function saveNodes(value = get(nodes)): Promise<boolean> {
 						: directFolderAccess && file
 						? get(library).imported
 							? 'Saved in browser library'
-							: 'Saved to folder'
+							: 'Saved'
 						: 'Saved in browser')
 			);
 		}
@@ -189,10 +205,10 @@ export async function saveNodes(value = get(nodes)): Promise<boolean> {
 	}
 }
 let choosingFile = false;
-export async function saveDocument(): Promise<boolean> {
+export async function saveDocument(saveCopy = false): Promise<boolean> {
 	if (choosingFile || switching || get(frozen) || !get(documentOpen)) return false;
 	if (!directFolderAccess) return saveNodes();
-	if (!needsFileLocation()) return saveNodes();
+	if (!saveCopy && !needsFileLocation()) return saveNodes();
 	choosingFile = true;
 	const savedSession = session;
 	try {
@@ -202,11 +218,21 @@ export async function saveDocument(): Promise<boolean> {
 		const file = await chosen;
 		if (session !== savedSession) return false;
 		if (file.name.toLowerCase().endsWith('.xlsx')) {
+			const title = documentTitleFromFilename(file.name);
+			if (!saveCopy) documentTitle.set(title);
 			resolvePendingAction(get(nodes));
-			await downloadXlsx(get(nodes), file.handle);
+			await downloadXlsx(get(nodes), file.handle, title);
+			if (!saveCopy) await saveNodes();
+			return true;
+		}
+		if (saveCopy) {
+			resolvePendingAction(get(nodes));
+			const title = documentTitleFromFilename(file.name);
+			await saveLibraryFile(getJson(get(nodes), title), title, file);
 			return true;
 		}
 		bindLibraryFile(file);
+		documentTitle.set(documentTitleFromFilename(file.name));
 		lastSavedRaw = null;
 		return await saveNodes();
 	} catch (error) {
@@ -226,7 +252,7 @@ export async function saveBeforeSwitch() {
 	let before: number;
 	do {
 		before = editRevision;
-		await saveNodes();
+		await saveNodes(get(nodes), true);
 	} while (before !== editRevision);
 	if (worthSaving(get(nodes)) && getJson(get(nodes)) !== lastDurableRaw && get(dirty)) {
 		throw new Error(
@@ -270,7 +296,7 @@ export async function openDocument(
 		lastSavedRaw = options.duplicate ? null : getJson(next);
 		lastDurableRaw = lastSavedRaw;
 		dirty.set(false);
-		saveStatus.set('');
+		saveStatus.set(options.target && !options.duplicate && !get(library).imported ? 'Saved' : '');
 	} finally {
 		switching = false;
 	}
@@ -365,7 +391,9 @@ export function importLocalFlows(entries: { raw: string; name: string; modified?
 			})
 		};
 		try {
+			const removed = trimBrowserSaves(metadata);
 			localStorage.setItem('savedFlows', JSON.stringify(metadata));
+			for (const oldKey of removed) localStorage.removeItem(oldKey);
 		} catch (error) {
 			localStorage.removeItem(key);
 			delete metadata[key];
@@ -392,5 +420,10 @@ export function deleteNodes(key: NodeKey) {
 }
 export function downloadSavedNodes(key: NodeKey) {
 	const raw = localStorage.getItem(key);
-	if (raw) downloadString(raw, documentFilename(JSON.parse(raw).title ?? ''));
+	if (raw) {
+		const data = JSON.parse(raw);
+		return saveStringAs(raw, documentFilename(data.title ?? ''), (name) =>
+			JSON.stringify({ ...data, title: documentTitleFromFilename(name) })
+		);
+	}
 }

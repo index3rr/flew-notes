@@ -1,6 +1,6 @@
 import { get, writable } from 'svelte/store';
 import { loadNodes } from './file';
-import { documentFilename } from './document';
+import { documentFilename, documentTitleFromFilename } from './document';
 import { importLocalFlows, type SavedNodesData } from './autoSave';
 import type { Nodes } from './node';
 
@@ -45,6 +45,7 @@ export type FileTarget = {
 	raw: string | null;
 	handle?: FileSystemFileHandle;
 	outside?: boolean;
+	filenameTitle?: string;
 };
 export const hasDiskFile = writable(false);
 let target: FileTarget | null = null;
@@ -310,7 +311,17 @@ export async function readLibraryFile(name: string) {
 		: await (await handle!.getFile()).text();
 	if (raw == null) throw new Error('This file no longer exists. Refresh the library.');
 	loadNodes(JSON.parse(raw), false);
-	return { raw, target: { directory: dir, path, name, raw, handle } as FileTarget };
+	return {
+		raw,
+		target: {
+			directory: dir,
+			path,
+			name,
+			raw,
+			handle,
+			filenameTitle: JSON.parse(raw).title ?? ''
+		} as FileTarget
+	};
 }
 export function bindLibraryFile(file: FileTarget | null) {
 	target = file;
@@ -342,14 +353,15 @@ export async function chooseNewLibraryFile(title: string): Promise<FileTarget> {
 		types: [
 			{ description: 'Flew flow', accept: { 'application/json': ['.json'] } },
 			{
-				description: 'Excel workbook',
+				description: 'Excel (.XLSX)',
 				accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] }
 			}
 		]
 	});
 	const relative = await root.resolve(handle);
 	return {
-		directory: null,
+		directory: relative ? await directory(relative.slice(0, -1)) : null,
+		filenameTitle: documentTitleFromFilename(handle.name),
 		path: relative?.slice(0, -1) ?? [],
 		name: handle.name,
 		raw: handle.name.toLowerCase().endsWith('.xlsx') ? null : await (await handle.getFile()).text(),
@@ -358,7 +370,7 @@ export async function chooseNewLibraryFile(title: string): Promise<FileTarget> {
 	};
 }
 async function readAt(file: FileTarget, name: string): Promise<string | null> {
-	if (file.handle) return (await file.handle.getFile()).text();
+	if (file.handle && name === file.name) return (await file.handle.getFile()).text();
 	if (imported) return imported[[...file.path, name].join('/')] ?? null;
 	try {
 		return await (await (await file.directory!.getFileHandle(name)).getFile()).text();
@@ -376,7 +388,12 @@ async function syncImported() {
 		);
 	imported = saved.files;
 }
-export function saveLibraryFile(raw: string, title: string, file: FileTarget | null) {
+export function saveLibraryFile(
+	raw: string,
+	title: string,
+	file: FileTarget | null,
+	renameFile = false
+) {
 	if (!file) {
 		if (get(library).needsPermission)
 			return Promise.reject(
@@ -397,19 +414,21 @@ export function saveLibraryFile(raw: string, title: string, file: FileTarget | n
 			throw new Error(
 				'Reconnect your folder to save changes to disk. A browser recovery copy was saved.'
 			);
-		if (!imported && !file.handle && !file.directory) file.directory = await directory(file.path);
+		if (!imported && !file.outside && !file.directory) file.directory = await directory(file.path);
 		if (file.raw !== null && (await readAt(file, file.name)) !== file.raw)
 			throw new Error(
 				'The file changed outside Flew. Open it again or duplicate your recovery copy to keep both versions.'
 			);
-		let name = file.handle ? file.name : documentFilename(title);
+		const rename = !file.outside && (imported || (renameFile && title !== file.filenameTitle));
+		const extension = file.name.match(/\.json$/i)?.[0] ?? '.json';
+		let name = rename ? documentFilename(title).replace(/\.json$/, extension) : file.name;
 		// Preserve original filenames when an untitled legacy document is edited.
-		if (!file.handle && !title.trim() && file.name && !JSON.parse(file.raw ?? '{}').title?.trim())
-			name = file.name;
+		if (!title.trim() && file.name && !file.filenameTitle?.trim()) name = file.name;
 		if (name !== file.name) {
 			const stem = name.slice(0, -5);
 			let suffix = 2;
-			while ((await readAt(file, name)) !== null) name = `${stem} (${suffix++}).json`;
+			while (name !== file.name && (await readAt(file, name)) !== null)
+				name = `${stem} (${suffix++})${extension}`;
 		}
 		if (imported) {
 			const next = { ...imported, [[...file.path, name].join('/')]: raw };
@@ -417,7 +436,12 @@ export function saveLibraryFile(raw: string, title: string, file: FileTarget | n
 			await remembered({ files: next, name: importedName, id: importedId }, true);
 			imported = next;
 		} else {
-			const handle = file.handle ?? (await file.directory!.getFileHandle(name, { create: true }));
+			const handle =
+				name === file.name && file.handle
+					? file.handle
+					: await file.directory!.getFileHandle(name, { create: true });
+			if (name !== file.name && (await handle.getFile()).size !== 0)
+				throw new Error('A file appeared at the new name. Try renaming again.');
 			const stream = await handle.createWritable();
 			try {
 				await stream.write(raw);
@@ -426,11 +450,24 @@ export function saveLibraryFile(raw: string, title: string, file: FileTarget | n
 				await stream.abort().catch(() => undefined);
 				throw error;
 			}
-			if (!file.handle && file.name && file.name !== name)
-				await file.directory!.removeEntry(file.name);
+			if (file.name && file.name !== name) {
+				try {
+					if (file.raw !== null && (await readAt(file, file.name)) !== file.raw)
+						throw new Error('The original file changed during the rename.');
+					await file.directory!.removeEntry(file.name);
+				} catch {
+					library.update((s) => ({
+						...s,
+						warning:
+							'Saved under the new name, but the original file could not be removed. Both copies were kept.'
+					}));
+				}
+			}
+			file.handle = handle;
 		}
 		file.name = name;
 		file.raw = raw;
+		if (renameFile || imported) file.filenameTitle = title;
 		try {
 			await refreshLibrary();
 		} catch {

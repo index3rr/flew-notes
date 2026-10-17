@@ -19,12 +19,12 @@ type SaveableNodes = {
 	title?: string;
 	created?: string;
 };
-export function getJson(nodes: Nodes): string {
+export function getJson(nodes: Nodes, title = get(documentTitle)): string {
 	const saveable: SaveableNodes = {
 		nodes,
 		version: CURRENT_SAVE_VERSION,
 		sideDocText: get(sideDocText),
-		title: get(documentTitle),
+		title,
 		created: get(documentCreated) ?? undefined
 	};
 	return JSON.stringify(saveable);
@@ -158,6 +158,41 @@ export function downloadString(data: string, filename: string) {
 	document.body.removeChild(element);
 }
 
+export async function saveStringAs(
+	data: string,
+	filename: string,
+	contentForName?: (name: string) => string
+) {
+	const picker = (
+		window as Window & {
+			showSaveFilePicker?: (options: {
+				suggestedName: string;
+				types: { description: string; accept: Record<string, string[]> }[];
+			}) => Promise<FileSystemFileHandle>;
+		}
+	).showSaveFilePicker;
+	if (!picker) {
+		downloadString(data, filename);
+		return;
+	}
+	try {
+		const handle = await picker.call(window, {
+			suggestedName: filename,
+			types: [{ description: 'Flew flow (.JSON)', accept: { 'application/json': ['.json'] } }]
+		});
+		const stream = await handle.createWritable();
+		try {
+			await stream.write(contentForName ? contentForName(handle.name) : data);
+			await stream.close();
+		} catch (error) {
+			await stream.abort().catch(() => undefined);
+			throw error;
+		}
+	} catch (error) {
+		if ((error as DOMException).name !== 'AbortError') throw error;
+	}
+}
+
 function childToData(
 	nodes: Nodes,
 	data: string[][],
@@ -201,8 +236,13 @@ function fixXlsxWorkbookName(name: string) {
 	return name;
 }
 
-export async function downloadXlsx(nodes: Nodes, handle?: FileSystemFileHandle) {
+export async function downloadXlsx(
+	nodes: Nodes,
+	handle?: FileSystemFileHandle,
+	title = get(documentTitle)
+) {
 	const wb: Workbook = new Workbook();
+	wb.title = title;
 
 	let unnamedIterator = 1;
 	for (const flowId of nodes.root.children) {

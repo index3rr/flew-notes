@@ -68,12 +68,12 @@
 			ariaLabel={directFolderAccess
 				? $library.name
 					? 'Disconnect'
-					: 'Choose folder'
+					: 'link a folder for automatic disk saves'
 				: 'Import folder'}
 			tooltip={directFolderAccess && $library.name
 				? 'Disconnect this folder'
 				: directFolderAccess
-				? 'Choose a folder for automatic disk saves'
+				? 'link a folder for automatic disk saves'
 				: 'Import flows from a folder'}
 			disabled={busy || $frozen}
 			disabledReason="library is busy"

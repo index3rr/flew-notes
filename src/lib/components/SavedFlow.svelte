@@ -13,6 +13,15 @@
 	export let alternate = false;
 
 	let error = '';
+	async function saveAs() {
+		error = '';
+		try {
+			await downloadSavedNodes(key);
+		} catch (e) {
+			error = (e as Error).message;
+		}
+	}
+
 	async function open(copy = false) {
 		try {
 			await loadSavedNodes(key, !copy);
@@ -25,12 +34,7 @@
 <FlowCard {flowData} {alternate}>
 	<Button icon="open" ariaLabel="open" tooltip="Open" on:click={() => open()} />
 	<Button icon="copy" ariaLabel="duplicate" tooltip="Duplicate" on:click={() => open(true)} />
-	<Button
-		icon="download"
-		ariaLabel="download"
-		tooltip="Download"
-		on:click={() => downloadSavedNodes(key)}
-	/>
+	<Button icon="download" ariaLabel="download" tooltip="Download" on:click={saveAs} />
 	<Button
 		icon="trash"
 		ariaLabel="delete"

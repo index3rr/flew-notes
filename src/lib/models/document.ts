@@ -26,3 +26,7 @@ export function documentFilename(title = get(documentTitle)) {
 	const name = safe || unnamedTitle;
 	return `${/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(name) ? '_' : ''}${name}.json`;
 }
+
+export function documentTitleFromFilename(name: string) {
+	return name.replace(/\.(json|xlsx)$/i, '');
+}

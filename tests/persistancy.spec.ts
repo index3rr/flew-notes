@@ -140,8 +140,13 @@ async function nativeFolder(page: Page, mainScreen = false) {
 	}, round);
 	if (mainScreen) {
 		await page.evaluate(() => localStorage.setItem('deny-folder', 'true'));
-		await page.getByRole('button', { name: 'Choose folder', exact: true }).click();
-	} else await page.getByRole('button', { name: 'Choose folder', exact: true }).click();
+		await page
+			.getByRole('button', { name: 'link a folder for automatic disk saves', exact: true })
+			.click();
+	} else
+		await page
+			.getByRole('button', { name: 'link a folder for automatic disk saves', exact: true })
+			.click();
 	await expect(row(page, 'Round.json')).toBeVisible();
 }
 async function disk(page: Page, name: string) {
@@ -243,7 +248,9 @@ test('folder import retains subfolders across reload and supports rename, duplic
 		await page.evaluate(() => !('showDirectoryPicker' in window)),
 		'Covered by the snapshot import and recovery export tests in browsers without writable handles.'
 	);
-	await expect(page.getByRole('button', { name: 'Choose folder', exact: true })).toBeEnabled();
+	await expect(
+		page.getByRole('button', { name: 'link a folder for automatic disk saves', exact: true })
+	).toBeEnabled();
 	await page.getByLabel('Import flow folder').setInputFiles(fixtures);
 	await expect(lib(page)).toContainText('Skipped 1 invalid JSON');
 	await open(page, 'Round.json');
@@ -279,7 +286,7 @@ test('folder import retains subfolders across reload and supports rename, duplic
 });
 
 nativeTest(
-	'native folder persists, saves pending edits and notes, preserves filenames and reconnects',
+	'native folder persists, saves pending edits and notes, renames files and reconnects',
 	async ({ page, browserName }) => {
 		test.skip(
 			browserName !== 'chromium',
@@ -289,43 +296,43 @@ nativeTest(
 		await open(page, 'Round.json');
 		await title(page).fill('Saved round');
 		await page.getByPlaceholder('type here', { exact: true }).fill('Final disk argument');
-		await expect(page.locator('.save-status')).toHaveText('Saved to folder');
-		expect((await disk(page, 'Round.json')).nodes['box-a'].value.content).toBe(
+		await expect(page.locator('.save-status')).toHaveText('Saved');
+		expect((await disk(page, 'Saved round.json')).nodes['box-a'].value.content).toBe(
 			'Final disk argument'
 		);
-		expect((await disk(page, 'Round.json')).title).toBe('Saved round');
+		expect((await disk(page, 'Saved round.json')).title).toBe('Saved round');
 		await page.evaluate(() => localStorage.setItem('deny-folder', 'yes'));
 		page.once('dialog', (dialog) => dialog.accept());
 		await page.reload();
 		await expect(page.getByRole('button', { name: 'Reconnect folder' })).toBeVisible();
 		await page.getByRole('button', { name: 'Reconnect folder' }).click();
-		await expect(row(page, 'Round.json')).toBeVisible();
-		await open(page, 'Round.json');
+		await expect(row(page, 'Saved round.json')).toBeVisible();
+		await open(page, 'Saved round.json');
 		await expect(page.getByPlaceholder('type here', { exact: true })).toHaveValue(
 			'Final disk argument'
 		);
 		await closeFlow(page);
-		await row(page, 'Round.json').getByRole('button', { name: 'Duplicate' }).click();
+		await row(page, 'Saved round.json').getByRole('button', { name: 'Duplicate' }).click();
 		await expect(title(page)).toHaveValue('Saved round copy');
 		await page.getByRole('button', { name: 'Save flow', exact: true }).click();
-		await expect(page.locator('.save-status')).toHaveText('Saved to folder');
+		await expect(page.locator('.save-status')).toHaveText('Saved');
 		await closeFlow(page);
 		await expect(row(page, 'Saved round copy.json')).toBeVisible();
-		expect((await disk(page, 'Round.json')).title).toBe('Saved round');
+		expect((await disk(page, 'Saved round.json')).title).toBe('Saved round');
 		await lib(page).getByRole('button', { name: 'preflows', exact: true }).click();
 		await open(page, 'Preflow.json');
 		await title(page).fill('Nested');
-		await expect(page.locator('.save-status')).toHaveText('Saved to folder');
+		await expect(page.locator('.save-status')).toHaveText('Saved');
 		await page
 			.getByPlaceholder('type here', { exact: true })
 			.fill('Save stays in original subfolder');
-		await expect(page.locator('.save-status')).toHaveText('Saved to folder');
+		await expect(page.locator('.save-status')).toHaveText('Saved');
 		await closeFlow(page);
-		await expect(row(page, 'Preflow.json')).toBeVisible();
+		await expect(row(page, 'Nested.json')).toBeVisible();
 		await page.getByRole('button', { name: 'Up one folder' }).click();
-		await expect(row(page, 'Preflow.json')).toHaveCount(0);
+		await expect(row(page, 'Nested.json')).toHaveCount(0);
 		await lib(page).getByRole('button', { name: 'preflows', exact: true }).click();
-		await open(page, 'Preflow.json');
+		await open(page, 'Nested.json');
 		await expect(page.getByPlaceholder('type here', { exact: true })).toHaveValue(
 			'Save stays in original subfolder'
 		);
@@ -363,7 +370,7 @@ nativeTest(
 		await page.getByRole('button', { name: 'Reconnect folder' }).click();
 		await open(page, 'Round.json');
 		await page.getByPlaceholder('type here', { exact: true }).fill('Permission restored');
-		await expect(page.locator('.save-status')).toHaveText('Saved to folder');
+		await expect(page.locator('.save-status')).toHaveText('Saved');
 		expect((await disk(page, 'Round.json')).nodes['box-a'].value.content).toBe(
 			'Permission restored'
 		);
@@ -386,7 +393,9 @@ test('notes, manual pending-text save, and legacy imports remain compatible', as
 		await page.evaluate(() => !('showDirectoryPicker' in window)),
 		'Covered by the snapshot import and recovery export tests in browsers without writable handles.'
 	);
-	await expect(page.getByRole('button', { name: 'Choose folder', exact: true })).toBeEnabled();
+	await expect(
+		page.getByRole('button', { name: 'link a folder for automatic disk saves', exact: true })
+	).toBeEnabled();
 	await page.getByLabel('Import flow folder').setInputFiles(fixtures);
 	await open(page, 'Round.json');
 	await expect(page.getByPlaceholder('type notes here')).toHaveValue('Round notes');
@@ -414,7 +423,7 @@ test('notes, manual pending-text save, and legacy imports remain compatible', as
 });
 
 nativeTest(
-	'first native save chooses a unique file and preserves that location on title edits',
+	'first native save chooses a unique file and renames it when title editing is finished',
 	async ({ page }) => {
 		await nativeFolder(page);
 		for (const [name, expected] of [
@@ -426,19 +435,20 @@ nativeTest(
 			await title(page).fill(name);
 			await page.getByRole('button', { name: 'New flow', exact: true }).click();
 			await page.getByRole('button', { name: 'Save flow', exact: true }).click();
-			await expect(page.locator('.save-status')).toHaveText('Saved to folder');
+			await expect(page.locator('.save-status')).toHaveText('Saved');
 			const suggestion = await page.evaluate(() => localStorage.getItem('save-suggestion'));
 			const filename = expected ?? suggestion!;
 			expect(Buffer.byteLength(filename)).toBeLessThan(255);
 			if (!name) expect(filename).toMatch(/^Flow \d{4}-\d{2}-\d{2}T.*\.json$/);
-			expect((await disk(page, filename)).title).toBe(name);
+			expect((await disk(page, filename)).title).toBe(filename.replace(/\.json$/i, ''));
 			await title(page).fill('Edited title');
-			await expect(page.locator('.save-status')).toHaveText('Saved to folder');
+			await expect(page.locator('.save-status')).toHaveText('Saved');
 			expect((await disk(page, filename)).title).toBe('Edited title');
 			await closeFlow(page);
 			page.once('dialog', (dialog) => dialog.accept());
-			await row(page, filename).getByRole('button', { name: 'Delete' }).click();
+			await row(page, 'Edited title.json').getByRole('button', { name: 'Delete' }).click();
 			await expect(row(page, filename)).toHaveCount(0);
+			await expect(row(page, 'Edited title.json')).toHaveCount(0);
 		}
 		expect((await disk(page, 'Round.json')).nodes['box-a'].value.content).toBe('Original argument');
 	}
@@ -516,7 +526,9 @@ nativeTest(
 			.locator('.prelude .flow')
 			.filter({ has: page.getByText(/^(Recovered )?Browser-only round$/) });
 		await expect(browserCard).toBeVisible();
-		await page.getByRole('button', { name: 'Choose folder', exact: true }).click();
+		await page
+			.getByRole('button', { name: 'link a folder for automatic disk saves', exact: true })
+			.click();
 		await expect(row(page, 'Round.json')).toBeVisible();
 		await expect(page.locator('.prelude .flows [data-filename="Round.json"]')).toBeVisible();
 		await expect(browserCard).toHaveCount(0);
@@ -540,7 +552,7 @@ nativeTest(
 		await page.getByRole('button', { name: 'New flow', exact: true }).click();
 		await title(page).fill('Picked folder round');
 		await page.getByRole('button', { name: 'Save flow', exact: true }).click();
-		await expect(page.locator('.save-status')).toHaveText('Saved to folder');
+		await expect(page.locator('.save-status')).toHaveText('Saved');
 		await expect(page.locator('.sidebar .library')).toHaveCount(0);
 		await closeFlow(page);
 		await expect(row(page, 'Picked folder round.json')).toBeVisible();
@@ -570,12 +582,16 @@ nativeTest('denied folder permission leaves browser recovery available', async (
 		localStorage.setItem('deny-folder', 'true');
 		localStorage.setItem('reject-folder', 'true');
 	});
-	await page.getByRole('button', { name: 'Choose folder', exact: true }).click();
+	await page
+		.getByRole('button', { name: 'link a folder for automatic disk saves', exact: true })
+		.click();
 	await expect(page.getByRole('alert')).toContainText('Folder write permission was not granted');
 	await expect(
 		page.locator('.prelude .flow').filter({ has: page.getByText(/^(Recovered )?Recovery round$/) })
 	).toBeVisible();
-	await expect(page.getByRole('button', { name: 'Choose folder', exact: true })).toBeEnabled();
+	await expect(
+		page.getByRole('button', { name: 'link a folder for automatic disk saves', exact: true })
+	).toBeEnabled();
 });
 
 test('library controls, alternating rows, and Help tutorial follow the main-screen layout', async ({
@@ -586,12 +602,16 @@ test('library controls, alternating rows, and Help tutorial follow the main-scre
 		await page.evaluate(() => !('showDirectoryPicker' in window)),
 		'Covered by the snapshot import and recovery export tests in browsers without writable handles.'
 	);
-	await expect(page.getByRole('button', { name: 'Choose folder', exact: true })).toBeEnabled();
+	await expect(
+		page.getByRole('button', { name: 'link a folder for automatic disk saves', exact: true })
+	).toBeEnabled();
 	await page.getByLabel('Import flow folder').setInputFiles(fixtures);
 	const setup = page.getByRole('region', { name: 'Flow library setup', exact: true });
 	await expect(setup.getByRole('button', { name: 'Refresh', exact: true })).toBeVisible();
 	await expect(setup.getByRole('button', { name: 'Disconnect', exact: true })).toBeVisible();
-	await expect(page.getByRole('button', { name: 'Choose folder', exact: true })).toHaveCount(0);
+	await expect(
+		page.getByRole('button', { name: 'link a folder for automatic disk saves', exact: true })
+	).toHaveCount(0);
 	await expect(page.getByRole('heading', { name: 'persistancy' })).toBeVisible();
 	await expect(lib(page).getByRole('button', { name: 'Refresh', exact: true })).toHaveCount(0);
 	await row(page, 'Round.json').getByRole('button', { name: 'Duplicate', exact: true }).click();
@@ -630,7 +650,7 @@ test('library controls, alternating rows, and Help tutorial follow the main-scre
 });
 
 nativeTest(
-	'new and duplicate flows pick a save location once; cancellation keeps recovery and retries',
+	'new and duplicate flows pick save locations; cancellation keeps recovery and retries',
 	async ({ page }) => {
 		await nativeFolder(page);
 		await title(page).fill('First save');
@@ -653,16 +673,18 @@ nativeTest(
 		).toContain('Latest pending text');
 		await page.evaluate(() => localStorage.setItem('save-as-path', 'preflows/Chosen name.json'));
 		await page.getByPlaceholder('type here', { exact: true }).press('Control+s');
-		await expect(page.locator('.save-status')).toHaveText('Saved to folder');
+		await expect(page.locator('.save-status')).toHaveText('Saved');
+		await expect(title(page)).toHaveValue('Chosen name');
 		expect(await page.evaluate(() => localStorage.getItem('save-start'))).toBe('Flows');
 		expect(await page.evaluate(() => localStorage.getItem('save-suggestion'))).toBe(
 			'First save.json'
 		);
 		expect(await page.evaluate(() => localStorage.getItem('save-activation'))).toBe('true');
 		await page.getByPlaceholder('type here', { exact: true }).fill('Later edit');
+		await expect(page.locator('.save-status')).toHaveText('Saved');
 		await page.getByRole('button', { name: 'Save flow', exact: true }).click();
-		await expect(page.locator('.save-status')).toHaveText('Saved to folder');
-		expect(await page.evaluate(() => localStorage.getItem('save-count'))).toBe('2');
+		await expect(page.locator('.save-status')).toHaveText('Saved');
+		expect(await page.evaluate(() => localStorage.getItem('save-count'))).toBe('3');
 		await closeFlow(page);
 		await lib(page).getByRole('button', { name: 'preflows', exact: true }).click();
 		await expect(row(page, 'Chosen name.json')).toBeVisible();
@@ -670,15 +692,15 @@ nativeTest(
 		await expect(page.getByPlaceholder('type here', { exact: true })).toHaveValue('Later edit');
 		await closeFlow(page);
 		await row(page, 'Chosen name.json').getByRole('button', { name: 'Duplicate' }).click();
-		await expect(title(page)).toHaveValue('First save copy');
-		expect(await page.evaluate(() => localStorage.getItem('save-count'))).toBe('2');
+		await expect(title(page)).toHaveValue('Chosen name copy');
+		expect(await page.evaluate(() => localStorage.getItem('save-count'))).toBe('3');
 		await page.evaluate(() => localStorage.setItem('save-as-path', 'preflows/Copy chosen.json'));
 		await page.getByRole('button', { name: 'Save flow', exact: true }).click();
-		await expect(page.locator('.save-status')).toHaveText('Saved to folder');
+		await expect(page.locator('.save-status')).toHaveText('Saved');
 		expect(await page.evaluate(() => localStorage.getItem('save-start'))).toBe('preflows');
-		expect(await page.evaluate(() => localStorage.getItem('save-count'))).toBe('3');
+		expect(await page.evaluate(() => localStorage.getItem('save-count'))).toBe('4');
 		await page.getByPlaceholder('type here', { exact: true }).fill('Independent copy');
-		await expect(page.locator('.save-status')).toHaveText('Saved to folder');
+		await expect(page.locator('.save-status')).toHaveText('Saved');
 		await closeFlow(page);
 		await open(page, 'Chosen name.json');
 		await expect(page.getByPlaceholder('type here', { exact: true })).toHaveValue('Later edit');
@@ -692,7 +714,7 @@ nativeTest(
 		await title(page).fill('Autosave round');
 		await page.getByRole('button', { name: 'New flow', exact: true }).click();
 		await page.getByRole('button', { name: 'Save flow', exact: true }).click();
-		await expect(page.locator('.save-status')).toHaveText('Saved to folder');
+		await expect(page.locator('.save-status')).toHaveText('Saved');
 		const filename = 'Autosave round.json';
 		const argument = page.getByPlaceholder('type here', { exact: true });
 		const readArgument = async () => {
@@ -701,7 +723,10 @@ nativeTest(
 			return saved.nodes[flow.children[0]].value.content;
 		};
 		await argument.fill('Typed without leaving the argument');
+		await expect(page.locator('.save-status')).toBeVisible();
+		await expect(page.locator('.save-status')).toHaveText('Autosaving…');
 		await expect.poll(readArgument).toBe('Typed without leaving the argument');
+		await expect(page.locator('.save-status')).toHaveText('Saved');
 		await expect(argument).toBeFocused();
 		await argument.press('End');
 		await argument.pressSequentially(' and kept typing');
@@ -823,6 +848,12 @@ test('local folder imports retain more than twenty flows and existing local save
 				)
 			)
 		);
+		await page.addInitScript(() =>
+			localStorage.setItem(
+				'settings',
+				JSON.stringify({ version: 1, isSettings: true, settings: { maxLocalSaves: 0 } })
+			)
+		);
 		await page.goto('/app');
 		await title(page).fill('Existing local');
 		await page.getByRole('button', { name: 'New flow', exact: true }).click();
@@ -942,6 +973,8 @@ nativeTest(
 		const { default: ExcelJS } = await import('exceljs');
 		const workbook = new ExcelJS.Workbook();
 		await workbook.xlsx.load(new Uint8Array(bytes).buffer);
+		expect(workbook.title).toBe('Export');
+		await expect(title(page)).toHaveValue('Export');
 		expect(JSON.stringify(workbook.worksheets[0].getSheetValues())).toContain('Exported argument');
 		await page.getByPlaceholder('type here', { exact: true }).fill('Later browser edit');
 		await expect
@@ -989,5 +1022,278 @@ nativeTest(
 		}));
 		expect(dimensions.height).toBeGreaterThanOrEqual(dimensions.minimum);
 		await expect(lib(page).getByRole('button', { name: 'Download', exact: true })).toHaveCount(0);
+	}
+);
+
+nativeTest(
+	'Save opens the picker for a first save and every copy without changing the original target',
+	async ({ page }) => {
+		await nativeFolder(page);
+		await title(page).fill('Original');
+		await page.getByRole('button', { name: 'New flow', exact: true }).click();
+		const save = page.getByRole('button', { name: 'Save flow', exact: true });
+		await save.hover();
+		await expect(page.getByText('Save as…', { exact: true })).toBeVisible();
+		await save.click();
+		await expect(page.locator('.save-status')).toHaveText('Saved');
+		await save.hover();
+		await expect(page.getByText('Save a copy', { exact: true })).toBeVisible();
+		await page.evaluate(() => localStorage.setItem('save-as-path', 'Copy.json'));
+		await save.click();
+		await expect.poll(() => diskNames(page)).toContain('Copy.json');
+		expect(await page.evaluate(() => localStorage.getItem('save-count'))).toBe('2');
+		const before = await disk(page, 'Copy.json');
+		expect(before.title).toBe('Copy');
+		await expect(title(page)).toHaveValue('Original');
+		await page.getByPlaceholder('type here', { exact: true }).fill('Still editing the original');
+		await expect
+			.poll(async () => JSON.stringify(await disk(page, 'Original.json')))
+			.toContain('Still editing the original');
+		expect(await disk(page, 'Copy.json')).toEqual(before);
+		await page.evaluate(() => localStorage.setItem('cancel-save', 'true'));
+		await save.click();
+		expect(await page.evaluate(() => localStorage.getItem('save-count'))).toBe('3');
+		await page.getByPlaceholder('type here', { exact: true }).fill('After cancellation');
+		await expect
+			.poll(async () => JSON.stringify(await disk(page, 'Original.json')))
+			.toContain('After cancellation');
+		await page.getByPlaceholder('type here', { exact: true }).press('Control+s');
+		await expect.poll(() => page.evaluate(() => localStorage.getItem('save-count'))).toBe('4');
+	}
+);
+
+nativeTest(
+	'browser library download opens Save As without a connected folder',
+	async ({ page }) => {
+		await page.addInitScript(() => {
+			Object.defineProperty(window, 'showSaveFilePicker', {
+				value: async (options: { suggestedName: string }) => {
+					localStorage.setItem('download-save-name', options.suggestedName);
+					if (localStorage.getItem('cancel-library-save'))
+						throw new DOMException('Cancelled', 'AbortError');
+					return (await navigator.storage.getDirectory()).getFileHandle('Library export.json', {
+						create: true
+					});
+				}
+			});
+		});
+		await page.goto('/app');
+		await title(page).fill('Browser export');
+		await page.getByRole('button', { name: 'New flow', exact: true }).click();
+		await page.getByPlaceholder('type here', { exact: true }).fill('Saved library content');
+		await closeFlow(page);
+		const card = page
+			.locator('.prelude .flow')
+			.filter({ has: page.getByText('Browser export', { exact: true }) });
+		await card.getByRole('button', { name: 'download', exact: true }).click();
+		await expect
+			.poll(() => page.evaluate(() => localStorage.getItem('download-save-name')))
+			.toBe('Browser export.json');
+		await expect
+			.poll(() =>
+				page.evaluate(async () => {
+					try {
+						return (
+							await (
+								await (await navigator.storage.getDirectory()).getFileHandle('Library export.json')
+							).getFile()
+						).text();
+					} catch {
+						return '';
+					}
+				})
+			)
+			.toContain('Saved library content');
+		expect(
+			await page.evaluate(
+				async () =>
+					JSON.parse(
+						await (
+							await (
+								await (await navigator.storage.getDirectory()).getFileHandle('Library export.json')
+							).getFile()
+						).text()
+					).title
+			)
+		).toBe('Library export');
+		await page.evaluate(() => localStorage.setItem('cancel-library-save', 'true'));
+		await card.getByRole('button', { name: 'download', exact: true }).click();
+		await expect(page.getByRole('alert')).toHaveCount(0);
+		await expect(card).toBeVisible();
+	}
+);
+
+test('flow library settings hide the bar and enforce the browser save limit', async ({ page }) => {
+	await page.goto('/app');
+	await page.locator('.header button').nth(1).click();
+	const barSetting = page
+		.locator('.settings > ul > div')
+		.filter({ has: page.getByRole('heading', { name: 'Show flow library top bar', exact: true }) });
+	const limitSetting = page
+		.locator('.settings > ul > div')
+		.filter({ has: page.getByRole('heading', { name: 'Maximum browser saves', exact: true }) });
+	await barSetting.locator('label').click();
+	await limitSetting.getByRole('spinbutton').fill('2');
+	await page.keyboard.press('Escape');
+	await expect(page.getByRole('region', { name: 'Flow library setup', exact: true })).toHaveCount(
+		0
+	);
+	for (const name of ['Oldest', 'Middle', 'Newest']) {
+		await title(page).fill(name);
+		await page.getByRole('button', { name: 'New flow', exact: true }).click();
+		await page.getByRole('button', { name: 'Close flow', exact: true }).click();
+		await expect(title(page)).toHaveValue('');
+	}
+	const saved = await page.evaluate(() =>
+		Object.entries(JSON.parse(localStorage.getItem('savedFlows')!)).map(([key, value]) => ({
+			...(value as { title: string }),
+			raw: localStorage.getItem(key)
+		}))
+	);
+	expect(saved.map((item) => item.title).sort()).toEqual(['Middle', 'Newest']);
+	expect(saved.every((item) => item.raw)).toBe(true);
+	await page.reload();
+	await expect(page.getByRole('region', { name: 'Flow library setup', exact: true })).toHaveCount(
+		0
+	);
+	await page.locator('.header button').nth(1).click();
+	await expect(limitSetting.getByRole('spinbutton')).toHaveValue('2');
+	await barSetting.locator('label').click();
+	await limitSetting.getByRole('spinbutton').fill('0');
+	await page.keyboard.press('Escape');
+	await expect(page.getByRole('region', { name: 'Flow library setup', exact: true })).toBeVisible();
+	await title(page).fill('Unlimited');
+	await page.getByRole('button', { name: 'New flow', exact: true }).click();
+	await closeFlow(page);
+	await expect(page.locator('.prelude .flows .flow')).toHaveCount(3);
+});
+
+nativeTest(
+	'title commits rename linked files safely and autosave follows the new filename',
+	async ({ page }) => {
+		await nativeFolder(page);
+		await title(page).fill('Initial');
+		await page.getByRole('button', { name: 'New flow', exact: true }).click();
+		await page.getByRole('button', { name: 'Save flow', exact: true }).click();
+		await expect(page.locator('.save-status')).toHaveText('Saved');
+		await title(page).fill('Renamed');
+		await expect(page.locator('.save-status')).toHaveText('Saved');
+		expect(await diskNames(page)).toContain('Initial.json');
+		expect(await diskNames(page)).not.toContain('Renamed.json');
+		await title(page).press('Enter');
+		await expect.poll(() => diskNames(page)).toContain('Renamed.json');
+		await expect.poll(() => diskNames(page)).not.toContain('Initial.json');
+		await page.getByPlaceholder('type here', { exact: true }).fill('Edits follow the rename');
+		await expect
+			.poll(async () => {
+				try {
+					return JSON.stringify(await disk(page, 'Renamed.json'));
+				} catch {
+					return '';
+				}
+			})
+			.toContain('Edits follow the rename');
+		await page.evaluate(async (data) => {
+			const dir = await (await navigator.storage.getDirectory()).getDirectoryHandle('Flows');
+			const stream = await (
+				await dir.getFileHandle('Occupied.json', { create: true })
+			).createWritable();
+			await stream.write(JSON.stringify(data));
+			await stream.close();
+		}, round);
+		await title(page).fill('Occupied');
+		await page.getByPlaceholder('type here', { exact: true }).click();
+		await expect.poll(() => diskNames(page)).toContain('Occupied (2).json');
+		await expect.poll(() => diskNames(page)).not.toContain('Renamed.json');
+		expect(await disk(page, 'Occupied.json')).toEqual(round);
+		await title(page).fill('CON');
+		await title(page).press('Enter');
+		await expect.poll(() => diskNames(page)).toContain('_CON.json');
+		await expect.poll(() => diskNames(page)).not.toContain('Occupied (2).json');
+		await closeFlow(page);
+		await open(page, '_CON.json');
+		await expect(title(page)).toHaveValue('CON');
+		await expect(page.getByPlaceholder('type here', { exact: true })).toHaveValue(
+			'Edits follow the rename'
+		);
+	}
+);
+
+nativeTest(
+	'failed title renames preserve the original disk file and browser recovery',
+	async ({ page }) => {
+		await nativeFolder(page);
+		await open(page, 'Round.json');
+		await page.evaluate(() => {
+			const original = FileSystemFileHandle.prototype.createWritable;
+			FileSystemFileHandle.prototype.createWritable = async function (...args) {
+				if (this.name === 'Failed rename.json')
+					throw new DOMException('Write failed', 'NotAllowedError');
+				return original.apply(this, args);
+			};
+		});
+		await title(page).fill('Failed rename');
+		await title(page).press('Enter');
+		await expect(page.locator('.save-status')).toContainText('Write failed');
+		expect(await disk(page, 'Round.json')).toEqual(round);
+		expect(
+			await page.evaluate(() =>
+				Object.keys(JSON.parse(localStorage.getItem('savedFlows')!))
+					.map((key) => localStorage.getItem(key))
+					.join('')
+			)
+		).toContain('Failed rename');
+	}
+);
+
+test('Choose file replaces Save with no open document and imports normally without a linked folder', async ({
+	page
+}) => {
+	await page.goto('/app');
+	const choose = page.getByRole('button', { name: 'Choose file', exact: true });
+	await expect(choose).toBeEnabled();
+	await expect(page.getByRole('button', { name: 'Save flow', exact: true })).toHaveCount(0);
+	const picker = page.waitForEvent('filechooser');
+	await choose.click();
+	await (await picker).setFiles(path.join(fixtures, 'Round.json'));
+	await expect(title(page)).toHaveValue('Round');
+	await expect(page.getByPlaceholder('type here', { exact: true })).toHaveValue(
+		'Original argument'
+	);
+	await expect(page.getByRole('button', { name: 'Save flow', exact: true })).toBeEnabled();
+	await expect(choose).toHaveCount(0);
+	await closeFlow(page);
+	await expect(choose).toBeEnabled();
+});
+
+nativeTest(
+	'Choose file imports a duplicate awaiting Save when a folder is linked',
+	async ({ page }) => {
+		await nativeFolder(page);
+		const picker = page.waitForEvent('filechooser');
+		await page.getByRole('button', { name: 'Choose file', exact: true }).click();
+		await (await picker).setFiles(path.join(fixtures, 'Round.json'));
+		await expect(title(page)).toHaveValue('Round copy');
+		await expect(page.locator('.save-status')).toHaveText('Not saved to disk');
+		await page.getByPlaceholder('type here', { exact: true }).fill('Independent imported copy');
+		await expect
+			.poll(() =>
+				page.evaluate(() =>
+					Object.keys(JSON.parse(localStorage.getItem('savedFlows')!))
+						.map((key) => localStorage.getItem(key))
+						.join('')
+				)
+			)
+			.toContain('Independent imported copy');
+		expect(await diskNames(page)).not.toContain('Round copy.json');
+		expect(await disk(page, 'Round.json')).toEqual(round);
+		await page.getByRole('button', { name: 'Save flow', exact: true }).click();
+		await expect(page.locator('.save-status')).toHaveText('Saved');
+		expect(JSON.stringify(await disk(page, 'Round copy.json'))).toContain(
+			'Independent imported copy'
+		);
+		expect(await disk(page, 'Round.json')).toEqual(round);
+		await closeFlow(page);
+		await expect(page.getByRole('button', { name: 'Choose file', exact: true })).toBeEnabled();
 	}
 );

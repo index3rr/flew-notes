@@ -56,11 +56,12 @@
 	let isOnline = true;
 	let libraryBusy = false;
 	let libraryError = '';
+	let chooseFileInput: HTMLInputElement;
 	function saveFlow() {
-		if (!directFolderAccess || !$library.name || $library.imported) {
+		if (!directFolderAccess || !$library.connected || $library.imported) {
 			void saveNodes();
 			openPopup(DownloadUpload, 'Save flow');
-		} else void saveDocument();
+		} else void saveDocument($hasDiskFile);
 	}
 
 	async function toggleDocument() {
@@ -131,6 +132,13 @@
 			}
 		});
 	});
+
+	let showFlowLibraryBar = true;
+	onDestroy(
+		settings.subscribe(['showFlowLibraryBar'], () => {
+			showFlowLibraryBar = settings.data.showFlowLibraryBar.value as boolean;
+		})
+	);
 
 	let showSaveButton = settings.data.showSaveButton.value as boolean;
 	onDestroy(
@@ -288,13 +296,17 @@
 			}
 		}
 	});
+	function commitDocumentTitle() {
+		if ($documentOpen && !$frozen && !libraryBusy) void saveNodes($nodes, true);
+	}
 	function handleDocumentTitleKeydown(e: KeyboardEvent) {
-		if (e.key !== 'Enter' || e.isComposing || e.repeat || $documentOpen || libraryBusy || $frozen)
-			return;
+		if (e.key !== 'Enter' || e.isComposing || e.repeat || libraryBusy || $frozen) return;
 		e.preventDefault();
 		e.stopPropagation();
-		void toggleDocument();
+		if ($documentOpen) commitDocumentTitle();
+		else void toggleDocument();
 	}
+
 	function handleEditorInput(e: Event) {
 		const target = e.target as HTMLElement;
 		if (target.matches('.document-title') || target.closest('.flow, .title, .side-doc'))
@@ -330,8 +342,8 @@
 			});
 		}
 	}
-	function readUpload() {
-		const fileInput = document.getElementById('uploadId') as HTMLInputElement;
+	function readUpload(event: Event, duplicate = false) {
+		const fileInput = event.currentTarget as HTMLInputElement;
 		if (!fileInput?.files?.length) return;
 		const file = fileInput.files[0];
 
@@ -339,7 +351,9 @@
 		reader.onload = function (fileLoadedEvent) {
 			let uploadData = fileLoadedEvent.target?.result;
 			if (uploadData == undefined) return;
-			handleUpload(uploadData.toString());
+			void handleUpload(uploadData.toString(), duplicate).catch((error: Error) => {
+				openPopup(Message, 'File Message', { message: error.message, error: true });
+			});
 
 			fileInput.value = ''; // allow for the same file to be reuploaded
 		};
@@ -350,7 +364,7 @@
 		e.preventDefault();
 	}
 
-	async function handleUpload(data: string) {
+	async function handleUpload(data: string, duplicate = false) {
 		let dataObj;
 		try {
 			dataObj = JSON.parse(data);
@@ -374,7 +388,7 @@
 		}
 		if (newNodes != null) {
 			if (!unsavedChanges || confirm('Are you sure you want to overwrite your current flows?')) {
-				await openDocument(data);
+				await openDocument(data, { duplicate });
 				trackFileImported('json', newNodes.root.children.length);
 			}
 		}
@@ -423,6 +437,13 @@
 />
 <main class:activeMouse class="palette-plain">
 	<input id="uploadId" type="file" hidden on:change={readUpload} />
+	<input
+		bind:this={chooseFileInput}
+		type="file"
+		accept=".json,application/json"
+		hidden
+		on:change={(event) => readUpload(event, $library.connected && !$library.imported)}
+	/>
 	<div class="grid" class:showPrelude={!($nodes.root.children.length > 0)}>
 		<div class="sidebar">
 			<div class="header">
@@ -446,17 +467,25 @@
 						...(showSaveButton
 							? [
 									{
-										icon:
-											$saveStatus.startsWith('Saved') && !$dirty && !unsavedToDisk
-												? 'check'
-												: 'save',
-										ariaLabel: 'Save flow',
+										icon: !$documentOpen
+											? 'open'
+											: $library.connected && !$library.imported
+											? 'save'
+											: 'file',
+										ariaLabel: $documentOpen ? 'Save flow' : 'Choose file',
 										tutorialHighlight: 3,
-										tooltip: 'Save flow',
-										shortcut: ['commandControl', 's'],
-										disabled: !$documentOpen || $frozen || libraryBusy,
+										tooltip: !$documentOpen
+											? 'Choose file'
+											: $library.connected && !$library.imported
+											? $hasDiskFile
+												? 'Save a copy'
+												: 'Save as…'
+											: 'File',
+										shortcut: $documentOpen ? ['commandControl', 's'] : null,
+										disabled: $frozen || libraryBusy,
 										onclick: () => {
-											saveFlow();
+											if ($documentOpen) saveFlow();
+											else chooseFileInput.click();
 										}
 									}
 							  ]
@@ -484,6 +513,7 @@
 						disabled={$frozen}
 						bind:value={$documentTitle}
 						on:keydown={handleDocumentTitleKeydown}
+						on:blur={commitDocumentTitle}
 					/>
 				</div>
 				<Button
@@ -499,10 +529,12 @@
 			<p
 				class="save-status"
 				class:unsaved-to-disk={unsavedToDisk}
+				class:disk-save={$documentOpen && $hasDiskFile}
 				class:save-error={!unsavedToDisk &&
 					$saveStatus &&
 					$saveStatus !== 'Unsaved changes' &&
 					$saveStatus !== 'Saving…' &&
+					$saveStatus !== 'Autosaving…' &&
 					!$saveStatus.startsWith('Saved')}
 				role="status"
 			>
@@ -559,7 +591,10 @@
 			{/if}
 		{:else}
 			<div class="prelude">
-				<FlowLibrarySetup bind:busy={libraryBusy} bind:error={libraryError} />
+				{#if showFlowLibraryBar}
+					<FlowLibrarySetup bind:busy={libraryBusy} bind:error={libraryError} />
+				{/if}
+				{#if !showFlowLibraryBar && libraryError}<p role="alert">{libraryError}</p>{/if}
 				<div class="prelude-content">
 					<Prelude bind:busy={libraryBusy} bind:error={libraryError} />
 				</div>
@@ -647,7 +682,8 @@
 		overflow-wrap: anywhere;
 	}
 	.save-status.save-error,
-	.save-status.unsaved-to-disk {
+	.save-status.unsaved-to-disk,
+	.save-status.disk-save {
 		display: block;
 	}
 	.tabs {
