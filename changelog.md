@@ -5,8 +5,12 @@
 - [x] Local transcript panel using Whisper in a browser worker. Includes transcript export, editable tags, and phrase comparison against pasted or SpeechDrop DOCX/TXT documents. Outside-document flags are suggestions to review.
 - [x] Optional speech timer start when transcription first matches the opponent document; select and scroll to the next speech when time expires, leaving it paused. Controls live under Timers settings.
 - [x] Migrate older settings, preserving visible side notes on the right and hidden side notes as off.
-- [x] All panels support Off, Left, Right, Left collapsed, and Right collapsed. Notes and Flow Library keep their positions and show placeholder text without an open flow. Collapsed panels share a bottom icon row; one opens per side, and closing it preserves its state. Regular timer panels stay expanded.
-- [x] Collaboration messages arrive as dismissible notifications, with conversation history in the panel. SpeechDrop codes synchronize on connection and edits.
+- [x] All panels support Off, Left, Right, Left collapsed, and Right collapsed. Notes, Flow Library, Starred arguments, and Collaboration keep their positions and shrink to just their names without an open flow; hover for the explanation. Collapsed panels share a bottom icon row; one opens per side, and closing it preserves its state. Regular timer panels stay expanded.
+- [x] Collaboration messages arrive as dismissible notifications, with conversation history in the panel. SpeechDrop codes synchronize on connection and edits. When sharing is off, the panel offers an Enable collaboration button.
+
+- [x] Panel dividers only separate visible panels; collapsed tabs no longer add a stray line above SpeechDrop.
+
+- [x] Star, delete, cross-out, and popup-close tooltips show the matching shortcuts. Help includes selection, paste, timer fields, and document titles, with matching key labels.
 
 # Upstream changelog and roadmap
 

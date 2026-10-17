@@ -1,4 +1,6 @@
 <script lang="ts">
+	import PanelPlaceholder from './PanelPlaceholder.svelte';
+	export let available = true;
 	import { nodes, pendingAction } from '$lib/models/store';
 	import { focusId } from '$lib/models/focus';
 	import { getParentFlowId, type Box, type BoxId, type FlowId, type Node } from '$lib/models/node';
@@ -62,7 +64,9 @@
 </script>
 
 <section class="starred-panel">
-	{#if starred.length === 0}
+	{#if !available}
+		<PanelPlaceholder name="Starred arguments" />
+	{:else if starred.length === 0}
 		<div class="empty">Starred arguments</div>
 	{:else}
 		<div class="list">

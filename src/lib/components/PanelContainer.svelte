@@ -10,8 +10,7 @@
 	import TranscriptPanel from './panels/TranscriptPanel.svelte';
 	import CollaborationPanel from './panels/CollaborationPanel.svelte';
 	import Button from './Button.svelte';
-	import { documentOpen } from '$lib/models/autoSave';
-	import { nodes } from '$lib/models/store';
+	import { nodes, connections } from '$lib/models/store';
 	import type { FlowId } from '$lib/models/node';
 
 	export let side: 'left' | 'right';
@@ -27,6 +26,12 @@
 		'collaborationPanel'
 	] as const;
 	type PanelId = (typeof panelIds)[number];
+	const documentPanelIds: readonly PanelId[] = [
+		'libraryPanel',
+		'notesPanel',
+		'starredPanel',
+		'collaborationPanel'
+	];
 
 	const panelIcons: Record<PanelId, string> = {
 		tabsPanel: 'dots',
@@ -68,7 +73,7 @@
 		})
 	);
 
-	$: documentPanelsAvailable = $documentOpen && $nodes.root.children.length > 0;
+	$: documentPanelsAvailable = $nodes.root.children.length > 0;
 
 	$: activePanels = allPanels
 		.filter((p) => {
@@ -81,6 +86,10 @@
 			return orderA - orderB;
 		});
 
+	$: visiblePanelIds = activePanels
+		.filter((panel) => panelValues[panel.id] < 3 || expanded === panel.id)
+		.map((panel) => panel.id);
+
 	export let selectedFlowId: FlowId | null = null;
 	export let clickTab: (id: FlowId) => void = () => {};
 	export let addFlow: (style: any) => void = () => {};
@@ -90,23 +99,26 @@
 
 {#if activePanels.length > 0}
 	<div class="panel-container" class:customScrollbar={settings.data.customScrollbar.value}>
-		{#each activePanels as panel, i}
-			{#if i > 0 && (panelValues[panel.id] < 3 || expanded === panel.id)}
+		{#each activePanels as panel}
+			{#if visiblePanelIds.indexOf(panel.id) > 0}
 				<div class="divider" />
 			{/if}
 			<div
 				class="panel"
+				data-panel={panel.id}
 				class:collapsed={panelValues[panel.id] >= 3 && expanded !== panel.id}
 				class:auto-size={panel.id === 'timersPanel' ||
 					panel.id === 'starredPanel' ||
-					panel.id === 'speechDropPanel'}
+					panel.id === 'speechDropPanel' ||
+					(panel.id === 'collaborationPanel' && $connections.tag === 'empty') ||
+					(!documentPanelsAvailable && documentPanelIds.includes(panel.id))}
 			>
 				{#if panel.id === 'libraryPanel'}
 					<LibraryPanel available={documentPanelsAvailable} />
 				{:else if panel.id === 'transcriptPanel'}
 					<TranscriptPanel />
 				{:else if panel.id === 'collaborationPanel'}
-					<CollaborationPanel />
+					<CollaborationPanel available={documentPanelsAvailable} />
 				{:else if panel.id === 'tabsPanel'}
 					<TabsPanel {selectedFlowId} {clickTab} {addFlow} {handleSort} bind:switchSpeakers />
 				{:else if panel.id === 'timersPanel'}
@@ -114,7 +126,7 @@
 				{:else if panel.id === 'notesPanel'}
 					<NotesPanel editable={documentPanelsAvailable} />
 				{:else if panel.id === 'starredPanel'}
-					<StarredPanel {selectedFlowId} {clickTab} />
+					<StarredPanel available={documentPanelsAvailable} {selectedFlowId} {clickTab} />
 				{:else if panel.id === 'speechDropPanel'}
 					<SpeechDropPanel />
 				{/if}
@@ -140,6 +152,7 @@
 	}
 	.collapsed-buttons {
 		display: flex;
+		flex-wrap: wrap;
 		flex-shrink: 0;
 		margin-top: auto;
 	}

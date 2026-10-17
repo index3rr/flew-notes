@@ -69,3 +69,46 @@ test('partner messages notify both ways and SpeechDrop codes sync on join and ed
 	await host.getByRole('button', { name: 'Dismiss partner notification' }).click();
 	await expect(host.locator('.notifications')).not.toContainText('Working on it');
 });
+
+test('inactive collaboration offers a compact enable button and restores it after cancellation', async ({
+	page
+}) => {
+	await page.addInitScript(() =>
+		localStorage.setItem(
+			'settings',
+			JSON.stringify({
+				version: 2,
+				isSettings: true,
+				settings: { collaborationPanel: 2, notesPanel: 0, timersPanel: 0, telemetry: 0 }
+			})
+		)
+	);
+	await page.goto('/app');
+	const panel = page.locator('[data-panel="collaborationPanel"]');
+	await expect(panel.locator('.panel-placeholder')).toHaveText('Collaboration');
+	await expect(
+		panel.getByRole('button', { name: 'Enable collaboration', exact: true })
+	).toHaveCount(0);
+	await page.getByRole('button', { name: 'New flow', exact: true }).click();
+	const enable = panel.getByRole('button', { name: 'Enable collaboration', exact: true });
+	await expect(enable).toBeVisible();
+	await expect(panel).toHaveClass(/auto-size/);
+	await expect(panel.getByRole('textbox')).toHaveCount(0);
+	await enable.click();
+	await page.getByRole('button', { name: 'host new room', exact: true }).click();
+	await page.locator('.upper > .element > .top').click();
+	await expect(panel).not.toHaveClass(/auto-size/);
+	await panel.getByRole('textbox', { name: 'Message your partner' }).fill('Keep this draft');
+	await page.locator('.sidebar .header .buttons div:nth-child(4) > .top').first().click();
+	await page.getByRole('button', { name: 'cancel', exact: true }).click();
+	await page.locator('.upper > .element > .top').click();
+	await expect(enable).toBeVisible();
+	await expect(panel).toHaveClass(/auto-size/);
+	await expect(panel.getByRole('textbox')).toHaveCount(0);
+	await enable.click();
+	await page.getByRole('button', { name: 'host new room', exact: true }).click();
+	await page.locator('.upper > .element > .top').click();
+	await expect(panel.getByRole('textbox', { name: 'Message your partner' })).toHaveValue(
+		'Keep this draft'
+	);
+});

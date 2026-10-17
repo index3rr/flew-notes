@@ -197,7 +197,8 @@
 					onclick: deleteBoxAndFocus,
 					disabled: targetId == null,
 					tooltip: 'delete selected',
-					shortcut: ['commandControl', 'delete'],
+					ariaLabel: 'Delete selected cell',
+					shortcut: ['commandControl', 'backspace'],
 					disabledReason
 				}
 			],
@@ -226,15 +227,20 @@
 					onclick: () => toggleFormat('starred'),
 					disabled: targetId == null || targetBox()?.value.isExtension,
 					tooltip: 'toggle starred argument',
+					ariaLabel: 'Toggle starred argument',
+					shortcut: ['commandControl', 'shift', 's'],
 					toggled: targetBox()?.value?.starred,
-					disabledReason: targetBox()?.value.isExtension ? "can't star an extension" : disabledReason
+					disabledReason: targetBox()?.value.isExtension
+						? "can't star an extension"
+						: disabledReason
 				},
 				{
 					icon: 'cross',
 					onclick: () => toggleFormat('crossed'),
 					disabled: targetId == null || targetBox()?.value.isExtension,
 					tooltip: 'toggle crossed out',
-					shortcut: ['commandControl', 'shift', 'x'],
+					ariaLabel: 'Toggle crossed out',
+					shortcut: ['control', 'shift', 'x'],
 					toggled: targetBox()?.value?.crossed,
 					disabledReason: targetBox()?.value.isExtension
 						? "can't cross out an extension"

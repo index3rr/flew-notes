@@ -253,10 +253,10 @@ Use the existing theme tokens and component patterns when adding UI:
 
 ## Panels
 
-`PanelContainer.svelte` places panels according to numeric settings: 0 off, 1 left, 2 right, 3 left collapsed, 4 right collapsed. Notes and Flow Library always keep their configured positions and show placeholder text when no flow page is open. Each side opens one collapsed panel at a time; hidden collapsed content stays mounted so timers and transcription keep their state.
+`PanelContainer.svelte` places panels according to numeric settings: 0 off, 1 left, 2 right, 3 left collapsed, 4 right collapsed. Notes, Flow Library, Starred arguments, and Collaboration keep their configured positions and shrink to their panel names when no flow page is open, with the reason in a hover tooltip. Use content-sized panel containers for these empty states. Each side opens one collapsed panel at a time; hidden collapsed content stays mounted so timers and transcription keep their state.
 
 The Flow Library panel defaults to Off. `panels/LibraryPanel.svelte` displays compact `FlowCard` rows with names and colored page labels. Click a label to import its page; drag uses `application/x-flew-page`. Import with `importFlowPage` so IDs are regenerated and changes use the action/history/sharing pipeline. Keep file-management controls in the full library.
 
 `transcript.worker.ts` runs Whisper locally through Transformers.js, loaded only when transcription starts. AudioWorklet capture feeds 16 kHz PCM segments; no audio is sent to a transcription API. Models and runtime files download on first use. `transcript.ts` implements phrase comparison for review flags. SpeechDrop DOCX extraction uses Mammoth raw text, never injected HTML.
 
-`collaboration.ts` contains partner notices, SpeechDrop room/document state, and speech-detection events. `sharingChannel.ts` relays partner messages and room-code changes through existing WebRTC connections; notifications render globally even with the collaboration panel collapsed.
+`collaboration.ts` contains partner notices, SpeechDrop room/document state, and speech-detection events. `sharingChannel.ts` relays partner messages and room-code changes through existing WebRTC connections; notifications render globally even with the collaboration panel collapsed. With an open flow and sharing off, the collaboration panel shrinks to an Enable collaboration button that opens Share.

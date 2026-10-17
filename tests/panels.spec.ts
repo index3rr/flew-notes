@@ -52,7 +52,11 @@ test('right collapsed panels provide their tray and permanent timers show withou
 	await settings(page, { timersPanel: 1, collaborationPanel: 4, notesPanel: 0 });
 	await page.goto('/app');
 	await expect(page.locator('.timer-panel')).toBeVisible();
+	await page.getByRole('button', { name: 'New flow', exact: true }).click();
 	await page.getByRole('button', { name: 'Collaboration', exact: true }).click();
+	await page.getByRole('button', { name: 'Enable collaboration', exact: true }).click();
+	await page.getByRole('button', { name: 'host new room', exact: true }).click();
+	await page.locator('.upper > .element > .top').click();
 	await page
 		.getByRole('textbox', { name: 'Message your partner' })
 		.fill('Please answer this argument');
@@ -284,20 +288,17 @@ test('notes and library keep their positions and show placeholders without a flo
 	await settings(page, { notesPanel: 2, libraryPanel: 1, timersPanel: 0 });
 	await page.goto('/app');
 	const library = page.locator('.sidebar .library-panel');
-	const notes = page
-		.locator('.right-sidebar')
-		.getByPlaceholder('Notes are not editable when a flow is not open');
+	const notes = page.locator('.right-sidebar').locator('.notes-panel .panel-placeholder');
 	await expect(library).toBeVisible();
-	await expect(library).toHaveText('Open a flow to import pages from the library.');
+	await expect(library.locator('.panel-placeholder')).toHaveText('Flow library');
 	await expect(notes).toBeVisible();
-	await expect(notes).toHaveAttribute('readonly', '');
 	await expect(page.getByRole('button', { name: 'Notes', exact: true })).toHaveCount(0);
 	await expect(page.getByRole('button', { name: 'Flow library', exact: true })).toHaveCount(0);
 	await page.getByRole('button', { name: 'New flow', exact: true }).click();
 	await expect(page.locator('.right-sidebar').getByPlaceholder('type notes here')).toBeEditable();
-	await expect(library).not.toHaveText('Open a flow to import pages from the library.');
+	await expect(library.locator('.panel-placeholder')).toHaveCount(0);
 	await page.getByRole('button', { name: 'Close flow', exact: true }).click();
-	await expect(library).toHaveText('Open a flow to import pages from the library.');
+	await expect(library.locator('.panel-placeholder')).toHaveText('Flow library');
 	await expect(notes).toBeVisible();
 });
 
@@ -307,13 +308,9 @@ test('configured collapsed notes and library remain usable for viewing placehold
 	await settings(page, { notesPanel: 4, libraryPanel: 3, timersPanel: 0 });
 	await page.goto('/app');
 	await page.getByRole('button', { name: 'Flow library', exact: true }).click();
-	await expect(page.locator('.library-panel')).toHaveText(
-		'Open a flow to import pages from the library.'
-	);
+	await expect(page.locator('.library-panel .panel-placeholder')).toHaveText('Flow library');
 	await page.getByRole('button', { name: 'Notes', exact: true }).click();
-	await expect(
-		page.getByPlaceholder('Notes are not editable when a flow is not open')
-	).toBeVisible();
+	await expect(page.locator('.notes-panel .panel-placeholder')).toHaveText('Notes');
 });
 
 test('flow library panel is off by default', async ({ page }) => {
@@ -322,3 +319,85 @@ test('flow library panel is off by default', async ({ page }) => {
 	await page.getByRole('button', { name: 'New flow', exact: true }).click();
 	await expect(page.locator('.library-panel')).toHaveCount(0);
 });
+
+for (const side of ['left', 'right'] as const) {
+	test(`document panels show only compact placeholders on the ${side} without a flow`, async ({
+		page
+	}) => {
+		const position = side === 'left' ? 1 : 2;
+		const ids = ['libraryPanel', 'notesPanel', 'starredPanel', 'collaborationPanel'] as const;
+		await settings(page, {
+			...Object.fromEntries(ids.map((id) => [id, position])),
+			timersPanel: 0
+		});
+		await page.goto('/app');
+		const container = page.locator(side === 'left' ? '.sidebar' : '.right-sidebar');
+		for (const id of ids) {
+			const panel = container.locator(`[data-panel="${id}"]`);
+			await expect(panel.locator('.panel-placeholder')).toHaveText(
+				{
+					libraryPanel: 'Flow library',
+					notesPanel: 'Notes',
+					starredPanel: 'Starred arguments',
+					collaborationPanel: 'Collaboration'
+				}[id]!
+			);
+			const size = await panel.evaluate((element) => ({
+				panel: element.getBoundingClientRect().height,
+				text: element.querySelector('.panel-placeholder')!.getBoundingClientRect().height
+			}));
+			expect(Math.abs(size.panel - size.text)).toBeLessThan(1);
+			await expect(panel.locator('textarea, input, button')).toHaveCount(0);
+			await panel.locator('.panel-placeholder').hover();
+			await expect(panel.getByText('No flow is open.', { exact: true })).toBeVisible();
+			await page.mouse.move(0, 0);
+		}
+		await page.getByRole('button', { name: 'New flow', exact: true }).click();
+		await expect(container.getByPlaceholder('type notes here')).toBeEditable();
+		await expect(
+			container.getByRole('button', { name: 'Enable collaboration', exact: true })
+		).toBeVisible();
+		for (const id of ['libraryPanel', 'notesPanel']) {
+			await expect(container.locator(`[data-panel="${id}"]`)).not.toHaveClass(/auto-size/);
+		}
+		await page.getByRole('button', { name: 'Close flow', exact: true }).click();
+		for (const id of ids)
+			await expect(container.locator(`[data-panel="${id}"] .panel-placeholder`)).toBeVisible();
+	});
+}
+
+for (const side of ['left', 'right'] as const) {
+	test(`collapsed tabs do not add a separator above SpeechDrop on the ${side}`, async ({
+		page
+	}) => {
+		const position = side === 'left' ? 1 : 2;
+		await settings(page, {
+			tabsPanel: position + 2,
+			speechDropPanel: position,
+			notesPanel: 0,
+			timersPanel: 0,
+			libraryPanel: 0
+		});
+		await page.goto('/app');
+		await page.getByRole('button', { name: 'New flow', exact: true }).click();
+		const container = page.locator(
+			side === 'left' ? '.sidebar .panel-container' : '.right-sidebar .panel-container'
+		);
+		await expect(container.locator('.speechdrop-panel')).toBeVisible();
+		await expect(container.locator('.divider')).toHaveCount(0);
+		await container.getByRole('button', { name: 'Tabs', exact: true }).click();
+		await expect(container.locator('.tabs')).toBeVisible();
+		await expect(container.locator('.divider')).toHaveCount(1);
+		await container.getByRole('button', { name: 'Tabs', exact: true }).click();
+		await expect(container.locator('.tabs')).not.toBeVisible();
+		await expect(container.locator('.divider')).toHaveCount(0);
+		await page.evaluate(() => {
+			const saved = JSON.parse(localStorage.getItem('settings')!);
+			saved.settings.tabsPanel = 0;
+			localStorage.setItem('settings', JSON.stringify(saved));
+		});
+		await page.reload();
+		await expect(container.locator('.speechdrop-panel')).toBeVisible();
+		await expect(container.locator('.divider')).toHaveCount(0);
+	});
+}

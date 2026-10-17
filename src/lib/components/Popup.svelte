@@ -16,9 +16,13 @@
 <svelte:window on:keydown={handleKeydown} />
 <div class="top" in:popupIn|global out:popupOut|global>
 	<div class="upper">
-		<Button icon="delete" tooltip="close" palette="plain-secondary" on:click={closeSelf} /><span
-			>{title}</span
-		>
+		<Button
+			icon="delete"
+			tooltip="close"
+			shortcut={['escape']}
+			palette="plain-secondary"
+			on:click={closeSelf}
+		/><span>{title}</span>
 	</div>
 	<svelte:component this={component} closePopup={closeSelf} {...props} />
 </div>

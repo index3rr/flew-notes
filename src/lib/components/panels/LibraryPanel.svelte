@@ -1,4 +1,5 @@
 <script lang="ts">
+	import PanelPlaceholder from './PanelPlaceholder.svelte';
 	import LibraryPanelRow from './LibraryPanelRow.svelte';
 	import { savedNodesDatas } from '$lib/models/autoSave';
 	import {
@@ -24,7 +25,7 @@
 
 <section class="library-panel" aria-label="Flow library panel">
 	{#if !available}
-		<p>Open a flow to import pages from the library.</p>
+		<PanelPlaceholder name="Flow library" />
 	{:else}
 		{#if error}<p role="alert">{error}</p>{/if}
 		{#if directFolderAccess && $library.name}

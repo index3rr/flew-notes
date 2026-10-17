@@ -17,15 +17,29 @@
 	const groups: ShortcutGroup[] = [
 		{
 			name: 'Global',
-			context: 'Available anywhere in the app',
+			context: 'Inside an open flow document',
 			shortcuts: [
-				{ keys: ['commandControl', 'n'], description: 'Create new primary flow' },
-				{ keys: ['commandControl', 'shift', 'n'], description: 'Create new secondary flow' },
+				{
+					keys: ['control', 'n'],
+					description: 'Add primary flow page'
+				},
+				{
+					keys: ['control', 'shift', 'n'],
+					description: 'Add secondary flow page'
+				},
 				{ keys: ['commandControl', 'z'], description: 'Undo' },
 				{ keys: ['commandControl', 'shift', 'z'], description: 'Redo' },
 				{ keys: ['commandControl', 's'], description: 'Save flow' },
-				{ keys: ['commandControl', 'option', 'up'], description: 'Switch to previous tab', note: 'Only when multiple flows open' },
-				{ keys: ['commandControl', 'option', 'down'], description: 'Switch to next tab', note: 'Only when multiple flows open' }
+				{
+					keys: ['commandControl', 'option', 'up'],
+					description: 'Switch to previous tab',
+					note: 'Wraps around the open flow pages'
+				},
+				{
+					keys: ['commandControl', 'option', 'down'],
+					description: 'Switch to next tab',
+					note: 'Wraps around the open flow pages'
+				}
 			]
 		},
 		{
@@ -36,43 +50,138 @@
 				{ keys: ['down'], description: 'Focus cell below' },
 				{ keys: ['left'], description: 'Move to parent cell' },
 				{ keys: ['right'], description: 'Move to first child / response' },
-				{ keys: ['tab'], description: 'Focus next sibling cell' },
+				{
+					keys: ['tab'],
+					description: 'Focus next sibling cell'
+				},
 				{ keys: ['shift', 'tab'], description: 'Focus previous sibling cell' }
+			]
+		},
+		{
+			name: 'Selection',
+			context: 'Within one flow page',
+			shortcuts: [
+				{
+					keys: ['shift', 'up'],
+					description: 'Select through the cell above'
+				},
+				{
+					keys: ['shift', 'down'],
+					description: 'Select through the cell below'
+				},
+				{
+					keys: ['shift', 'left'],
+					description: 'Select through the parent cell'
+				},
+				{
+					keys: ['shift', 'right'],
+					description: 'Select through the first response'
+				},
+				{
+					keys: ['shift', 'click'],
+					description: 'Select a range of cells'
+				}
 			]
 		},
 		{
 			name: 'Cell Creation',
 			context: 'When a cell is focused',
 			shortcuts: [
-				{ keys: ['return'], description: 'Add cell below' },
+				{
+					keys: ['return'],
+					description: 'Focus or add cell below'
+				},
 				{ keys: ['shift', 'return'], description: 'Add response (child cell)' },
-				{ keys: ['option', 'return'], description: 'Add cell above', note: 'Not available on extension cells' },
-				{ keys: ['option', 'shift', 'return'], description: "Add at parent's next sibling" }
+				{
+					keys: ['option', 'return'],
+					description: 'Focus or add cell above'
+				},
+				{
+					keys: ['option', 'shift', 'return'],
+					description: 'Add a response to the next parent argument'
+				}
 			]
 		},
 		{
 			name: 'Cell Manipulation',
 			context: 'When a cell is focused',
 			shortcuts: [
-				{ keys: ['commandControl', 'b'], description: 'Toggle bold', note: 'Not available on extension cells' },
-				{ keys: ['commandControl', 'shift', 'x'], description: 'Toggle crossed out', note: 'Not available on extension cells' },
-				{ keys: ['commandControl', 'shift', 's'], description: 'Toggle starred argument', note: 'Not available on extension cells' },
-				{ keys: ['control', 'l'], description: 'Fold / collapse cell', note: 'Only when cell has children' },
-				{ keys: ['commandControl', 'e'], description: 'Extend cell', note: 'Not available on extension cells' },
-				{ keys: ['commandControl', 'c'], description: 'Copy cell' },
-				{ keys: ['commandControl', 'x'], description: 'Cut cell', note: 'Only when no text is selected' },
-				{ keys: ['backspace'], description: 'Delete cell', note: 'Only when empty and has no children' },
-				{ keys: ['commandControl', 'backspace'], description: 'Force delete cell', note: 'Only when cell has no children' }
+				{
+					keys: ['commandControl', 'b'],
+					description: 'Toggle bold'
+				},
+				{
+					keys: ['control', 'shift', 'x'],
+					description: 'Toggle crossed out'
+				},
+				{
+					keys: ['commandControl', 'shift', 's'],
+					description: 'Toggle starred argument'
+				},
+				{
+					keys: ['control', 'l'],
+					description: 'Fold / collapse cell'
+				},
+				{
+					keys: ['commandControl', 'e'],
+					description: 'Extend cell'
+				},
+				{
+					keys: ['backspace'],
+					description: 'Delete empty cell or extension'
+				},
+				{
+					keys: ['commandControl', 'backspace'],
+					description: 'Delete cell and its responses'
+				}
 			]
 		},
-
 		{
-			name: 'Title',
-			context: 'When editing the flow title',
+			name: 'Clipboard',
+			context: 'When a cell is focused',
+			shortcuts: [
+				{
+					keys: ['commandControl', 'c'],
+					description: 'Copy cell or selected cells, including responses'
+				},
+				{
+					keys: ['commandControl', 'x'],
+					description: 'Cut cell or selected cells, including responses'
+				},
+				{
+					keys: ['commandControl', 'v'],
+					description: 'Paste copied cells and their responses',
+					note: 'If the cell you paste into is not empty, the pasted cells become its children.'
+				}
+			]
+		},
+		{
+			name: 'Flow page title',
+			context: 'When editing a page title',
 			shortcuts: [
 				{ keys: ['return'], description: 'Move focus to first cell' },
 				{ keys: ['down'], description: 'Move focus to first cell' },
 				{ keys: ['right'], description: 'Move focus to first cell' }
+			]
+		},
+		{
+			name: 'Document title',
+			context: 'The title in the sidebar',
+			shortcuts: [
+				{
+					keys: ['return'],
+					description: 'Create a document or commit its title'
+				}
+			]
+		},
+		{
+			name: 'Timers',
+			context: 'When editing a paused timer',
+			shortcuts: [
+				{ keys: ['up'], description: 'Increase the focused minutes or seconds field' },
+				{ keys: ['down'], description: 'Decrease the focused minutes or seconds field' },
+				{ keys: ['right'], description: 'Move from minutes to seconds' },
+				{ keys: ['left'], description: 'Move from seconds to minutes' }
 			]
 		}
 	];
@@ -130,7 +239,7 @@
 		display: grid;
 		grid-template-columns: calc(max(130px, 20%) + var(--padding-big)) 1fr;
 	}
-	
+
 	.outline {
 		width: 100%;
 		padding-top: calc(var(--button-size) + var(--padding) * 2);
