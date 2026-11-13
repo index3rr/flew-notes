@@ -92,6 +92,7 @@
     - view only guests (for opponents?) locked to only speeches that have already been given
     - im unsure how small of a feature this is, webrtc code based sharing? instead of copy paste? could be part of flew share
     - an easier way to do quick webrtc handshake is you scan a qr code on your phone, it brings up that same qr code on your phone which you can scan into another computer since it would be awkward doing it with just 2 computers pointing webcam at screen
+    - is there a way to make the collab persistant if i disconnect and reconnect to wifi?
 
 - history changes
     - make it so you can undo deleting a flow page
@@ -100,14 +101,10 @@
 
 ## Small features/fixes (..X releases)
 
+- make qr code fit to screen
+    - the guest scan thing usually ends up off the screen when it is clicked
 
 - evaluate if switching to the AGPL is possible, if so do it,  do it  (gpl kind of does not work for this project to ensure free-ness since its served over web)
-
-- fix save button having save shortcut which doesnt work on zen because control s is compact mode, and on chrome it doesnt work because its captured by saving the html of the page, google docs can capture control s just fine. you should be able to as well
-
-## dont work on yet
-
-
 - Extemp debate preset
 - a good way to group cards to respond
     - could be you select cards and then push shift enter/ the button to make argument right
