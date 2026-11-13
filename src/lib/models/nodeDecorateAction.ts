@@ -205,10 +205,19 @@ export function newUpdateAction<Value extends Flow | Box>(
 	id: SelfIdFor<Value>,
 	value: Value
 ): UpdateAction<Value> {
+	const previous = $nodes[id]?.value as Value | undefined;
 	return {
 		tag: 'update',
 		id: id,
-		newValue: value
+		newValue: value,
+		fields: [...new Set([...Object.keys(previous ?? {}), ...Object.keys(value)])].filter(
+			(field) => {
+				return (
+					JSON.stringify(previous?.[field as keyof Value]) !==
+					JSON.stringify(value[field as keyof Value])
+				);
+			}
+		)
 	};
 }
 

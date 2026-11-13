@@ -25,7 +25,7 @@
 	import { connections } from '$lib/models/store';
 	import { hasTurnServerConfigured } from '$lib/models/iceServers';
 
-	export let closePopup = () => {};
+	export let closePopup = () => undefined;
 
 	let connectionMode: 'manual' | 'link' | 'qr' = 'link';
 
@@ -62,6 +62,11 @@
 					<span class="usePalette palette-accent-secondary">guest</span>.
 				</p>
 				<p>
+					Everyone in the room shares the current document, including its title. Opening, creating,
+					or closing a document changes it for everyone. You can browse its pages independently.
+					Sidebar notes stay on your device. Files and recovery copies are saved on each device.
+				</p>
+				<p>
 					If you encounter any issues with sharing, first update your browser, then <Button
 						text="contact me"
 						icon="link"
@@ -86,15 +91,15 @@
 				{#if !hasTurnServerConfigured()}
 					<p class="turnWarning">
 						Cross-network sharing may be broken at the moment, please <Button
-						icon="delta"
-						text="Contact me!"
-						on:click={() => {
-							closePopup();
-							openPopup(Help, 'Contact');
-						}}
-						target="_blank"
-						inline
-					/>
+							icon="delta"
+							text="Contact me!"
+							on:click={() => {
+								closePopup();
+								openPopup(Help, 'Contact');
+							}}
+							target="_blank"
+							inline
+						/>
 					</p>
 				{/if}
 			</div>

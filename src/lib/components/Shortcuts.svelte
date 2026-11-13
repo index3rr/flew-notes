@@ -24,8 +24,17 @@
 				{ keys: ['commandControl', 'z'], description: 'Undo' },
 				{ keys: ['commandControl', 'shift', 'z'], description: 'Redo' },
 				{ keys: ['commandControl', 's'], description: 'Save flow' },
-				{ keys: ['commandControl', 'option', 'up'], description: 'Switch to previous tab', note: 'Only when multiple flows open' },
-				{ keys: ['commandControl', 'option', 'down'], description: 'Switch to next tab', note: 'Only when multiple flows open' }
+				{ keys: ['commandControl', 'shift', 's'], description: 'Save a copy / export flow' },
+				{
+					keys: ['commandControl', 'option', 'up'],
+					description: 'Switch to previous tab',
+					note: 'Only when multiple flows open'
+				},
+				{
+					keys: ['commandControl', 'option', 'down'],
+					description: 'Switch to next tab',
+					note: 'Only when multiple flows open'
+				}
 			]
 		},
 		{
@@ -46,7 +55,11 @@
 			shortcuts: [
 				{ keys: ['return'], description: 'Add cell below' },
 				{ keys: ['shift', 'return'], description: 'Add response (child cell)' },
-				{ keys: ['option', 'return'], description: 'Add cell above', note: 'Not available on extension cells' },
+				{
+					keys: ['option', 'return'],
+					description: 'Add cell above',
+					note: 'Not available on extension cells'
+				},
 				{ keys: ['option', 'shift', 'return'], description: "Add at parent's next sibling" }
 			]
 		},
@@ -54,14 +67,42 @@
 			name: 'Cell Manipulation',
 			context: 'When a cell is focused',
 			shortcuts: [
-				{ keys: ['commandControl', 'b'], description: 'Toggle bold', note: 'Not available on extension cells' },
-				{ keys: ['commandControl', 'shift', 'x'], description: 'Toggle crossed out', note: 'Not available on extension cells' },
-				{ keys: ['control', 'l'], description: 'Fold / collapse cell', note: 'Only when cell has children' },
-				{ keys: ['commandControl', 'e'], description: 'Extend cell', note: 'Not available on extension cells' },
+				{
+					keys: ['commandControl', 'b'],
+					description: 'Toggle bold',
+					note: 'Not available on extension cells'
+				},
+				{
+					keys: ['commandControl', 'shift', 'x'],
+					description: 'Toggle crossed out',
+					note: 'Not available on extension cells'
+				},
+				{
+					keys: ['control', 'l'],
+					description: 'Fold / collapse cell',
+					note: 'Only when cell has children'
+				},
+				{
+					keys: ['commandControl', 'e'],
+					description: 'Extend cell',
+					note: 'Not available on extension cells'
+				},
 				{ keys: ['commandControl', 'c'], description: 'Copy cell' },
-				{ keys: ['commandControl', 'x'], description: 'Cut cell', note: 'Only when no text is selected' },
-				{ keys: ['backspace'], description: 'Delete cell', note: 'Only when empty and has no children' },
-				{ keys: ['commandControl', 'backspace'], description: 'Force delete cell', note: 'Only when cell has no children' }
+				{
+					keys: ['commandControl', 'x'],
+					description: 'Cut cell',
+					note: 'Only when no text is selected'
+				},
+				{
+					keys: ['backspace'],
+					description: 'Delete cell',
+					note: 'Only when empty and has no children'
+				},
+				{
+					keys: ['commandControl', 'backspace'],
+					description: 'Force delete cell',
+					note: 'Only when cell has no children'
+				}
 			]
 		},
 
@@ -129,7 +170,7 @@
 		display: grid;
 		grid-template-columns: calc(max(130px, 20%) + var(--padding-big)) 1fr;
 	}
-	
+
 	.outline {
 		width: 100%;
 		padding-top: calc(var(--button-size) + var(--padding) * 2);

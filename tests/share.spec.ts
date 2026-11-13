@@ -350,7 +350,14 @@ async function verifyQrSharing(
 						signaling: pc.signalingState,
 						hasRemoteDescription: !!pc.remoteDescription,
 						cameraState: video?.readyState,
-						cameraWidth: video?.videoWidth
+						cameraWidth: video?.videoWidth,
+						cameraRect: video?.getBoundingClientRect().toJSON(),
+						cameraPaused: video?.paused,
+						cameraTracks: (video?.srcObject as MediaStream | null)?.getTracks().map((track) => ({
+							readyState: track.readyState,
+							muted: track.muted,
+							enabled: track.enabled
+						}))
 					};
 				})
 			);

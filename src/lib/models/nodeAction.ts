@@ -54,6 +54,7 @@ export type UpdateAction<Value> = {
 	tag: 'update';
 	id: SelfIdFor<Value>;
 	newValue: Value;
+	fields?: string[];
 };
 
 export type MoveAction<Value> = {
@@ -82,6 +83,7 @@ export function applyAction<Value extends Box | Flow>(
 ): Action<Value> {
 	switch (action.tag) {
 		case 'add': {
+			if (getNode(nodes, action.id).some) return { tag: 'identity' };
 			const parentRes = getNode(nodes, action.parent);
 			if (!parentRes.some) return { tag: 'identity' };
 			const parent = parentRes.val;
@@ -109,6 +111,9 @@ export function applyAction<Value extends Box | Flow>(
 			const nodeRes = getNode(nodes, action.id);
 			if (!nodeRes.some) return { tag: 'identity' };
 			const node = <Node<Value>>nodeRes.val;
+			// A peer may have added a response since this deletion was prepared.
+			// Keep its parent instead of leaving an unreachable subtree.
+			if (node.children.length) return { tag: 'identity' };
 
 			const parentRes = getNode(nodes, node.parent);
 			if (!parentRes.some) return { tag: 'identity' };
@@ -135,9 +140,17 @@ export function applyAction<Value extends Box | Flow>(
 			const inverseAction: UpdateAction<Value> = {
 				tag: 'update',
 				id: action.id,
-				newValue: structuredClone(<Value>node.value)
+				newValue: structuredClone(<Value>node.value),
+				fields: action.fields
 			};
-			node.value = action.newValue;
+			if (action.fields) {
+				const value = { ...node.value } as Value;
+				for (const field of action.fields as (keyof Value)[]) {
+					if (Object.hasOwn(action.newValue, field)) value[field] = action.newValue[field];
+					else delete value[field];
+				}
+				node.value = value;
+			} else node.value = action.newValue;
 			return inverseAction;
 		}
 		case 'move': {

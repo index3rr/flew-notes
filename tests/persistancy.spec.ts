@@ -564,9 +564,14 @@ nativeTest(
 		).toHaveClass(/top/);
 		const data = await disk(page, 'Picked folder round.json');
 		expect(data.title).toBe('Picked folder round');
+		const modified = await page.evaluate(async () => {
+			const dir = await (await navigator.storage.getDirectory()).getDirectoryHandle('Flows');
+			const file = await (await dir.getFileHandle('Picked folder round.json')).getFile();
+			return new Date(file.lastModified).toISOString();
+		});
 		await expect(row(page, 'Picked folder round.json').locator('time')).toHaveAttribute(
 			'datetime',
-			data.created
+			modified
 		);
 		await expect(page.locator('.document-date')).toHaveCount(0);
 	}
@@ -741,6 +746,9 @@ nativeTest(
 			})
 			.toBe('Renamed page without blur');
 		await expect(pageTitle).toBeFocused();
+		await argument.fill('Explicit save stays in this file');
+		await argument.press('Control+s');
+		await expect.poll(readArgument).toBe('Explicit save stays in this file');
 		expect(await page.evaluate(() => localStorage.getItem('save-count'))).toBe('1');
 	}
 );
@@ -762,6 +770,7 @@ test('local-only browsers import folders into local flows and autosave without c
 	);
 	await page.goto('/app');
 	await expect(page.getByText(/Folder importing will be buggy/)).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'Import folder', exact: true })).toBeEnabled();
 	await page.getByLabel('Import flow folder').setInputFiles(fixtures);
 	await expect(page.getByRole('heading', { name: 'Local flows' })).toBeVisible();
 	const cards = page.locator('.prelude .flows .flow');
@@ -1058,6 +1067,8 @@ nativeTest(
 			.poll(async () => JSON.stringify(await disk(page, 'Original.json')))
 			.toContain('After cancellation');
 		await page.getByPlaceholder('type here', { exact: true }).press('Control+s');
+		expect(await page.evaluate(() => localStorage.getItem('save-count'))).toBe('3');
+		await page.getByPlaceholder('type here', { exact: true }).press('Control+Shift+s');
 		await expect.poll(() => page.evaluate(() => localStorage.getItem('save-count'))).toBe('4');
 	}
 );
@@ -1262,6 +1273,14 @@ test('Choose file replaces Save with no open document and imports normally witho
 	);
 	await expect(page.getByRole('button', { name: 'Save flow', exact: true })).toBeEnabled();
 	await expect(choose).toHaveCount(0);
+	await expect
+		.poll(() =>
+			page.evaluate(() => {
+				const metadata = JSON.parse(localStorage.getItem('savedFlows') ?? '{}');
+				return Object.values(metadata).some((value: any) => value.title === 'Round');
+			})
+		)
+		.toBe(true);
 	await closeFlow(page);
 	await expect(choose).toBeEnabled();
 });
@@ -1295,5 +1314,47 @@ nativeTest(
 		expect(await disk(page, 'Round.json')).toEqual(round);
 		await closeFlow(page);
 		await expect(page.getByRole('button', { name: 'Choose file', exact: true })).toBeEnabled();
+	}
+);
+
+nativeTest(
+	'collaboration switches detach the previous disk file and keep recovery copies',
+	async ({ page, browser }) => {
+		const { peer, connect } = await import('./helpers/collaboration');
+		await nativeFolder(page);
+		await open(page, 'Round.json');
+		await page.getByPlaceholder('type here', { exact: true }).fill('Saved local argument');
+		await expect(page.locator('.save-status')).toHaveText('Saved');
+		const before = await disk(page, 'Round.json');
+		const guest = await peer(browser);
+		try {
+			await connect(page, guest);
+			await guest.getByRole('button', { name: 'Close flow', exact: true }).click();
+			await expect(page.getByRole('button', { name: 'New flow', exact: true })).toBeVisible();
+			await guest.getByRole('textbox', { name: 'Flow document title' }).fill('Remote document');
+			await guest.getByRole('button', { name: 'New flow', exact: true }).click();
+			await expect(title(page)).toHaveValue('Remote document');
+			await guest
+				.getByPlaceholder('type here', { exact: true })
+				.fill('Never overwrite the old disk file');
+			await expect(page.getByPlaceholder('type here', { exact: true })).toHaveValue(
+				'Never overwrite the old disk file'
+			);
+			await expect
+				.poll(() =>
+					page.evaluate(() => {
+						const metadata = JSON.parse(localStorage.getItem('savedFlows') ?? '{}');
+						const key = Object.keys(metadata).find(
+							(key) => metadata[key].title === 'Remote document'
+						);
+						return key && localStorage.getItem(key);
+					})
+				)
+				.toContain('Never overwrite the old disk file');
+			expect(await disk(page, 'Round.json')).toEqual(before);
+			await expect(page.locator('.save-status')).toContainText('Not saved to disk');
+		} finally {
+			await guest.context().close();
+		}
 	}
 );

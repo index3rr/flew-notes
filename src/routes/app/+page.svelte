@@ -236,6 +236,11 @@
 			}
 		},
 		'commandControl shift': {
+			s: {
+				handle: saveFlow,
+				require: () => $documentOpen && !$frozen && !libraryBusy,
+				preventDefault: 'always'
+			},
 			z: {
 				handle: () => {
 					if ($selectedFlowId == null) return;
@@ -252,7 +257,7 @@
 		commandControl: {
 			s: {
 				handle: () => {
-					saveFlow();
+					void saveDocument();
 				},
 				require: () => $documentOpen && !$frozen && !libraryBusy,
 				preventDefault: 'always'
@@ -444,7 +449,7 @@
 		hidden
 		on:change={(event) => readUpload(event, $library.connected && !$library.imported)}
 	/>
-	<div class="grid" class:showPrelude={!($nodes.root.children.length > 0)}>
+	<div class="grid" class:showPrelude={!$documentOpen}>
 		<div class="sidebar">
 			<div class="header">
 				<ButtonBar
@@ -481,7 +486,11 @@
 												? 'Save a copy'
 												: 'Save as…'
 											: 'File',
-										shortcut: $documentOpen ? ['commandControl', 's'] : null,
+										shortcut: $documentOpen
+											? $library.connected && !$library.imported && !$hasDiskFile
+												? ['commandControl', 's']
+												: ['commandControl', 'shift', 's']
+											: null,
 										disabled: $frozen || libraryBusy,
 										onclick: () => {
 											if ($documentOpen) saveFlow();
@@ -566,7 +575,7 @@
 				<Timers />
 			</div>
 		</div>
-		{#if $nodes.root.children.length > 0}
+		{#if $documentOpen}
 			{#if $selectedFlowId != null && $nodes[$selectedFlowId]}
 				{#key $selectedFlowId}
 					<div class="title">
@@ -583,6 +592,10 @@
 						<Flow on:focusFlow={focusFlow} flowId={$selectedFlowId} />
 					</div>
 				{/key}
+			{:else}
+				<div class="flow">
+					<p>This document has no pages. Add a page using the buttons in the sidebar.</p>
+				</div>
 			{/if}
 			{#if showSideDoc}
 				<div class="side-doc">

@@ -22,9 +22,10 @@ pendingAction.subscribe((value) => {
 });
 export function resolvePendingAction(nodes: Nodes) {
 	if ($pendingAction == null) return;
-	history.setNextBeforeFocus($pendingAction.beforeFocusId, $pendingAction.ownerId);
-	const action = $pendingAction.action(nodes);
-	doActionBundle(action, $pendingAction.ownerId);
-	history.setPrevAfterFocus($pendingAction.afterFocusId, $pendingAction.ownerId);
+	const pending = $pendingAction;
 	pendingAction.set(null);
+	history.setNextBeforeFocus(pending.beforeFocusId, pending.ownerId);
+	const action = pending.action(nodes);
+	doActionBundle(action, pending.ownerId);
+	history.setPrevAfterFocus(pending.afterFocusId, pending.ownerId);
 }

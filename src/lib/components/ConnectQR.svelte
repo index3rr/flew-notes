@@ -20,10 +20,14 @@
 
 	let preparedKey: HostKey | GuestKey | null = null;
 	let preparation = 0;
+	let preparedFor: RTCPeerConnection | null = null;
 	$: void prepareKey(connection);
 	async function prepareKey(current: Host | Guest | null) {
 		const generation = ++preparation;
-		preparedKey = null;
+		// ICE updates can refresh the key while the reply scanner is running.
+		// Keep that scanner mounted while preparing another key for the same peer.
+		if (preparedFor !== (current?.pc ?? null)) preparedKey = null;
+		preparedFor = current?.pc ?? null;
 		if (current?.tag == 'hostAwaitingGuestKey') {
 			const fullKey = {
 				...current.key,
@@ -110,8 +114,10 @@
 	{:else if connection.tag == 'hostAwaitingGuestKey' && preparedKey == null}
 		<p>Creating room QR code…</p>
 	{:else if connection.tag == 'hostAwaitingGuestKey' && preparedKey != null}
-		<p>Have your guest scan this room QR code:</p>
-		<QRCode value={encodeSharingQr(preparedKey, undefined, true)} />
+		{#if !scanning}
+			<p>Have your guest scan this room QR code:</p>
+			<QRCode value={encodeSharingQr(preparedKey, undefined, true)} />
+		{/if}
 		<Button
 			icon="qr"
 			text={scanning ? 'stop scanning' : 'scan guest QR code'}

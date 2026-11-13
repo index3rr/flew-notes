@@ -1,4 +1,6 @@
 import { writable, get } from 'svelte/store';
+import { nodes } from './store';
+import type { Nodes } from './node';
 
 // A document contains all flow pages and the notes sidebar.
 export const documentTitle = writable('');
@@ -29,4 +31,41 @@ export function documentFilename(title = get(documentTitle)) {
 
 export function documentTitleFromFilename(name: string) {
 	return name.replace(/\.(json|xlsx)$/i, '');
+}
+
+// Document identity belongs to the collaboration session, never to a local file path.
+export const documentOpen = writable(false);
+export let documentId: string = crypto.randomUUID();
+export let changingDocument = false;
+export function beginDocumentChange() {
+	changingDocument = true;
+}
+export function endDocumentChange() {
+	changingDocument = false;
+}
+export function setDocumentId(id: string = crypto.randomUUID()) {
+	documentId = id;
+}
+export type SharedDocument = {
+	id: string;
+	open: boolean;
+	title: string;
+	created: string | null;
+	nodes: Nodes;
+};
+export function sharedDocument(): SharedDocument {
+	return {
+		id: documentId,
+		open: get(documentOpen),
+		title: get(documentTitle),
+		created: get(documentCreated),
+		nodes: get(nodes)
+	};
+}
+let receiveDocument: (document: SharedDocument) => void;
+export function registerDocumentReceiver(receiver: typeof receiveDocument) {
+	receiveDocument = receiver;
+}
+export function receiveSharedDocument(document: SharedDocument) {
+	receiveDocument(document);
 }

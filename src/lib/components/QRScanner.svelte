@@ -30,6 +30,7 @@
 				'Camera scanning requires HTTPS. Open this app through a secure HTTPS address, then try again.';
 			return;
 		}
+		video.scrollIntoView({ block: 'nearest' });
 		scanner = new QrScanner(video, (result) => dispatch('scan', result.data), {
 			returnDetailedScanResult: true,
 			calculateScanRegion: getScanRegion,
