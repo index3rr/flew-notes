@@ -153,7 +153,6 @@
 		white-space: nowrap;
 		z-index: 10000;
 		font-size: var(--font-size);
-		box-shadow: var(--box-shadow);
 		display: flex;
 		flex-direction: column;
 		gap: var(--padding-small);

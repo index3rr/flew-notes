@@ -120,19 +120,22 @@
 		padding: var(--padding);
 	}
 	.page {
-		border: 0;
+		border: none;
 		font: inherit;
 		font-weight: var(--font-weight);
-		cursor: pointer;
 		max-width: 100%;
 		transition: background var(--transition-speed);
 	}
-	.page:hover {
+	.page:hover,
+	.page:active {
 		background: var(--this-background-active);
 	}
+	.page:active {
+		transition: none;
+	}
 	.page:disabled {
-		opacity: 0.5;
-		cursor: default;
+		color: var(--this-text-weak);
+		background: var(--this-background-indent);
 	}
 
 	.flow {

@@ -165,10 +165,7 @@
 		margin-top: auto;
 	}
 	.panel-container {
-		background: var(--background);
 		width: 100%;
-		border-radius: var(--border-radius);
-		padding: var(--padding);
 		box-sizing: border-box;
 		display: flex;
 		flex-direction: column;

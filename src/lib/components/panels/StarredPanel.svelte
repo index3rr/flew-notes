@@ -102,9 +102,8 @@
 		flex-direction: column;
 	}
 	.empty {
-		padding: var(--padding);
 		color: var(--text-weak);
-		font-size: 0.8rem;
+		white-space: nowrap;
 	}
 	.list {
 		display: flex;
@@ -127,7 +126,6 @@
 		text-align: left;
 		white-space: pre-wrap;
 		transition: background var(--transition-speed);
-		cursor: pointer;
 	}
 	.content:hover {
 		background: var(--this-background-indent);
@@ -151,7 +149,6 @@
 		background: none;
 		color: inherit;
 		font: inherit;
-		font-size: 0.9rem;
 		outline: none;
 	}
 	textarea::placeholder {

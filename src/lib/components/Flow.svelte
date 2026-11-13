@@ -76,14 +76,10 @@
 	.top {
 		--this-background: var(--background-secondary);
 		--this-background-secondary: var(--background);
-		--this-accent-text: var(--accent-secondary-text);
-		--this-accent-secondary-text: var(--accent-text);
 	}
 	.top.invert {
 		--this-background: var(--background);
 		--this-background-secondary: var(--background-secondary);
-		--this-accent-text: var(--accent-text);
-		--this-accent-secondary-text: var(--accent-secondary-text);
 	}
 	.viewer {
 		position: relative;

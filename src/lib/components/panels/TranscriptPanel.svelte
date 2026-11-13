@@ -256,6 +256,10 @@
 	.transcript {
 		overflow-y: auto;
 	}
+	/* Keep content at its natural height so a short panel scrolls instead of overlapping. */
+	.transcript > :global(*) {
+		flex-shrink: 0;
+	}
 	.transcript,
 	label {
 		display: flex;
@@ -274,9 +278,20 @@
 		font: inherit;
 		color: var(--text);
 		background: var(--background-indent);
-		border: 0;
+		border: none;
+		border-radius: var(--border-radius);
+		outline: none;
 		padding: var(--padding);
 		min-width: 0;
+		transition: background var(--transition-speed);
+	}
+	textarea:focus,
+	input:focus {
+		background: var(--background-active);
+	}
+	textarea::placeholder,
+	input::placeholder {
+		color: var(--text-weak);
 	}
 	textarea {
 		min-height: 5em;

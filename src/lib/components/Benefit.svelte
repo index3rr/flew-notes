@@ -67,7 +67,6 @@
 		order: 2;
 	}
 	.top > div {
-		border-radius: var(--radius);
 		background: var(--background);
 		border-radius: var(--border-radius);
 		box-sizing: border-box;

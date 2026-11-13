@@ -418,14 +418,22 @@
 		flex: 1;
 		box-sizing: border-box;
 		padding: var(--padding);
-		border: 0;
+		border: none;
 		border-radius: var(--border-radius);
-		background: var(--background-secondary);
+		outline: none;
+		background: var(--background-indent);
 		color: var(--text);
 		font: inherit;
+		transition: background var(--transition-speed);
 	}
 	.room-entry input:focus {
-		outline: 2px solid var(--color-fade);
+		background: var(--background-active);
+	}
+	.room-entry input::placeholder {
+		color: var(--text-weak);
+	}
+	.auto-open input {
+		accent-color: var(--color-accent);
 	}
 	.status {
 		margin: 0;

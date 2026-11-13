@@ -70,17 +70,21 @@
 		gap: var(--padding-small);
 	}
 	.folder {
-		border: 0;
-		background: transparent;
+		border: none;
+		background: none;
 		color: var(--text);
 		text-align: left;
 		font: inherit;
 		padding: var(--padding);
-		cursor: pointer;
 		border-radius: var(--border-radius);
+		transition: background var(--transition-speed);
 	}
 	.folder:hover {
 		background: var(--background-indent);
+	}
+	.folder:active {
+		transition: none;
+		background: var(--background-active);
 	}
 	p {
 		margin: 0;

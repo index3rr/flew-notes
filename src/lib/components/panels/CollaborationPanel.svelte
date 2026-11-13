@@ -100,10 +100,16 @@
 		font: inherit;
 		color: var(--text);
 		background: var(--background-indent);
-		border: 0;
+		border: none;
+		border-radius: var(--border-radius);
+		outline: none;
 		padding: var(--padding);
 		min-height: 4em;
 		resize: vertical;
+		transition: background var(--transition-speed);
+	}
+	textarea:focus {
+		background: var(--background-active);
 	}
 	.message {
 		overflow-wrap: anywhere;

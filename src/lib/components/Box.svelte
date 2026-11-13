@@ -1045,8 +1045,8 @@
 	}
 	.star-marker {
 		position: absolute;
-		top: 2px;
-		right: 2px;
+		top: calc(var(--padding-small) / 2);
+		right: calc(var(--padding-small) / 2);
 		color: var(--this-text);
 		z-index: 3;
 		pointer-events: none;

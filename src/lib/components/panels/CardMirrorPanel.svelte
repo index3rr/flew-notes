@@ -299,8 +299,14 @@
 		font: inherit;
 		background: var(--background-indent);
 		color: var(--text);
-		border: 0;
-		border-radius: var(--border-radius-small);
+		border: none;
+		border-radius: var(--border-radius);
+		outline: none;
+		transition: background var(--transition-speed);
+	}
+	textarea:focus,
+	select:focus {
+		background: var(--background-active);
 	}
 	textarea {
 		resize: vertical;
@@ -313,7 +319,6 @@
 		color: var(--text-weak);
 	}
 	summary {
-		cursor: pointer;
 		padding: var(--padding-small) 0;
 	}
 	.cardmirror-panel :global(.element) {

@@ -4,7 +4,7 @@
 	let icons: { name: string; svg: string }[] = [
 		{
 			name: 'star',
-			svg: `<path d="M50 7L63.3 35.1L94 39.2L71.6 60.8L77.3 91L50 76.1L22.7 91L28.4 60.8L6 39.2L36.7 35.1L50 7Z" fill="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>`
+			svg: `<path d="M50 7L63.3 35.1L94 39.2L71.6 60.8L77.3 91L50 76.1L22.7 91L28.4 60.8L6 39.2L36.7 35.1L50 7Z" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>`
 		},
 		{
 			name: 'dots',

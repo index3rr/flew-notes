@@ -124,7 +124,6 @@
 	ul {
 		margin: 0;
 		padding: 0;
-		color: var(--color-subtle);
 		text-align: left;
 		width: 100%;
 		box-sizing: border-box;
