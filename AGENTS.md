@@ -281,16 +281,16 @@ There is no `--accent` or `--accent-secondary` variable. Use the derived tokens 
 - **Popup content components**: accept `export let closePopup` (or `export const closePopup = () => {}` if unused). Give the root a palette class (usually `palette-plain`). Reserve space for the floating close button with `padding-top: calc(var(--button-size) + var(--padding) * 2)` on the first row. Two-pane popups (Settings, Shortcuts) put the outline on `--background-secondary`.
 - **Panels in the app grid** (`app/+page.svelte`) are `--background` surfaces with `--border-radius`, separated by `--gap`, and sized from `--main-height` / `--view-height` / `--title-height`.
 
-### Known token bugs (don't copy these)
+### Keeping the codebase clean
 
-These references point at variables that don't exist. Fix them when you're working nearby, rather than imitating them:
+`svelte-check` doesn't catch undefined CSS variables. After editing styles, make sure every `var(--…)` you use is defined in `global.css`, `+layout.svelte`'s `cssVarIndex`, or a palette class. This command should print nothing:
 
-- `Flow.svelte`: `--accent-text`, `--accent-secondary-text`
-- `Tooltip.svelte`: `--box-shadow`
-- `Help.svelte`, `Changelog.svelte`, `DownloadUpload.svelte`: `--color-subtle`
-- `Benefit.svelte`: `--radius`
-- `+layout.svelte`: `customTextAccentWeak` maps to `custom-background-weak` instead of `custom-text-accent-weak`, so `--text-accent-weak` is unset in the custom theme.
-- `Popup.svelte`: `font-weight: bold` instead of `var(--font-weight-bold)`.
+```bash
+comm -23 <(grep -rhoE 'var\(--[a-zA-Z0-9-]+' src | sed 's/var(//' | sort -u) \
+  <({ grep -rhoE -- '--[a-zA-Z0-9-]+ ?:' src | sed -E 's/ ?:$//'; \
+      grep -rhoE "setProperty\('--[a-zA-Z0-9-]+" src | sed "s/setProperty('//"; \
+      grep -hoE "name: ?'[a-z-]+'" src/routes/+layout.svelte | sed -E "s/name: ?'/--/; s/'//"; } | sort -u)
+```
 
 ### Verifying UI changes
 
