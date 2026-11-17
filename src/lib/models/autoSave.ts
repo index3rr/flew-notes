@@ -1,9 +1,17 @@
-import { nodes, subscribeFlowsChange, sideDocText, newNodes, frozen } from '$lib/models/store';
+import {
+	nodes,
+	subscribeFlowsChange,
+	sideDocText,
+	newNodes,
+	frozen,
+	_nodesMut,
+	pendingAction
+} from '$lib/models/store';
 import { writable, derived, get } from 'svelte/store';
 import { getJson, loadNodes, saveStringAs, downloadXlsx } from './file';
 import { getNode, type Nodes } from './node';
 import { getDebateStyleFlow } from './debateStyle';
-import { replaceNodes, addNewFlow } from './nodeDecorateAction';
+import { addNewFlow } from './nodeDecorateAction';
 import { resolvePendingAction } from './nodePendingAction';
 import { trackFlowDataUpload, getCurrentTier } from './telemetry';
 import {
@@ -11,7 +19,13 @@ import {
 	resetDocumentTitle,
 	documentFilename,
 	documentCreated,
-	documentTitleFromFilename
+	documentTitleFromFilename,
+	documentOpen,
+	documentId,
+	setDocumentId,
+	beginDocumentChange,
+	endDocumentChange,
+	registerDocumentReceiver
 } from './document';
 import {
 	directFolderAccess,
@@ -27,6 +41,9 @@ import {
 import { focusId, selectedFlowId, lastFocusIds } from './focus';
 import { history, History } from './history';
 import { settings } from './settings';
+import { publishDocument } from './sharingChannel';
+import { applyActionBundle, toBundle } from './nodeAction';
+import { clearSelection } from './selection';
 
 export type NodeKey = string;
 export type SavedNodesData = {
@@ -41,7 +58,7 @@ const savedNodesDatasMut = writable<SavedNodesDatas>(getSavedNodesDatas());
 export const savedNodesDatas = derived(savedNodesDatasMut, (value) => value);
 export const saveStatus = writable('');
 export const dirty = writable(false);
-export const documentOpen = writable(false);
+export { documentOpen } from './document';
 let flowKey: NodeKey | null = null;
 let timer: ReturnType<typeof setTimeout> | null = null;
 let switching = false;
@@ -125,6 +142,25 @@ function worthSaving(value: Nodes) {
 		flowKey !== null
 	);
 }
+function writeRecovery(value: Nodes, raw = getJson(value), title = get(documentTitle)) {
+	const metadata = getSavedNodesDatas();
+	flowKey ??= `flow:${crypto.randomUUID()}`;
+	localStorage.setItem(flowKey, raw);
+	metadata[flowKey] = {
+		created: get(documentCreated) ?? metadata[flowKey]?.created ?? new Date().toISOString(),
+		modified: new Date().toISOString(),
+		title,
+		flowInfos: value.root.children.map((id) => {
+			const flow = getNode(value, id).unwrap().value;
+			return { content: flow.content, invert: flow.invert };
+		})
+	};
+	const removed = trimBrowserSaves(metadata);
+	localStorage.setItem('savedFlows', JSON.stringify(metadata));
+	for (const key of removed) localStorage.removeItem(key);
+	savedNodesDatasMut.set(metadata);
+	lastDurableRaw = raw;
+}
 // localStorage is written synchronously, even when called during pagehide.
 export async function saveNodes(value = get(nodes), renameFile = false): Promise<boolean> {
 	clearTimer();
@@ -151,23 +187,7 @@ export async function saveNodes(value = get(nodes), renameFile = false): Promise
 	saveStatus.set(libraryTarget()?.name && !get(library).imported ? 'Autosaving…' : 'Saving…');
 	let recoveryError = '';
 	try {
-		const metadata = getSavedNodesDatas();
-		flowKey ??= `flow:${crypto.randomUUID()}`;
-		localStorage.setItem(flowKey, raw);
-		metadata[flowKey] = {
-			created: metadata[flowKey]?.created ?? new Date().toISOString(),
-			modified: new Date().toISOString(),
-			title,
-			flowInfos: value.root.children.map((id) => {
-				const flow = getNode(value, id).unwrap().value;
-				return { content: flow.content, invert: flow.invert };
-			})
-		};
-		const removed = trimBrowserSaves(metadata);
-		localStorage.setItem('savedFlows', JSON.stringify(metadata));
-		for (const key of removed) localStorage.removeItem(key);
-		savedNodesDatasMut.set(metadata);
-		lastDurableRaw = raw;
+		writeRecovery(value, raw, title);
 	} catch {
 		recoveryError = 'Browser recovery save failed. Download a JSON copy to keep your work.';
 	}
@@ -179,7 +199,8 @@ export async function saveNodes(value = get(nodes), renameFile = false): Promise
 	try {
 		if (directFolderAccess) await saveLibraryFile(raw, title, file, renameFile);
 		const pendingLocation = directFolderAccess && needsFileLocation();
-		if (directFolderAccess && file && !pendingLocation) lastDurableRaw = raw;
+		if (session === savedSession && directFolderAccess && file && !pendingLocation)
+			lastDurableRaw = raw;
 		if (session === savedSession && editRevision === savedRevision) {
 			lastSavedRaw = raw;
 			dirty.set(!!recoveryError || pendingLocation);
@@ -265,12 +286,17 @@ export async function openDocument(
 	options: { key?: string; target?: FileTarget; duplicate?: boolean } = {}
 ) {
 	const data = JSON.parse(raw);
+	if (get(frozen)) throw new Error('Wait for collaboration to finish syncing.');
+	const previousSession = session;
 	loadNodes(data, false); // Validate without touching the current document.
 	await saveBeforeSwitch();
+	if (session !== previousSession || get(frozen)) return;
 	clearTimer();
 	switching = true;
+	beginDocumentChange();
 	session++;
 	try {
+		setDocumentId();
 		flowKey = options.duplicate ? null : options.key ?? null;
 		bindLibraryFile(options.duplicate ? newLibraryTarget() : options.target ?? null);
 		resetDocumentTitle();
@@ -289,25 +315,33 @@ export async function openDocument(
 			);
 		focusId.set(null);
 		lastFocusIds.set({});
-		replaceNodes(next);
+		_nodesMut.set(next);
+		clearSelection();
 		history.histories = { root: new History() };
 		history.lastAddedOwner = null;
 		selectedFlowId.set(next.root.children[0] ?? null);
-		lastSavedRaw = options.duplicate ? null : getJson(next);
+		lastSavedRaw = !options.duplicate && (options.key || options.target) ? getJson(next) : null;
 		lastDurableRaw = lastSavedRaw;
 		dirty.set(false);
 		saveStatus.set(options.target && !options.duplicate && !get(library).imported ? 'Saved' : '');
 	} finally {
 		switching = false;
+		endDocumentChange();
 	}
-	if (options.duplicate) await saveNodes();
+	publishDocument();
+	if (options.duplicate || (!options.key && !options.target)) await saveNodes();
 }
-export async function closeDocument() {
+export async function closeDocument(publish = true) {
+	if (get(frozen)) throw new Error('Wait for collaboration to finish syncing.');
+	const previousSession = session;
 	await saveBeforeSwitch();
+	if (session !== previousSession || get(frozen)) return false;
 	clearTimer();
 	switching = true;
+	beginDocumentChange();
 	session++;
 	try {
+		setDocumentId();
 		unsetFlowKey();
 		documentOpen.set(false);
 		documentCreated.set(null);
@@ -316,7 +350,8 @@ export async function closeDocument() {
 		focusId.set(null);
 		lastFocusIds.set({});
 		selectedFlowId.set(null);
-		if (get(nodes).root.children.length) replaceNodes(newNodes());
+		_nodesMut.set(newNodes());
+		clearSelection();
 		history.histories = { root: new History() };
 		history.lastAddedOwner = null;
 		lastSavedRaw = null;
@@ -325,27 +360,84 @@ export async function closeDocument() {
 		saveStatus.set('');
 	} finally {
 		switching = false;
+		endDocumentChange();
 	}
+	if (publish) publishDocument();
 	return true;
 }
 export async function createDocument(title = get(documentTitle)) {
 	const style = getDebateStyleFlow('primary');
 	if (!style) throw new Error('No starting page is available for this debate style.');
-	if (!(await closeDocument())) return;
-	resetDocumentTitle(title);
-	documentCreated.set(new Date().toISOString());
-	documentOpen.set(true);
-	const id = addNewFlow(0, style, false);
-	if (!id) throw new Error('Could not create the starting page.');
-	selectedFlowId.set(id);
-	focusId.set(id);
+	if (!(await closeDocument(false))) return;
+	beginDocumentChange();
+	try {
+		resetDocumentTitle(title);
+		documentCreated.set(new Date().toISOString());
+		documentOpen.set(true);
+		const id = addNewFlow(0, style, false);
+		if (!id) throw new Error('Could not create the starting page.');
+		selectedFlowId.set(id);
+		focusId.set(id);
+	} finally {
+		endDocumentChange();
+	}
+	publishDocument();
 	await saveNodes();
 }
-// Remote collaboration can supply a document without opening a local file.
-nodes.subscribe((value) => {
-	if (!switching && value.root.children.length) {
-		documentOpen.set(true);
-		if (!get(documentCreated)) documentCreated.set(new Date().toISOString());
+// Preserve the outgoing document before adopting a peer's document. Never carry
+// a local disk target or undo stack across a shared document boundary.
+registerDocumentReceiver((document) => {
+	if (typeof document.id !== 'string' || typeof document.open !== 'boolean')
+		throw new Error('Invalid shared document.');
+	loadNodes(
+		{
+			version: 1,
+			nodes: document.nodes,
+			title: document.title,
+			created: document.created
+		},
+		false
+	);
+	const changed = document.id !== documentId;
+	const pending = get(pendingAction);
+	if (pending) {
+		pendingAction.set(null);
+		applyActionBundle(get(nodes), toBundle(pending.action(get(nodes))), false);
+	}
+	const selected = get(selectedFlowId);
+	if (changed && get(documentOpen) && worthSaving(get(nodes))) {
+		writeRecovery(get(nodes));
+	}
+	clearTimer();
+	switching = true;
+	beginDocumentChange();
+	session++;
+	try {
+		pendingAction.set(null);
+		if (changed) unsetFlowKey();
+		setDocumentId(document.id);
+		documentOpen.set(document.open);
+		resetDocumentTitle(document.title);
+		documentCreated.set(document.created);
+		// Sidebar notes stay local, including during initial sync and document switches.
+		focusId.set(null);
+		lastFocusIds.set({});
+		clearSelection();
+		_nodesMut.set(document.nodes);
+		selectedFlowId.set(
+			!changed && selected && document.nodes[selected]
+				? selected
+				: document.nodes.root.children[0] ?? null
+		);
+		history.histories = { root: new History() };
+		history.lastAddedOwner = null;
+		lastSavedRaw = null;
+		lastDurableRaw = null;
+		dirty.set(document.open);
+		saveStatus.set('');
+	} finally {
+		switching = false;
+		endDocumentChange();
 	}
 });
 

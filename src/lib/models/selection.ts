@@ -42,6 +42,27 @@ export function collectBoxRange(nodes: Nodes, from: BoxId, to: BoxId): BoxId[] {
 	return allBoxes.slice(start, end + 1);
 }
 
+// Selected cells one response can answer together: the cells in the top-most selected cell's
+// column, in order. Returns null unless there are at least two and the next column exists.
+export function groupReplyTargets(nodes: Nodes, ids: Iterable<BoxId>): BoxId[] | null {
+	const selected = new Set(ids);
+	const first = [...selected][0];
+	if (first == null) return null;
+	const flowId = nodes[first]?.value.flowId;
+	if (flowId == null) return null;
+	const flow = nodes[flowId];
+	if (!flow || flow.value.tag !== 'flow') return null;
+	const ordered = collectAllBoxesInFlow(nodes, flowId).filter((id) => selected.has(id));
+	const levels = ordered.map((id) => nodes[id]!.level);
+	const level = levels.length ? Math.min(...levels) : null;
+	if (level == null || level >= flow.value.columns.length) return null;
+	const targets = ordered.filter((id) => {
+		const node = nodes[id];
+		return node?.level === level && !node.value.empty && !node.value.isExtension;
+	});
+	return targets.length >= 2 ? targets : null;
+}
+
 export function clearSelection() {
 	selectedBoxIds.set(new Set());
 	selectionAnchorId.set(null);

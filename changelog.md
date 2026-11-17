@@ -1,3 +1,14 @@
+# 1.4.0 changes
+- click and drag across cells to select them, with scrolling at the edges (dragging inside one cell still selects text)
+- qr codes fit short windows now, and the camera preview scrolls into view
+- Extemp Debate preset (aff/neg flows, speech timers, no prep)
+- select cards and press Shift+Enter / add response to answer them together
+    - keeps the cards separate, with a curved line from the bottom card to the reply
+    - Shift+Enter on a grouped card adds another response to the group; the separate right-side plus is hidden
+    - saved in JSON, shared with peers, and undoable
+
+- fixed missing theme colors, custom accent text colors, and popup title font weights
+
 # 1.3.0 changes
 ## persistancy update
 - chrome lets you set a folder for autosaving flows 
@@ -92,6 +103,7 @@
     - view only guests (for opponents?) locked to only speeches that have already been given
     - im unsure how small of a feature this is, webrtc code based sharing? instead of copy paste? could be part of flew share
     - an easier way to do quick webrtc handshake is you scan a qr code on your phone, it brings up that same qr code on your phone which you can scan into another computer since it would be awkward doing it with just 2 computers pointing webcam at screen
+    - is there a way to make the collab persistant if i disconnect and reconnect to wifi?
 
 - history changes
     - make it so you can undo deleting a flow page
@@ -100,15 +112,4 @@
 
 ## Small features/fixes (..X releases)
 
-
 - evaluate if switching to the AGPL is possible, if so do it,  do it  (gpl kind of does not work for this project to ensure free-ness since its served over web)
-
-- fix save button having save shortcut which doesnt work on zen because control s is compact mode, and on chrome it doesnt work because its captured by saving the html of the page, google docs can capture control s just fine. you should be able to as well
-
-## dont work on yet
-
-
-- Extemp debate preset
-- a good way to group cards to respond
-    - could be you select cards and then push shift enter/ the button to make argument right
-    - how does this get saved

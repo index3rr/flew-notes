@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Button from './Button.svelte';
 	import { downloadJson, downloadXlsx } from '$lib/models/file';
+	import { documentOpen } from '$lib/models/document';
 	import { nodes } from '$lib/models/store';
 	import { resolvePendingAction } from '$lib/models/nodePendingAction';
 
@@ -24,7 +25,7 @@
 				downloadJson($nodes);
 				closePopup();
 			}}
-			disabled={$nodes.root.children.length == 0}
+			disabled={!$documentOpen}
 			disabledReason={'nothing to download'}
 			palette="accent"
 		/>
@@ -76,7 +77,7 @@
 		line-height: 1.6em;
 		margin: 0;
 		padding-left: var(--padding-big);
-		color: var(--color-subtle);
+		color: var(--text-weak);
 		text-align: left;
 		width: 100%;
 		box-sizing: border-box;
@@ -84,7 +85,7 @@
 	p {
 		margin: 0;
 		padding: 0;
-		color: var(--color-subtle);
+		color: var(--text-weak);
 		text-align: center;
 	}
 

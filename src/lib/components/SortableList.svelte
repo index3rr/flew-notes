@@ -93,12 +93,14 @@
 			element.style.height = 'auto';
 		}
 		await tick();
+		if (element == null) return;
+		// Outgoing tabs can remain in the DOM during a transition.
+		const keys = new Set(list.map((item) => JSON.stringify(getKey(item))));
 		/// combine heights of children
 		let height = 0;
-		for (let i = 0; i < list.length; i++) {
-			height += element.children[i].scrollHeight;
+		for (const child of Array.from(element.children)) {
+			if (keys.has((child as HTMLElement).dataset.id ?? '')) height += child.scrollHeight;
 		}
-		if (element == null) return;
 		element.style.height = `calc(${height}px)`;
 	}
 	onMount(() => {

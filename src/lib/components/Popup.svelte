@@ -39,6 +39,6 @@
 		gap: var(--padding-small);
 	}
 	span {
-		font-weight: bold;
+		font-weight: var(--font-weight-bold);
 	}
 </style>

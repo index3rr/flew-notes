@@ -190,7 +190,7 @@
 			unit: ''
 		},
 		customTextAccentWeak: {
-			name:'custom-background-weak',
+			name:'custom-text-accent-weak',
 			unit: ''
 		},
 		customTextAccentSecondary: {

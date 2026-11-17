@@ -54,12 +54,14 @@ export type UpdateAction<Value> = {
 	tag: 'update';
 	id: SelfIdFor<Value>;
 	newValue: Value;
+	fields?: string[];
 };
 
 export type MoveAction<Value> = {
 	tag: 'move';
 	id: SelfIdFor<Value>;
 	newIndex: number;
+	newParent?: ParentIdFor<Value>;
 };
 
 export type ReplaceAction = {
@@ -82,6 +84,7 @@ export function applyAction<Value extends Box | Flow>(
 ): Action<Value> {
 	switch (action.tag) {
 		case 'add': {
+			if (getNode(nodes, action.id).some) return { tag: 'identity' };
 			const parentRes = getNode(nodes, action.parent);
 			if (!parentRes.some) return { tag: 'identity' };
 			const parent = parentRes.val;
@@ -109,6 +112,9 @@ export function applyAction<Value extends Box | Flow>(
 			const nodeRes = getNode(nodes, action.id);
 			if (!nodeRes.some) return { tag: 'identity' };
 			const node = <Node<Value>>nodeRes.val;
+			// A peer may have added a response since this deletion was prepared.
+			// Keep its parent instead of leaving an unreachable subtree.
+			if (node.children.length) return { tag: 'identity' };
 
 			const parentRes = getNode(nodes, node.parent);
 			if (!parentRes.some) return { tag: 'identity' };
@@ -135,9 +141,17 @@ export function applyAction<Value extends Box | Flow>(
 			const inverseAction: UpdateAction<Value> = {
 				tag: 'update',
 				id: action.id,
-				newValue: structuredClone(<Value>node.value)
+				newValue: structuredClone(<Value>node.value),
+				fields: action.fields
 			};
-			node.value = action.newValue;
+			if (action.fields) {
+				const value = { ...node.value } as Value;
+				for (const field of action.fields as (keyof Value)[]) {
+					if (Object.hasOwn(action.newValue, field)) value[field] = action.newValue[field];
+					else delete value[field];
+				}
+				node.value = value;
+			} else node.value = action.newValue;
 			return inverseAction;
 		}
 		case 'move': {
@@ -149,6 +163,20 @@ export function applyAction<Value extends Box | Flow>(
 			if (!parentRes.some) return { tag: 'identity' };
 			const parent = parentRes.val;
 
+			const newParentId = action.newParent ?? node.parent;
+			const newParentRes = getNode(nodes, newParentId);
+			if (!newParentRes.some) return { tag: 'identity' };
+			const newParent = newParentRes.val;
+			// Grouping moves whole branches within a speech, preserving levels and flow IDs.
+			if (newParent.level !== parent.level) return { tag: 'identity' };
+			if (
+				node.value.tag === 'box' &&
+				(newParent.value.tag === 'root' ||
+					(newParent.value.tag === 'flow'
+						? newParentId !== node.value.flowId
+						: newParent.value.flowId !== node.value.flowId))
+			)
+				return { tag: 'identity' };
 			const index = (<SelfIdFor<Value>[]>parent.children).indexOf(action.id);
 			if (index == -1) return { tag: 'identity' };
 
@@ -157,14 +185,15 @@ export function applyAction<Value extends Box | Flow>(
 				id: action.id,
 				newIndex: index
 			};
+			if (newParentId !== node.parent) inverseAction.newParent = node.parent;
 
 			(<SelfIdFor<Value>[]>parent.children).splice(index, 1);
-			(<SelfIdFor<Value>[]>parent.children).splice(
-				constrainIndex(action.newIndex, parent.children.length),
+			(<SelfIdFor<Value>[]>newParent.children).splice(
+				constrainIndex(action.newIndex, newParent.children.length),
 				0,
 				action.id
 			);
-
+			node.parent = newParentId;
 			return inverseAction;
 		}
 		case 'replace': {
