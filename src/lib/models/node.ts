@@ -61,6 +61,8 @@ export type Box = {
 	crossed?: boolean;
 	bold?: boolean;
 	isExtension?: boolean;
+	// Other cells in the parent's column that this response also answers.
+	respondsTo?: BoxId[];
 };
 
 export type Flow = {
@@ -144,29 +146,29 @@ export function checkIdBox(nodes: Nodes, id: AnyId): BoxId | null {
 }
 
 export type SerializedBox = {
-  value: Omit<Box, 'tag' | 'flowId'>;
-  children: SerializedBox[];
+	value: Omit<Box, 'tag' | 'flowId'>;
+	children: SerializedBox[];
 };
 
 export type CopiedBoxData = {
-  tag: 'flew-notes-boxes';
-  version: 1;
-  boxes: SerializedBox[];
+	tag: 'flew-notes-boxes';
+	version: 1;
+	boxes: SerializedBox[];
 };
 
 export function serializeBoxSubtree(nodes: Nodes, boxId: BoxId): SerializedBox {
-  const node = getNode(nodes, boxId).unwrap();
-  if (node.value.tag !== 'box') throw new Error('Expected a box');
-  const { tag, flowId, ...value } = node.value;
-  return {
-    value,
-    children: node.children
-      .filter((childId): childId is BoxId => {
-        const child = nodes[childId];
-        return child != null && child.value.tag === 'box';
-      })
-      .map((childId) => serializeBoxSubtree(nodes, childId))
-  };
+	const node = getNode(nodes, boxId).unwrap();
+	if (node.value.tag !== 'box') throw new Error('Expected a box');
+	const { tag, flowId, ...value } = node.value;
+	return {
+		value,
+		children: node.children
+			.filter((childId): childId is BoxId => {
+				const child = nodes[childId];
+				return child != null && child.value.tag === 'box';
+			})
+			.map((childId) => serializeBoxSubtree(nodes, childId))
+	};
 }
 
 export function isNodesWorthSaving(nodes: Nodes, ignoreFirstEmptyFlow = false): boolean {
@@ -263,7 +265,7 @@ export function getColumnBoxes(nodes: Nodes, focusId: BoxId | FlowId | null): Bo
 		const ci = f.value.columns.indexOf(colName);
 		if (ci < 0) continue;
 		const levelTarget = ci + 1;
-		const stack: (BoxId)[] = [...(f.children as BoxId[])];
+		const stack: BoxId[] = [...(f.children as BoxId[])];
 		while (stack.length > 0) {
 			const cur = stack.shift()!;
 			const curNode = nodes[cur];
@@ -311,7 +313,7 @@ export function getAdjacentAcrossFlows(
 			const ci = f.value.columns.indexOf(colName);
 			if (ci >= 0) {
 				const targetLevel = ci + 1;
-				const stack: (BoxId)[] = [...(f.children as BoxId[])];
+				const stack: BoxId[] = [...(f.children as BoxId[])];
 				let found: BoxId | null = null;
 				while (stack.length > 0) {
 					const curBox = stack.shift()!;

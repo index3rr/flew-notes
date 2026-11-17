@@ -2,6 +2,7 @@
 	import Text from './Text.svelte';
 	import Icon from './Icon.svelte';
 	import { getContext, onDestroy, onMount, tick } from 'svelte';
+	import type { Writable } from 'svelte/store';
 	import { activeMouse, nodes, pendingAction } from '$lib/models/store';
 	import {
 		type BoxId,
@@ -26,6 +27,8 @@
 	import { focusId } from '$lib/models/focus';
 	import {
 		addNewBox,
+		addGroupReply,
+		addGroupResponse,
 		addNewExtension,
 		deleteBox,
 		newUpdateAction,
@@ -37,6 +40,8 @@
 	import { resolvePendingAction } from '$lib/models/nodePendingAction';
 	import { settings } from '$lib/models/settings';
 	import { folded } from '$lib/models/fold';
+	import { groupReplyParents } from '$lib/models/groupReply';
+	import { isSelectingWithPointer } from '$lib/models/dragSelection';
 	import Tooltip from './Tooltip.svelte';
 	import Fold from './Fold.svelte';
 	import {
@@ -45,7 +50,8 @@
 		collectBoxRange,
 		isShiftHeld,
 		consumeAnchorCapture,
-		clearSelection
+		clearSelection,
+		groupReplyTargets
 	} from '$lib/models/selection';
 
 	export let id: BoxId | FlowId;
@@ -54,8 +60,7 @@
 	let consistentEnterBehaviour: boolean = settings.data['consistentEnterBehaviour']
 		.value as boolean;
 	let tabReturnsToParent: boolean = settings.data['tabReturnsToParent'].value as boolean;
-	let shiftArrowThroughCells: boolean = settings.data['shiftArrowThroughCells']
-		.value as boolean;
+	let shiftArrowThroughCells: boolean = settings.data['shiftArrowThroughCells'].value as boolean;
 	let dottedLines: boolean = settings.data['dottedLines'].value as boolean;
 
 	let node: Node<Box | Flow>;
@@ -109,6 +114,25 @@
 	export let focusSiblingStrict: (childIndex: number, direction: number) => boolean = () => false;
 	export let focusParent: () => void = () => {};
 	export let dispatchSelfFocus: (childId: BoxId | FlowId, isFocused: boolean) => void = () => {};
+
+	const boxElements = getContext<Writable<Map<BoxId, HTMLElement>>>('boxElements');
+	const groupReplyCurves = getContext<Writable<Map<BoxId, string[]>>>('groupReplyCurves');
+	const groupReplySpacing = getContext<Writable<Map<BoxId, number>>>('groupReplySpacing');
+	$: curves = $groupReplyCurves.get(id as BoxId) ?? [];
+	$: groupParent = $groupReplyParents.get(id as BoxId);
+	$: groupSpace = $groupReplySpacing.get(id as BoxId) ?? 0;
+	function registerBox(el: HTMLElement) {
+		const boxId = checkIdBox($nodes, id);
+		if (boxId == null) return;
+		boxElements.update((elements) => elements.set(boxId, el));
+		return {
+			destroy: () =>
+				boxElements.update((elements) => {
+					elements.delete(boxId);
+					return elements;
+				})
+		};
+	}
 
 	const getInvert: () => boolean = getContext('invert');
 	let invert: boolean = getInvert();
@@ -192,6 +216,7 @@
 	$: $focusId, updateSelection();
 
 	function updateSelection() {
+		if (isSelectingWithPointer()) return;
 		if ($focusId == null) {
 			clearSelection();
 			return;
@@ -323,6 +348,19 @@
 		shift: {
 			Enter: {
 				handle: () => {
+					const targets = groupReplyTargets($nodes, $selectedBoxIds);
+					if (
+						groupParent &&
+						(!targets || targets.every((target) => $groupReplyParents.get(target) === groupParent))
+					) {
+						focusGroupReply(addGroupResponse(id as BoxId), groupParent);
+						return;
+					}
+					if (targets) {
+						const reply = addGroupReply(targets);
+						focusGroupReply(reply, targets[0]);
+						return;
+					}
 					blurSelf();
 					let childIndex = 0; // Add response to position 1 if an extension is in pos 0
 					if (node.children[0] && $nodes[node.children[0]]?.value.isExtension) childIndex = 1;
@@ -399,6 +437,15 @@
 			},
 			ArrowRight: {
 				handle: () => {
+					if (groupParent) {
+						const child = $nodes[groupParent]?.children[0];
+						if (child) {
+							$folded.delete(groupParent);
+							$folded = $folded;
+							$focusId = child;
+						}
+						return;
+					}
 					blurSelf();
 					if (node.children.length > 0) {
 						focusChild(0, 0);
@@ -420,6 +467,16 @@
 		}
 	};
 	let handleKeydown = createKeyDownHandler(keyComboOptionsIndex, shiftArrowThroughCells);
+
+	function focusGroupReply(reply: BoxId | null | undefined, parent: BoxId) {
+		if (!reply || !$nodes[reply]) return;
+		consumeAnchorCapture();
+		clearSelection();
+		$folded.delete(parent);
+		$folded = $folded;
+		$focusId = reply;
+		history.setPrevAfterFocus(reply);
+	}
 
 	function formatSelf(format: Parameters<typeof toggleBoxFormat>[1]) {
 		const boxId = checkIdBox($nodes, id);
@@ -776,7 +833,9 @@
 	function noTextSelected() {
 		const el = document.activeElement;
 		if (el && el.tagName === 'TEXTAREA') {
-			return (el as HTMLTextAreaElement).selectionStart === (el as HTMLTextAreaElement).selectionEnd;
+			return (
+				(el as HTMLTextAreaElement).selectionStart === (el as HTMLTextAreaElement).selectionEnd
+			);
 		}
 		return true;
 	}
@@ -861,6 +920,8 @@
 <div
 	class={`box top palette-${palette}`}
 	class:childless={node.children.length == 0}
+	class:groupAnchor={groupParent === id}
+	style={`--group-space: ${groupSpace}px`}
 	class:empty={box?.empty}
 	class:focus={$focusId == id}
 	class:selected={isSelected}
@@ -876,6 +937,7 @@
 	{:else}
 		<div
 			class="content"
+			data-box-id={box ? id : undefined}
 			class:root={box == null}
 			style={`--this-background: none`}
 			class:left={node.children.length > 0}
@@ -911,7 +973,7 @@
 					role="separator"
 				/>
 
-				<div class="text" class:crossed={box?.crossed} class:bold={box?.bold}>
+				<div class="text" use:registerBox class:crossed={box?.crossed} class:bold={box?.bold}>
 					{#if box != null}
 						<Text
 							on:keydown={handleKeydown}
@@ -951,9 +1013,15 @@
 					}}
 					on:mousedown={preventBlur}
 					role="separator"
-				/>
+				>
+					{#if curves.length}
+						<svg class="groupReplies" aria-hidden="true">
+							{#each curves as d}<path {d} />{/each}
+						</svg>
+					{/if}
+				</div>
 			</div>
-			{#if !isFolded && node.children.length == 0 && node.level < columnCount}
+			{#if !isFolded && !groupParent && node.children.length == 0 && node.level < columnCount}
 				<button
 					class={`add palette-${outsidePalette}`}
 					on:click={() => {
@@ -1075,7 +1143,8 @@
 	.line {
 		content: '';
 		display: block;
-		background-color: var(--this-background-indent);
+		color: var(--this-background-indent);
+		background-color: currentColor;
 		height: var(--line-width);
 		margin-left: var(--padding);
 		width: calc(var(--column-width) - var(--padding) * 2);
@@ -1083,7 +1152,23 @@
 		margin-top: calc(-0.5 * var(--line-width));
 		position: absolute;
 		transition: width var(--transition-speed), margin var(--transition-speed),
-			background var(--transition-speed);
+			color var(--transition-speed);
+	}
+	svg.groupReplies {
+		position: absolute;
+		left: 0;
+		top: 50%;
+		width: 100%;
+		height: 100%;
+		overflow: visible;
+		pointer-events: none;
+	}
+	.groupReplies path {
+		fill: none;
+		stroke: currentColor;
+		stroke-width: var(--line-width);
+		stroke-linecap: round;
+		stroke-linejoin: round;
 	}
 	.line.below {
 		margin-top: calc(-0.5 * var(--line-width));
@@ -1120,7 +1205,8 @@
 	:is(.focus, .focus.activeMouse) > .content > .barcontainer > .line,
 	.activeMouse .content:hover > .barcontainer > .line {
 		z-index: 3;
-		background-color: var(--this-color-fade);
+		color: var(--this-color-fade);
+		background-color: currentColor;
 	}
 
 	.barcontainer {
@@ -1131,6 +1217,18 @@
 		width: max-content;
 		padding: 0;
 		margin: 0;
+	}
+	.groupAnchor {
+		position: relative;
+	}
+	.groupAnchor > .children {
+		grid-area: auto;
+		position: absolute;
+		left: var(--column-width);
+		top: 0;
+	}
+	.box {
+		margin-bottom: var(--group-space);
 	}
 	.children.isFolded {
 		height: 0;

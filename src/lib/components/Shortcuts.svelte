@@ -54,7 +54,11 @@
 			context: 'When a cell is focused',
 			shortcuts: [
 				{ keys: ['return'], description: 'Add cell below' },
-				{ keys: ['shift', 'return'], description: 'Add response (child cell)' },
+				{
+					keys: ['shift', 'return'],
+					description: 'Add response (child cell)',
+					note: 'With multiple cells selected, reply to all selected cells in the leftmost selected column. On grouped cards, add another response to the group.'
+				},
 				{
 					keys: ['option', 'return'],
 					description: 'Add cell above',
@@ -87,7 +91,12 @@
 					description: 'Extend cell',
 					note: 'Not available on extension cells'
 				},
-				{ keys: ['commandControl', 'c'], description: 'Copy cell' },
+				{
+					keys: ['commandControl', 'c'],
+					description: 'Copy selected cells',
+					note: 'Drag across cells or Shift-click to select multiple cells'
+				},
+				{ keys: ['esc'], description: 'Cancel an active cell selection drag' },
 				{
 					keys: ['commandControl', 'x'],
 					description: 'Cut cell',

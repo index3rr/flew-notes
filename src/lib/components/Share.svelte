@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { settings } from '$lib/models/settings';
 	import Button from './Button.svelte';
 	import {
 		initGuestConnection,
@@ -50,7 +51,11 @@
 	});
 </script>
 
-<div class="top palette-plain" class:qrMode={connectionMode == 'qr'}>
+<div
+	class="top palette-plain"
+	class:customScrollbar={settings.data.customScrollbar.value}
+	class:qrMode={connectionMode == 'qr'}
+>
 	{#if $connections.tag == 'empty'}
 		<div class="start">
 			<div class="explain">
@@ -255,7 +260,8 @@
 <style>
 	.top {
 		width: min(calc(100vw - var(--padding) * 2), 600px);
-		height: min(calc(100vh - var(--padding) * 2), min-content);
+		max-height: calc(100vh - var(--padding) * 2);
+		overflow-y: auto;
 		padding: calc(var(--button-size) + var(--padding) * 2) 0 0 0;
 		box-sizing: border-box;
 		display: flex;
@@ -271,6 +277,7 @@
 	}
 
 	.hostGuestButtons {
+		flex-wrap: wrap;
 		display: flex;
 		flex-direction: row;
 		gap: var(--padding);

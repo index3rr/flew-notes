@@ -30,6 +30,7 @@
 				'Camera scanning requires HTTPS. Open this app through a secure HTTPS address, then try again.';
 			return;
 		}
+		// Share scrolls when content is taller than the window; keep the preview visible.
 		video.scrollIntoView({ block: 'nearest' });
 		scanner = new QrScanner(video, (result) => dispatch('scan', result.data), {
 			returnDetailedScanResult: true,
@@ -45,6 +46,7 @@
 			.start()
 			.then(() => {
 				cameraReady = true;
+				video.scrollIntoView({ block: 'nearest' });
 			})
 			.catch((reason: unknown) => {
 				error =
@@ -59,7 +61,7 @@
 	<!-- Live camera preview for scanning, with no audio or spoken content. -->
 	<video bind:this={video} playsinline muted />
 	{#if error}
-		<p>Camera error: {error}</p>
+		<p class="error">Camera error: {error}</p>
 	{:else if cameraReady}
 		<p>Camera ready. Hold the QR code anywhere in the preview.</p>
 	{:else}
@@ -77,12 +79,21 @@
 	video {
 		display: block;
 		width: 100%;
-		max-height: 24rem;
-		object-fit: cover;
+		max-height: min(
+			24rem,
+			max(
+				calc(var(--button-size) * 2),
+				calc(100dvh - var(--button-size) * 6 - var(--padding-big) * 6)
+			)
+		);
+		object-fit: contain;
 	}
 	p {
 		margin: 0;
 		padding: var(--padding);
+		color: var(--text-weak);
+	}
+	p.error {
 		color: var(--text-error);
 	}
 </style>

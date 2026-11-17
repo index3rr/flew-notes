@@ -1,4 +1,4 @@
-const CACHE_NAME = 'flew-notes-v1.3.1'; // you MUST change package.json AND version.ts when you change version
+const CACHE_NAME = 'flew-notes-v1.4.0'; // you MUST change package.json AND version.ts when you change version
 const PRECACHE = ['/', '/favicon.png', '/manifest.json'];
 
 self.addEventListener('install', (event) => {

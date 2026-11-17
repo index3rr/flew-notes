@@ -24,6 +24,8 @@ import {
 } from './nodeAction';
 import { resolvePendingAction } from './nodePendingAction';
 import { nodes } from './store';
+import { groupReplyTargets } from './selection';
+import { collectGroupReplyParents, expandReplyGroup } from './groupReply';
 import { trackFlowCreated, trackFlowDeleted, trackBoxCreated } from './telemetry';
 
 let $nodes: Nodes;
@@ -135,6 +137,75 @@ export const addNewBox = decorate(function (
 	};
 	trackBoxCreated(getNode(nodes, parent).unwrap().level);
 	return result;
+});
+
+// Consolidate the selected arguments' branches into one response stack.
+export const addGroupReply = decorate(function (nodes: Nodes, targets: BoxId[]) {
+	const validTargets = groupReplyTargets(nodes, expandReplyGroup(nodes, targets));
+	const owner = nodes[targets[0]]?.value.flowId ?? 'root';
+	if (validTargets == null) return { action: [], owner, ret: null };
+	const [parentId, ...respondsTo] = validTargets;
+	const parent = getNode(nodes, parentId).unwrap();
+	const flowId = parent.value.flowId;
+	const actions: ActionBundle = [];
+	let extensionId = parent.children.find((id) => nodes[id]?.value.isExtension);
+	let extensionChildren = extensionId ? nodes[extensionId]?.children.length ?? 0 : 0;
+	let index = parent.children.length;
+	for (const target of validTargets) {
+		for (const childId of nodes[target]?.children ?? []) {
+			const child = nodes[childId];
+			if (!child) continue;
+			if (child.value.respondsTo) {
+				const value = { ...child.value };
+				delete value.respondsTo;
+				actions.push(newUpdateAction(childId, value));
+			}
+			if (target === parentId) continue;
+			if (child.value.isExtension && extensionId) {
+				for (const grandchild of child.children) {
+					actions.push({
+						tag: 'move',
+						id: grandchild,
+						newParent: extensionId,
+						newIndex: extensionChildren++
+					});
+				}
+				actions.push({ tag: 'delete', id: childId });
+			} else {
+				actions.push({
+					tag: 'move',
+					id: childId,
+					newParent: parentId,
+					newIndex: child.value.isExtension ? 0 : index
+				});
+				index++;
+				if (child.value.isExtension) {
+					extensionId = childId;
+					extensionChildren = child.children.length;
+				}
+			}
+		}
+	}
+	// Group members occupy adjacent rows, even when an older group is expanded.
+	const parentIndex = nodes[parent.parent]?.children.indexOf(parentId) ?? 0;
+	respondsTo.forEach((id, offset) => {
+		actions.push({ tag: 'move', id, newParent: parent.parent, newIndex: parentIndex + offset + 1 });
+	});
+	const action = newBoxAction(parentId, flowId, extensionId ? 1 : 0);
+	action.value.respondsTo = respondsTo;
+	actions.push(action);
+	trackBoxCreated(parent.level);
+	return { action: actions, owner: flowId, ret: action.id };
+});
+
+export const addGroupResponse = decorate(function (nodes: Nodes, sourceId: BoxId) {
+	const parentId = collectGroupReplyParents(nodes).get(sourceId);
+	const parent = parentId && nodes[parentId];
+	const owner = nodes[sourceId]?.value.flowId ?? 'root';
+	if (!parentId || !parent) return { action: [], owner, ret: null };
+	const action = newBoxAction(parentId, parent.value.flowId, parent.children.length);
+	trackBoxCreated(parent.level);
+	return { action, owner: parent.value.flowId, ret: action.id };
 });
 
 export const addNewExtension = decorate(function (nodes: Nodes, parent: FlowId | BoxId) {

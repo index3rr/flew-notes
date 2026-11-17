@@ -1,3 +1,14 @@
+# 1.4.0 changes
+- click and drag across cells to select them, with scrolling at the edges (dragging inside one cell still selects text)
+- qr codes fit short windows now, and the camera preview scrolls into view
+- Extemp Debate preset (aff/neg flows, speech timers, no prep)
+- select cards and press Shift+Enter / add response to answer them together
+    - keeps the cards separate, with a curved line from the bottom card to the reply
+    - Shift+Enter on a grouped card adds another response to the group; the separate right-side plus is hidden
+    - saved in JSON, shared with peers, and undoable
+
+- fixed missing theme colors, custom accent text colors, and popup title font weights
+
 # 1.3.0 changes
 ## persistancy update
 - chrome lets you set a folder for autosaving flows 
@@ -101,11 +112,4 @@
 
 ## Small features/fixes (..X releases)
 
-- make qr code fit to screen
-    - the guest scan thing usually ends up off the screen when it is clicked
-
 - evaluate if switching to the AGPL is possible, if so do it,  do it  (gpl kind of does not work for this project to ensure free-ness since its served over web)
-- Extemp debate preset
-- a good way to group cards to respond
-    - could be you select cards and then push shift enter/ the button to make argument right
-    - how does this get saved

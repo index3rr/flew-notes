@@ -1,7 +1,10 @@
 <script lang="ts">
 	import Box from './Box.svelte';
+	import GroupReplyLines from './GroupReplyLines.svelte';
+	import { writable } from 'svelte/store';
+	import { dragSelect } from '$lib/models/dragSelection';
 	import Header from './Header.svelte';
-	import type { FlowId, Node, Flow } from '../models/node';
+	import type { BoxId, FlowId, Node, Flow } from '../models/node';
 
 	import { setContext } from 'svelte';
 	import { focusId } from '$lib/models/focus';
@@ -10,6 +13,9 @@
 	import { settings } from '$lib/models/settings';
 
 	export let flowId: FlowId;
+	setContext('boxElements', writable(new Map<BoxId, HTMLElement>()));
+	setContext('groupReplyCurves', writable(new Map<BoxId, string[]>()));
+	setContext('groupReplySpacing', writable(new Map<BoxId, number>()));
 	let node: Node<Flow>;
 	$: {
 		// hold onto node when it's deleted
@@ -44,10 +50,14 @@
 	<div class="viewer">
 		<div
 			class="content"
+			use:dragSelect={flowId}
 			class:customScrollbar={settings.data.customScrollbar.value}
 			on:scroll={fixScroll}
 		>
-			<Box id={flowId} />
+			<div class="boxes">
+				<Box id={flowId} />
+				<GroupReplyLines {flowId} />
+			</div>
 		</div>
 		<div class="headers">
 			{#each flow.columns as column, index}
@@ -69,6 +79,9 @@
 </div>
 
 <style>
+	.boxes {
+		position: relative;
+	}
 	.top {
 		width: calc(var(--column-width) * var(--column-count));
 		overflow: hidden;

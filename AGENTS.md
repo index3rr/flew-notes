@@ -8,7 +8,7 @@ Flew Notes is a browser app for flowing (note-taking) in competitive debate. Deb
 
 - Live: https://flew-notes.netlify.app/ (Netlify, `netlify.toml`, Node 24)
 - Source: https://github.com/index3rr/flew-notes, a fork of [debate-flow](https://github.com/Ashwagandhae/debate-flow)
-- Current release: `1.3.1`
+- Current release: `1.4.0`
 
 ### Terminology
 
@@ -83,9 +83,10 @@ type Node<T> = { value: T; level: number; parent: ParentIdFor<T>; children: Chil
 
 - **Root**: `{ tag: 'root' }`, id is literally `'root'`, level `-1`. Children are flows.
 - **Flow**: `{ tag: 'flow', content, invert, columns }`, level `0`. `content` is the tab name, `columns` the speech names (e.g. `['1AC', '1NC', …]`), `invert` is `true` for neg-side flows and swaps the color assignment. Children are top-level boxes.
-- **Box**: `{ tag: 'box', content, flowId, placeholder?, empty?, crossed?, bold?, isExtension? }`. Top-level boxes are level `1`. A box at level `n` sits in column `n - 1`. Children are responses in the next column.
+- **Box**: `{ tag: 'box', content, flowId, placeholder?, empty?, crossed?, bold?, isExtension?, respondsTo? }`. Top-level boxes are level `1`. A box at level `n` sits in column `n - 1`. Children are responses in the next column.
 - **Extensions** (`isExtension: true`) are blank filler cells for an argument that skips a speech. They always sit at index 0 of their parent. `addNewExtension` creates the extension plus a child box. The UI shows an `arrowRightThroughCircle` icon; XLSX export writes `→ Extended →`.
 - **Empty** boxes (`empty: true`) are invisible spacers created by `addNewEmpty` to start an argument in a later column.
+- **Group replies** use the normal parent for the first target and optional `respondsTo: BoxId[]` for the other targets in the same flow and previous column. `groupReplyTargets` uses the leftmost selected column, skips empty/extension cells, and requires a next column. Shift+Enter and the add-response toolbar button create one reply through `addGroupReply`. `groupReplyParents` in `groupReply.ts` maps grouped source cards to their common parent. Their right-side plus is hidden; Shift+Enter and the toolbar append through `addGroupResponse`, preserving that parent and focusing the new response. `GroupReplyLines` calculates a themed curve from the lowest target's bottom line to the final visible sibling response's bottom line using registered cell elements and updates on resize/folding. The curve renders inside that bottom line in `Box`, sharing `currentColor` so focus, descendant focus, hover, and color transitions match exactly. Missing targets are ignored without removing their stored IDs, so undo restores their connections. JSON saves preserve links; cell paste deliberately drops them to avoid linking to the original IDs.
 
 IDs are branded strings: `NodeId`, `FlowId`, `BoxId` (all `crypto.randomUUID()` via `newNodeId`/`newFlowId`/`newBoxId`), `RootId = 'root'`, `AnyId`. Don't cast between them casually; the brands exist to catch FlowId/BoxId mix-ups.
 
@@ -100,7 +101,7 @@ All tree mutations go through actions: `add`, `delete`, `update` (with optional 
 - `applyAction` mutates in place and returns the inverse. `applyActionBundle` returns the reversed inverse bundle.
 - `doActionBundle(actions, owner)` applies the bundle, sends it to peers (`sharingChannel.sendActionBundle`), and records the inverse in history. It refuses with an alert while `frozen`.
 - `syncUi` (`nodeSyncUi.ts`) publishes the new map. It also clears focus, selection, and the selected tab when they point at deleted nodes.
-- `decorate()` in `nodeDecorateAction.ts` wraps creators. It resolves any pending action, then runs `doActionBundle`. Public mutators: `addNewBox`, `addNewExtension`, `addNewFlow`, `addNewEmpty`, `toggleBoxFormat`, `deleteBox`, `deleteFlow`, `moveFlow`, `replaceNodes`.
+- `decorate()` in `nodeDecorateAction.ts` wraps creators. It resolves any pending action, then runs `doActionBundle`. Public mutators: `addNewBox`, `addGroupReply`, `addGroupResponse`, `addNewExtension`, `addNewFlow`, `addNewEmpty`, `toggleBoxFormat`, `deleteBox`, `deleteFlow`, `moveFlow`, `replaceNodes`.
 
 Never write to `_nodesMut` or mutate node objects directly from components. Add a decorated function instead, so undo, sharing, and autosave keep working.
 
@@ -112,9 +113,11 @@ Typing creates a `PendingAction` holding a lazy builder instead of an action per
 
 `HistoryHolder` keeps one undo/redo stack per flow plus `'root'` for flow-level operations. Each entry stores the inverse bundle plus `beforeFocus`/`afterFocus`, so undo restores the cursor.
 
-### Focus and selection (`focus.ts`, `selection.ts`, `fold.ts`)
+### Focus and selection (`focus.ts`, `selection.ts`, `dragSelection.ts`, `fold.ts`)
 
 `focusId` (focused FlowId/BoxId), `selectedFlowId` (active tab), `lastFocusIds` (per-flow last focus, for tab switching), `selectionAnchorId` + `selectedBoxIds` (shift range selection), `folded` (collapsed boxes).
+
+`dragSelect` attaches to the flow scroll container and reuses the same range and selection stores. A mouse/pen drag becomes a cell selection after entering another cell; within-cell drags retain native text selection, and touch keeps native scrolling. Active drags capture the pointer, scroll at the flow edges, and suppress native text selection. `Box.updateSelection` leaves selection alone during a cell drag. Pointer release/cancellation, Escape, window blur, and action teardown clean up the gesture and listeners.
 
 ### Settings (`settings.ts`)
 
@@ -126,7 +129,7 @@ Typing creates a `PendingAction` holding a lazy builder instead of an action per
 
 ### Debate styles (`debateStyle.ts`)
 
-11 formats, in setting order: Policy, Public Forum, Lincoln Douglas, Congress, World Schools, Big Questions, NOF SPAR, Parli, Classic, British Parliamentary, IPPF. Each defines `flows` (`name`, `columns`, optional `columnsSwitch` for speaker order, `invert`, optional `starterBoxes`), `timerSpeeches`, optional `prepTime`, and optionally `alternativeFlows<N>` chosen by the setting named in `alternativeFlowSelectorSettingName` (LD: `LDSubstyle`, Classical vs TOC Circuit). The order of `debateStyleMap` must match the `debateStyle` radio options.
+12 formats, in setting order: Policy, Public Forum, Lincoln Douglas, Congress, World Schools, Big Questions, NOF SPAR, Parli, Classic, British Parliamentary, IPPF, Extemp Debate. Each defines `flows` (`name`, `columns`, optional `columnsSwitch` for speaker order, `invert`, optional `starterBoxes`), `timerSpeeches`, optional `prepTime`, and optionally `alternativeFlows<N>` chosen by the setting named in `alternativeFlowSelectorSettingName` (LD: `LDSubstyle`, Classical vs TOC Circuit). The order of `debateStyleMap` must match the `debateStyle` radio options. Settings store the index, so append new styles at the end.
 
 ### Documents, autosave, and the flow library (`document.ts`, `autoSave.ts`, `flowLibrary.ts`)
 
@@ -180,7 +183,7 @@ Precaches `/`, `/favicon.png`, `/manifest.json`. Navigations and same-origin ass
 
 ### Versioning and releases (`version.ts`)
 
-`CURRENT_VERSION` (`'1.3.1'`) is the source of truth and is sent with telemetry. `isChangelogVersionCurrent` compares it with `localStorage['lastUsedVersion']` to show the update dot. Every release updates all of these together:
+`CURRENT_VERSION` (`'1.4.0'`) is the source of truth and is sent with telemetry. `isChangelogVersionCurrent` compares it with `localStorage['lastUsedVersion']` to show the update dot. Every release updates all of these together:
 
 - `src/lib/models/version.ts`: `CURRENT_VERSION`
 - `package.json`: `version`
@@ -188,7 +191,7 @@ Precaches `/`, `/favicon.png`, `/manifest.json`. Navigations and same-origin ass
 - `static/sw.js`: `CACHE_NAME` = `flew-notes-v<release>`, with an optional `-r<n>` cache-revision suffix. Changing the worker bytes triggers its update lifecycle; skip this and PWA users keep stale assets.
 - `src/lib/components/Changelog.svelte`: the in-app release notes users actually see. `changelog.md` is the maintainer's own log; updating it alone changes nothing in the app.
 
-To refresh the cache within a release, bump only the revision suffix (`flew-notes-v1.3.1-r1` → `-r2`).
+To refresh the cache within a release, bump only the revision suffix (`flew-notes-v1.4.0-r1` → `-r2`).
 
 ## Design System
 
@@ -317,6 +320,8 @@ Run `npm run dev` and check the change:
 ## Testing
 
 - `tests/flow.spec.ts`: editing, boxes, and flows.
+- `tests/selection.spec.ts`: drag ranges, native text selection, copy/cut, grouping, edge scrolling, and gesture cleanup.
+- `tests/groupReply.spec.ts`: group reply selection, keyboard/toolbar creation, undo, persistence, peer sync, themed connections, and the Extemp preset.
 - `tests/persistancy.spec.ts`: autosave, browser saves, flow library, import/export.
 - `tests/collaboration.spec.ts`, `tests/share.spec.ts` (+ `tests/helpers/collaboration.ts`): multi-peer sync and QR handshakes.
 - `tests/sharingQr.spec.ts`, `tests/iceCredentials.spec.ts`, `tests/sharingTransport.spec.ts`: codec and transport units run in the browser.
@@ -328,7 +333,7 @@ Add or extend a spec whenever you change behavior in the models. Sharing, persis
 | Area          | Components                                                                                                                                                                                                      |
 | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | App shell     | `app/+page.svelte`, `Title` (flow name + delete), `BoxControl` (toolbar: undo/redo, add, extension, format, save), `Tab`, `AddTab`, `SortableList` (drag-reorder tabs), `SideDoc` (notes), `DownloadUpload`     |
-| Flow grid     | `Flow` (columns, headers, sets `invert`/`columnCount` context), `Header` (column name + hover "+"), `Box` (recursive cell, keyboard navigation), `Fold`                                                         |
+| Flow grid     | `Flow` (columns, headers, sets `invert`/`columnCount` context), `Header` (column name + hover "+"), `Box` (recursive cell, keyboard navigation), `GroupReplyLines` (group response curves), `Fold`              |
 | Start screen  | `Prelude` → `Tutorial`/`TutorialHighlight` or `SavedFlows` → `SavedFlow`, `FlowLibrary`, `FlowCard`; `FlowLibrarySetup`                                                                                         |
 | Timers        | `Timers`, `SpeechTimer`, `PacingTimer`, `Timer`, `Time`                                                                                                                                                         |
 | Popups        | `Popup`, `Message`, `Settings`/`Setting`, `Help`, `Shortcuts`/`Shortcut`, `Changelog`, `Share` → `ConnectLink`, `ConnectManual`, `ConnectQR` (`QRCode`, `QRScanner`), `ConnectStatus`, `CopyBox`; `CloseWindow` |

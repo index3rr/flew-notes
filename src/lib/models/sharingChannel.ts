@@ -16,7 +16,7 @@ import {
 
 export type ActionId = string & { readonly ActionId: unique symbol };
 export type SendAction = { id: ActionId; actionBundle: ActionBundle; documentId?: string };
-const PROTOCOL = 'flew-document-v2';
+const PROTOCOL = 'flew-document-v3';
 type Hello = { tag: 'hello'; protocol: string };
 const compatibleChannels = new WeakSet<object>();
 type Metadata = { title?: string };

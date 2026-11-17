@@ -102,6 +102,12 @@ function validateNodes(nodes: Nodes) {
 			)
 				throw new Error('Invalid flow columns');
 			if (value.tag === 'box' && value.flowId !== flow) throw new Error('Invalid box flow');
+			if (
+				value.respondsTo != null &&
+				(!Array.isArray(value.respondsTo) ||
+					!value.respondsTo.every((id: unknown) => typeof id === 'string'))
+			)
+				throw new Error('Invalid response links');
 		}
 		for (const child of node.children) {
 			if (typeof child !== 'string') throw new Error('Invalid child');
@@ -114,12 +120,39 @@ function validateNodes(nodes: Nodes) {
 		}
 	}
 	if (visited.size !== Object.keys(nodes).length) throw new Error('Unreachable flow nodes');
+	for (const node of Object.values(nodes)) {
+		if (node?.value.tag !== 'box' || !node.value.respondsTo) continue;
+		const links = node.value.respondsTo;
+		if (new Set(links).size !== links.length || node.value.empty || node.value.isExtension)
+			throw new Error('Invalid response links');
+		for (const id of links) {
+			const target = nodes[id];
+			// Deleted targets stay in the list so undo can restore their connections.
+			if (
+				target &&
+				(target.value.tag !== 'box' ||
+					target.value.flowId !== node.value.flowId ||
+					target.level !== node.level - 1 ||
+					target.value.empty ||
+					target.value.isExtension ||
+					id === node.parent)
+			)
+				throw new Error('Invalid response links');
+		}
+	}
 }
 type NodeData = {
 	parent: string | null;
 	level: number;
 	children: string[];
-	value: { tag: string; content?: string; columns?: unknown[]; invert?: boolean; flowId?: string };
+	value: {
+		tag: string;
+		content?: string;
+		columns?: unknown[];
+		invert?: boolean;
+		flowId?: string;
+		respondsTo?: unknown;
+	};
 };
 
 export function downloadJson(nodes: Nodes) {

@@ -15,24 +15,31 @@
 <div class="top palette-plain">
 	<div class="scroll">
 		<section>
+			<div class="above"><h2>v1.4.0</h2></div>
+			the selection and grouped responses update
+			<ul>
+				<li>
+					click and drag across cells to select them; dragging inside one cell still selects text
+				</li>
+				<li>
+					select cards and press <Shortcut keys={['shift', 'return']} /> or use add response to answer
+					them together, with a curved line connecting the group to its last response
+				</li>
+				<li>extemp db8 now has a preset</li>
+				<li>qr collab improvements</li>
+				<li>slightly better styling</li>
+			</ul>
+		</section>
+		<section>
 			<div class="above"><h2>v1.3.1</h2></div>
 			the 'make collaboration less buggy' update
 			<ul>
-				<li>
-					its better now
-				</li>
-				<li>
-					look its bug fixes and stability improvements
-				</li>
-				<li>
-					its not that interesting
-				</li>
-				<li>
-					...
-				</li>
-				<li>
-					..... prevents extinction...
-				</li>
+				<li>its better now</li>
+				<li>look its bug fixes and stability improvements</li>
+				<li>its not that interesting</li>
+				<li>...</li>
+				<li>..... prevents extinction...</li>
+			</ul>
 		</section>
 		<section>
 			<div class="above"><h2>v1.3.0</h2></div>

@@ -61,6 +61,7 @@ export type MoveAction<Value> = {
 	tag: 'move';
 	id: SelfIdFor<Value>;
 	newIndex: number;
+	newParent?: ParentIdFor<Value>;
 };
 
 export type ReplaceAction = {
@@ -162,6 +163,20 @@ export function applyAction<Value extends Box | Flow>(
 			if (!parentRes.some) return { tag: 'identity' };
 			const parent = parentRes.val;
 
+			const newParentId = action.newParent ?? node.parent;
+			const newParentRes = getNode(nodes, newParentId);
+			if (!newParentRes.some) return { tag: 'identity' };
+			const newParent = newParentRes.val;
+			// Grouping moves whole branches within a speech, preserving levels and flow IDs.
+			if (newParent.level !== parent.level) return { tag: 'identity' };
+			if (
+				node.value.tag === 'box' &&
+				(newParent.value.tag === 'root' ||
+					(newParent.value.tag === 'flow'
+						? newParentId !== node.value.flowId
+						: newParent.value.flowId !== node.value.flowId))
+			)
+				return { tag: 'identity' };
 			const index = (<SelfIdFor<Value>[]>parent.children).indexOf(action.id);
 			if (index == -1) return { tag: 'identity' };
 
@@ -170,14 +185,15 @@ export function applyAction<Value extends Box | Flow>(
 				id: action.id,
 				newIndex: index
 			};
+			if (newParentId !== node.parent) inverseAction.newParent = node.parent;
 
 			(<SelfIdFor<Value>[]>parent.children).splice(index, 1);
-			(<SelfIdFor<Value>[]>parent.children).splice(
-				constrainIndex(action.newIndex, parent.children.length),
+			(<SelfIdFor<Value>[]>newParent.children).splice(
+				constrainIndex(action.newIndex, newParent.children.length),
 				0,
 				action.id
 			);
-
+			node.parent = newParentId;
 			return inverseAction;
 		}
 		case 'replace': {

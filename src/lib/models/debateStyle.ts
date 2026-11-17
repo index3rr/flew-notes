@@ -12,7 +12,8 @@ export const debateStyleMap = [
 	'parli',
 	'classic',
 	'britishParliamentary',
-	'ippf'
+	'ippf',
+	'extempDebate'
 ] as const;
 
 export type DebateStyleKey = (typeof debateStyleMap)[number];
@@ -736,6 +737,30 @@ export const debateStyles: {
 			{ name: 'NCX', time: 1 * 60 * 1000, secondary: true },
 			{ name: 'AR', time: 5 * 60 * 1000, secondary: false },
 			{ name: 'NR', time: 5 * 60 * 1000, secondary: true }
+		]
+	},
+	// NSDA Extemporaneous Debate: 1v1, pro (aff) and con (neg)
+	extempDebate: {
+		flows: [
+			{
+				name: 'aff',
+				columns: ['AC', 'NC', 'AR', 'NR', 'AS', 'NS'],
+				invert: false
+			},
+			{
+				name: 'neg',
+				columns: ['NC', 'AR', 'NR', 'AS', 'NS'],
+				invert: true
+			}
+		],
+		timerSpeeches: [
+			{ name: 'AC', time: 2 * 60 * 1000, secondary: false },
+			{ name: 'NC', time: 2 * 60 * 1000, secondary: true },
+			{ name: 'CX', time: 3 * 60 * 1000, secondary: false },
+			{ name: 'AR', time: 2 * 60 * 1000, secondary: false },
+			{ name: 'NR', time: 2 * 60 * 1000, secondary: true },
+			{ name: 'AS', time: 1 * 60 * 1000, secondary: false },
+			{ name: 'NS', time: 1 * 60 * 1000, secondary: true }
 		]
 	}
 };

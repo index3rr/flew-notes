@@ -124,6 +124,68 @@ async function installFakeQrCamera(
 	);
 }
 
+test('QR sharing and camera preview fit short and narrow windows', async ({ page }) => {
+	await installFakeQrCamera(page);
+	await page.addInitScript(() =>
+		localStorage.setItem(
+			'settings',
+			JSON.stringify({
+				version: 1,
+				isSettings: true,
+				settings: { telemetry: 0, transitionSpeed: 0 }
+			})
+		)
+	);
+	await page.setViewportSize({ width: 390, height: 640 });
+	await page.bringToFront();
+	await page.goto('/app');
+	await page.locator('.sidebar .header .buttons div:nth-child(4) > .top').first().click();
+	await page.getByRole('button', { name: 'QR code', exact: true }).click();
+	await page.getByRole('button', { name: 'join room', exact: true }).click();
+	await expect(page.getByText('Camera ready.', { exact: false })).toBeVisible();
+	const fits = () =>
+		page.locator('.scanner video').evaluate((video) => {
+			const rect = video.getBoundingClientRect();
+			return (
+				rect.width > 0 &&
+				rect.height > 0 &&
+				rect.top >= 0 &&
+				rect.bottom <= innerHeight &&
+				rect.left >= 0 &&
+				rect.right <= innerWidth
+			);
+		});
+	await expect.poll(fits).toBe(true);
+	await page.getByRole('button', { name: 'join room', exact: true }).click();
+	await page.getByRole('button', { name: 'host new room', exact: true }).click();
+	await page.getByRole('button', { name: 'add guest', exact: true }).click();
+	const qr = page.getByAltText('QR code for this sharing link');
+	await expect(qr).toBeVisible({ timeout: 15000 });
+	for (const size of [
+		{ width: 390, height: 640 },
+		{ width: 900, height: 360 }
+	]) {
+		await page.setViewportSize(size);
+		await expect
+			.poll(() =>
+				qr.evaluate((image) => {
+					const rect = image.getBoundingClientRect();
+					return (
+						rect.width > 0 &&
+						rect.height > 0 &&
+						rect.top >= 0 &&
+						rect.bottom <= innerHeight &&
+						rect.right <= innerWidth
+					);
+				})
+			)
+			.toBe(true);
+	}
+	await page.getByRole('button', { name: 'scan guest QR code', exact: true }).click();
+	await expect(page.getByText('Camera ready.', { exact: false })).toBeVisible();
+	await expect.poll(fits).toBe(true);
+});
+
 test('share', async ({ context }) => {
 	const hostPage = await context.newPage();
 	await hostPage.goto('/app');

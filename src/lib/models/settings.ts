@@ -249,7 +249,8 @@ export const settings: Settings = new Settings({
 				'Parli',
 				'Classic',
 				'British Parliamentary',
-				'International Public Policy Forum'
+				'International Public Policy Forum',
+				'Extemp Debate'
 			]
 		},
 		info: "Already created flows won't be affected by this setting"
