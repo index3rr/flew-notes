@@ -187,8 +187,14 @@ test('microphone capture sends PCM to local worker, flags new claims and starts 
 				async getUserMedia() {
 					const context = new AudioContext();
 					const oscillator = context.createOscillator();
+					const gate = context.createGain();
 					const output = context.createMediaStreamDestination();
-					oscillator.connect(output);
+					// Bursts of tone with pauses, so the segmenter sees utterances to cut.
+					for (let second = 0; second < 120; second += 2)
+						gate.gain
+							.setValueAtTime(0.5, context.currentTime + second)
+							.setValueAtTime(0, context.currentTime + second + 1.2);
+					oscillator.connect(gate).connect(output);
 					oscillator.start();
 					await context.resume();
 					Object.defineProperty(window, '__transcriptTracks', {
@@ -287,8 +293,8 @@ test('notes and library keep their positions and show placeholders without a flo
 }) => {
 	await settings(page, { notesPanel: 2, libraryPanel: 1, timersPanel: 0 });
 	await page.goto('/app');
-	const library = page.locator('.sidebar .library-panel');
-	const notes = page.locator('.right-sidebar').locator('.notes-panel .panel-placeholder');
+	const library = page.locator('.sidebar [data-panel="libraryPanel"]');
+	const notes = page.locator('.right-sidebar [data-panel="notesPanel"] .panel-placeholder');
 	await expect(library).toBeVisible();
 	await expect(library.locator('.panel-placeholder')).toHaveText('Flow library');
 	await expect(notes).toBeVisible();
@@ -308,9 +314,11 @@ test('configured collapsed notes and library remain usable for viewing placehold
 	await settings(page, { notesPanel: 4, libraryPanel: 3, timersPanel: 0 });
 	await page.goto('/app');
 	await page.getByRole('button', { name: 'Flow library', exact: true }).click();
-	await expect(page.locator('.library-panel .panel-placeholder')).toHaveText('Flow library');
+	await expect(page.locator('[data-panel="libraryPanel"] .panel-placeholder')).toHaveText(
+		'Flow library'
+	);
 	await page.getByRole('button', { name: 'Notes', exact: true }).click();
-	await expect(page.locator('.notes-panel .panel-placeholder')).toHaveText('Notes');
+	await expect(page.locator('[data-panel="notesPanel"] .panel-placeholder')).toHaveText('Notes');
 });
 
 test('flow library panel is off by default', async ({ page }) => {
@@ -342,10 +350,17 @@ for (const side of ['left', 'right'] as const) {
 					collaborationPanel: 'Collaboration'
 				}[id]!
 			);
-			const size = await panel.evaluate((element) => ({
-				panel: element.getBoundingClientRect().height,
-				text: element.querySelector('.panel-placeholder')!.getBoundingClientRect().height
-			}));
+			// The card holds only the name: its content box is exactly the placeholder.
+			const size = await panel.evaluate((element) => {
+				const style = getComputedStyle(element);
+				return {
+					panel:
+						element.getBoundingClientRect().height -
+						parseFloat(style.paddingTop) -
+						parseFloat(style.paddingBottom),
+					text: element.querySelector('.panel-placeholder')!.getBoundingClientRect().height
+				};
+			});
 			expect(Math.abs(size.panel - size.text)).toBeLessThan(1);
 			await expect(panel.locator('textarea, input, button')).toHaveCount(0);
 			await panel.locator('.panel-placeholder').hover();
@@ -367,30 +382,31 @@ for (const side of ['left', 'right'] as const) {
 }
 
 for (const side of ['left', 'right'] as const) {
-	test(`collapsed tabs do not add a separator above SpeechDrop on the ${side}`, async ({
-		page
-	}) => {
+	test(`collapsed panels add no empty card on the ${side}`, async ({ page }) => {
 		const position = side === 'left' ? 1 : 2;
 		await settings(page, {
 			tabsPanel: position + 2,
 			speechDropPanel: position,
 			notesPanel: 0,
 			timersPanel: 0,
-			libraryPanel: 0
+			libraryPanel: 0,
+			coveragePanel: 0
 		});
 		await page.goto('/app');
 		await page.getByRole('button', { name: 'New flow', exact: true }).click();
 		const container = page.locator(
 			side === 'left' ? '.sidebar .panel-container' : '.right-sidebar .panel-container'
 		);
+		const cards = container.locator('.panel:visible');
 		await expect(container.locator('.speechdrop-panel')).toBeVisible();
-		await expect(container.locator('.divider')).toHaveCount(0);
+		// SpeechDrop and the tray of collapsed buttons.
+		await expect(cards).toHaveCount(2);
 		await container.getByRole('button', { name: 'Tabs', exact: true }).click();
 		await expect(container.locator('.tabs')).toBeVisible();
-		await expect(container.locator('.divider')).toHaveCount(1);
+		await expect(cards).toHaveCount(3);
 		await container.getByRole('button', { name: 'Tabs', exact: true }).click();
 		await expect(container.locator('.tabs')).not.toBeVisible();
-		await expect(container.locator('.divider')).toHaveCount(0);
+		await expect(cards).toHaveCount(2);
 		await page.evaluate(() => {
 			const saved = JSON.parse(localStorage.getItem('settings')!);
 			saved.settings.tabsPanel = 0;
@@ -398,7 +414,7 @@ for (const side of ['left', 'right'] as const) {
 		});
 		await page.reload();
 		await expect(container.locator('.speechdrop-panel')).toBeVisible();
-		await expect(container.locator('.divider')).toHaveCount(0);
+		await expect(cards).toHaveCount(1);
 	});
 }
 

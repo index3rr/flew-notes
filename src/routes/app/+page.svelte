@@ -40,6 +40,7 @@
 	import Help from '$lib/components/Help.svelte';
 	import { settings } from '$lib/models/settings';
 	import PanelContainer from '$lib/components/PanelContainer.svelte';
+	import { panelIds, panelSide } from '$lib/models/panels';
 	import { history } from '$lib/models/history';
 	import { focusId, lastFocusIds, selectedFlowId } from '$lib/models/focus';
 	import { isChangelogVersionCurrent } from '$lib/models/version';
@@ -130,34 +131,11 @@
 	});
 
 	let hasRightPanels = false;
-	let panelSubUnsub = settings.subscribe(
-		[
-			'tabsPanel',
-			'timersPanel',
-			'notesPanel',
-			'starredPanel',
-			'speechDropPanel',
-			'libraryPanel',
-			'transcriptPanel',
-			'collaborationPanel',
-			'cardMirrorPanel'
-		],
-		() => {
-			const leftVal = (k: string) => settings.data[k]?.value as number;
-			const rightCount = [
-				leftVal('tabsPanel'),
-				leftVal('timersPanel'),
-				leftVal('notesPanel'),
-				leftVal('starredPanel'),
-				leftVal('speechDropPanel'),
-				leftVal('libraryPanel'),
-				leftVal('transcriptPanel'),
-				leftVal('collaborationPanel'),
-				leftVal('cardMirrorPanel')
-			].filter((v) => v === 2 || v === 4).length;
-			hasRightPanels = rightCount > 0;
-		}
-	);
+	let panelSubUnsub = settings.subscribe([...panelIds], () => {
+		hasRightPanels = panelIds.some(
+			(id) => panelSide(settings.data[id].value as number) === 'right'
+		);
+	});
 	onDestroy(panelSubUnsub);
 	onDestroy(disconnectCardMirror);
 	let showFlowLibraryBar = true;
@@ -503,106 +481,108 @@
 	/>
 	<div class="grid" class:showPrelude={!($nodes.root.children.length > 0)}>
 		<div class="sidebar">
-			<div class="header">
-				<ButtonBar
-					wrap
-					buttons={[
-						{
-							icon: 'link',
-							ariaLabel: 'Help',
-							onclick: () => openPopup(Help, 'Help'),
-							tooltip: $isChangelogVersionCurrent ? 'help' : 'new updates',
-							tutorialHighlight: 1,
-							notification: !$isChangelogVersionCurrent
-						},
-						{
-							icon: 'gear',
-							onclick: () => openPopup(Settings, 'Settings'),
-							tooltip: 'settings',
-							tutorialHighlight: 2
-						},
-						...(showSaveButton
-							? [
-									{
-										icon: !$documentOpen
-											? 'open'
-											: $library.connected && !$library.imported
-											? 'save'
-											: 'file',
-										ariaLabel: $documentOpen ? 'Save flow' : 'Choose file',
-										tutorialHighlight: 3,
-										tooltip: !$documentOpen
-											? 'Choose file'
-											: $library.connected && !$library.imported
-											? $hasDiskFile
-												? 'Save a copy'
-												: 'Save as…'
-											: 'File',
-										shortcut: $documentOpen ? ['commandControl', 's'] : null,
-										disabled: $frozen || libraryBusy,
-										onclick: () => {
-											if ($documentOpen) saveFlow();
-											else chooseFileInput.click();
-										}
-									}
-							  ]
-							: []),
-						{
-							icon: isOnline ? 'people' : 'offline',
-							onclick: () => {
-								if (isOnline) openPopup(Share, 'Share');
+			<div class="sidebar-head">
+				<div class="header">
+					<ButtonBar
+						wrap
+						buttons={[
+							{
+								icon: 'link',
+								ariaLabel: 'Help',
+								onclick: () => openPopup(Help, 'Help'),
+								tooltip: $isChangelogVersionCurrent ? 'help' : 'new updates',
+								tutorialHighlight: 1,
+								notification: !$isChangelogVersionCurrent
 							},
-							disabled: !isOnline,
-							disabledReason: 'sharing is disabled while offline',
-							tooltip: 'share',
-							tutorialHighlight: 4
-						}
-					]}
-				/>
-			</div>
-			<div class="document-heading">
-				<div class="document-name">
-					<input
-						class="document-title"
-						aria-label="Flow document title"
-						placeholder="new flow"
-						title={$documentTitle || 'new flow'}
-						disabled={$frozen}
-						bind:value={$documentTitle}
-						on:keydown={handleDocumentTitleKeydown}
-						on:blur={commitDocumentTitle}
+							{
+								icon: 'gear',
+								onclick: () => openPopup(Settings, 'Settings'),
+								tooltip: 'settings',
+								tutorialHighlight: 2
+							},
+							...(showSaveButton
+								? [
+										{
+											icon: !$documentOpen
+												? 'open'
+												: $library.connected && !$library.imported
+												? 'save'
+												: 'file',
+											ariaLabel: $documentOpen ? 'Save flow' : 'Choose file',
+											tutorialHighlight: 3,
+											tooltip: !$documentOpen
+												? 'Choose file'
+												: $library.connected && !$library.imported
+												? $hasDiskFile
+													? 'Save a copy'
+													: 'Save as…'
+												: 'File',
+											shortcut: $documentOpen ? ['commandControl', 's'] : null,
+											disabled: $frozen || libraryBusy,
+											onclick: () => {
+												if ($documentOpen) saveFlow();
+												else chooseFileInput.click();
+											}
+										}
+								  ]
+								: []),
+							{
+								icon: isOnline ? 'people' : 'offline',
+								onclick: () => {
+									if (isOnline) openPopup(Share, 'Share');
+								},
+								disabled: !isOnline,
+								disabledReason: 'sharing is disabled while offline',
+								tooltip: 'share',
+								tutorialHighlight: 4
+							}
+						]}
 					/>
 				</div>
-				<Button
-					icon={$documentOpen ? (unsavedToDisk ? 'undo' : 'delete') : 'add'}
-					ariaLabel={$documentOpen ? closeLabel : 'New flow'}
-					tooltip={$documentOpen ? closeLabel : 'New flow'}
-					disabled={libraryBusy || $frozen}
-					disabledReason="library is busy"
-					tutorialHighlight={5}
-					on:click={toggleDocument}
-				/>
+				<div class="document-heading">
+					<div class="document-name">
+						<input
+							class="document-title"
+							aria-label="Flow document title"
+							placeholder="new flow"
+							title={$documentTitle || 'new flow'}
+							disabled={$frozen}
+							bind:value={$documentTitle}
+							on:keydown={handleDocumentTitleKeydown}
+							on:blur={commitDocumentTitle}
+						/>
+					</div>
+					<Button
+						icon={$documentOpen ? (unsavedToDisk ? 'undo' : 'delete') : 'add'}
+						ariaLabel={$documentOpen ? closeLabel : 'New flow'}
+						tooltip={$documentOpen ? closeLabel : 'New flow'}
+						disabled={libraryBusy || $frozen}
+						disabledReason="library is busy"
+						tutorialHighlight={5}
+						on:click={toggleDocument}
+					/>
+				</div>
+				<p
+					class="save-status"
+					class:unsaved-to-disk={unsavedToDisk}
+					class:disk-save={$documentOpen && $hasDiskFile}
+					class:save-error={!unsavedToDisk &&
+						$saveStatus &&
+						$saveStatus !== 'Unsaved changes' &&
+						$saveStatus !== 'Saving…' &&
+						$saveStatus !== 'Autosaving…' &&
+						!$saveStatus.startsWith('Saved')}
+					role="status"
+				>
+					{unsavedToDisk &&
+					(!$saveStatus ||
+						$saveStatus === 'Unsaved changes' ||
+						$saveStatus.startsWith('Not saved to disk'))
+						? 'Not saved to disk'
+						: $saveStatus}
+				</p>
+				{#if libraryError && $nodes.root.children.length}<p role="alert">{libraryError}</p>{/if}
 			</div>
-			<p
-				class="save-status"
-				class:unsaved-to-disk={unsavedToDisk}
-				class:disk-save={$documentOpen && $hasDiskFile}
-				class:save-error={!unsavedToDisk &&
-					$saveStatus &&
-					$saveStatus !== 'Unsaved changes' &&
-					$saveStatus !== 'Saving…' &&
-					$saveStatus !== 'Autosaving…' &&
-					!$saveStatus.startsWith('Saved')}
-				role="status"
-			>
-				{unsavedToDisk &&
-				(!$saveStatus ||
-					$saveStatus === 'Unsaved changes' ||
-					$saveStatus.startsWith('Not saved to disk'))
-					? 'Not saved to disk'
-					: $saveStatus}
-			</p>
-			{#if libraryError && $nodes.root.children.length}<p role="alert">{libraryError}</p>{/if}
 			<PanelContainer
 				side="left"
 				selectedFlowId={$selectedFlowId}
@@ -689,32 +669,34 @@
 		grid-template-columns: var(--sidebar-width) minmax(0, 1fr) var(--panel-width);
 	}
 
-	.sidebar {
-		background: var(--background);
+	/* Sidebars are columns of surfaces: the document head, then one card per panel. */
+	.sidebar,
+	.right-sidebar {
 		width: 100%;
 		height: var(--main-height);
-		border-radius: var(--border-radius);
-		padding: var(--padding);
-		grid-area: sidebar;
 		display: flex;
 		flex-direction: column;
+		gap: var(--gap);
+		box-sizing: border-box;
+		min-height: 0;
+	}
+	.sidebar {
+		grid-area: sidebar;
+	}
+	.right-sidebar {
+		grid-area: right-sidebar;
+	}
+	.sidebar-head {
+		flex-shrink: 0;
+		background: var(--background);
+		border-radius: var(--border-radius);
+		padding: var(--padding);
 		box-sizing: border-box;
 	}
 	.header {
 		height: auto;
 		padding-bottom: var(--padding);
 		flex-shrink: 0;
-	}
-	.right-sidebar {
-		background: var(--background);
-		width: 100%;
-		height: var(--main-height);
-		border-radius: var(--border-radius);
-		padding: var(--padding);
-		grid-area: right-sidebar;
-		box-sizing: border-box;
-		display: flex;
-		flex-direction: column;
 	}
 	.document-heading {
 		display: flex;
@@ -736,7 +718,8 @@
 		color: var(--text);
 		background: none;
 		border: none;
-		padding: var(--padding) 0;
+		outline: none;
+		padding: var(--padding);
 		width: 100%;
 		box-sizing: border-box;
 	}

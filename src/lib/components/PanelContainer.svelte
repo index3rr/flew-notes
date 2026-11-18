@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { settings } from '$lib/models/settings';
-	import { onDestroy } from 'svelte';
+	import { afterUpdate, beforeUpdate, onDestroy } from 'svelte';
 	import TabsPanel from './panels/TabsPanel.svelte';
 	import TimersPanel from './panels/TimersPanel.svelte';
 	import NotesPanel from './panels/NotesPanel.svelte';
@@ -9,60 +9,28 @@
 	import LibraryPanel from './panels/LibraryPanel.svelte';
 	import TranscriptPanel from './panels/TranscriptPanel.svelte';
 	import CollaborationPanel from './panels/CollaborationPanel.svelte';
-	import Button from './Button.svelte';
+	import CoveragePanel from './panels/CoveragePanel.svelte';
 	import CardMirrorPanel from './panels/CardMirrorPanel.svelte';
+	import PanelPlaceholder from './panels/PanelPlaceholder.svelte';
+	import Button from './Button.svelte';
 	import { nodes, connections } from '$lib/models/store';
 	import type { FlowId } from '$lib/models/node';
+	import {
+		panelIds,
+		panelNames,
+		panelIcons,
+		documentPanelIds,
+		panelSide,
+		type PanelId
+	} from '$lib/models/panels';
+	import { panelIn, panelResize } from '$lib/models/transition';
 
 	export let side: 'left' | 'right';
-
-	const panelIds = [
-		'tabsPanel',
-		'notesPanel',
-		'starredPanel',
-		'speechDropPanel',
-		'timersPanel',
-		'libraryPanel',
-		'transcriptPanel',
-		'collaborationPanel',
-		'cardMirrorPanel'
-	] as const;
-	type PanelId = (typeof panelIds)[number];
-	const documentPanelIds: readonly PanelId[] = [
-		'libraryPanel',
-		'notesPanel',
-		'starredPanel',
-		'collaborationPanel',
-		'cardMirrorPanel'
-	];
-
-	const panelIcons: Record<PanelId, string> = {
-		tabsPanel: 'dots',
-		notesPanel: 'file',
-		starredPanel: 'star',
-		speechDropPanel: 'download',
-		timersPanel: 'clock',
-		libraryPanel: 'folder',
-		transcriptPanel: 'keyboard',
-		collaborationPanel: 'people',
-		cardMirrorPanel: 'link'
-	};
-	interface PanelConfig {
-		id: PanelId;
-		name: string;
-	}
-
-	const allPanels: PanelConfig[] = [
-		{ id: 'tabsPanel', name: 'Tabs' },
-		{ id: 'notesPanel', name: 'Notes' },
-		{ id: 'starredPanel', name: 'Starred arguments' },
-		{ id: 'speechDropPanel', name: 'SpeechDrop' },
-		{ id: 'timersPanel', name: 'Timers' },
-		{ id: 'libraryPanel', name: 'Flow library' },
-		{ id: 'transcriptPanel', name: 'Transcript' },
-		{ id: 'collaborationPanel', name: 'Collaboration' },
-		{ id: 'cardMirrorPanel', name: 'CardMirror' }
-	];
+	export let selectedFlowId: FlowId | null = null;
+	export let clickTab: (id: FlowId) => void = () => {};
+	export let addFlow: (style: any) => void = () => {};
+	export let handleSort: (e: { detail: { from: number; to: number } }) => void = () => {};
+	export let switchSpeakers: boolean = false;
 
 	let expanded: PanelId | null = null;
 	let panelValues = Object.fromEntries(
@@ -71,129 +39,153 @@
 
 	onDestroy(
 		settings.subscribe([...panelIds], (key: string) => {
-			panelValues = {
-				...panelValues,
-				[key as PanelId]: settings.data[key].value as number
-			};
+			panelValues = { ...panelValues, [key as PanelId]: settings.data[key].value as number };
 		})
 	);
 
 	$: documentPanelsAvailable = $nodes.root.children.length > 0;
+	$: activePanels = panelIds.filter((id) => panelSide(panelValues[id]) === side);
+	$: collapsedPanels = activePanels.filter((id) => panelValues[id] >= 3);
+	$: if (expanded && !collapsedPanels.includes(expanded)) expanded = null;
+	$: visiblePanelIds = activePanels.filter((id) => panelValues[id] < 3 || expanded === id);
 
-	$: activePanels = allPanels
-		.filter((p) => {
-			const pos = panelValues[p.id];
-			return side === 'left' ? pos === 1 || pos === 3 : pos === 2 || pos === 4;
-		})
-		.sort((a, b) => {
-			const orderA = panelIds.indexOf(a.id);
-			const orderB = panelIds.indexOf(b.id);
-			return orderA - orderB;
-		});
+	function unavailable(id: PanelId, available: boolean) {
+		return !available && documentPanelIds.includes(id);
+	}
+	function autoSize(id: PanelId, available: boolean, sharing: boolean) {
+		if (unavailable(id, available)) return true;
+		if (id === 'collaborationPanel') return !sharing;
+		return (
+			id === 'timersPanel' ||
+			id === 'starredPanel' ||
+			id === 'speechDropPanel' ||
+			id === 'cardMirrorPanel'
+		);
+	}
 
-	$: visiblePanelIds = activePanels
-		.filter((panel) => panelValues[panel.id] < 3 || expanded === panel.id)
-		.map((panel) => panel.id);
+	// Bodies that replace a placeholder stagger in by their position on this side.
+	function stagger(id: PanelId) {
+		return visiblePanelIds.indexOf(id) * ((settings.data.transitionSpeed.value as number) / 6);
+	}
 
-	export let selectedFlowId: FlowId | null = null;
-	export let clickTab: (id: FlowId) => void = () => {};
-	export let addFlow: (style: any) => void = () => {};
-	export let handleSort: (e: { detail: { from: number; to: number } }) => void = () => {};
-	export let switchSpeakers: boolean = false;
+	// When panels appear, collapse, or fill in, measure the old layout and animate each card to its new size.
+	const elements: Partial<Record<PanelId, HTMLElement>> = {};
+	$: layoutKey = `${visiblePanelIds.join()}|${documentPanelsAvailable}|${$connections.tag}`;
+	let lastLayoutKey: string | null = null;
+	let before: Map<PanelId, number> | null = null;
+	beforeUpdate(() => {
+		if (layoutKey === lastLayoutKey) return;
+		const initial = lastLayoutKey === null;
+		lastLayoutKey = layoutKey;
+		if (initial) return;
+		before = new Map(
+			activePanels.map((id) => [id, elements[id]?.getBoundingClientRect().height ?? 0])
+		);
+	});
+	afterUpdate(() => {
+		if (!before) return;
+		for (const id of visiblePanelIds) {
+			const element = elements[id];
+			if (element)
+				panelResize(element, before.get(id) ?? 0, element.getBoundingClientRect().height);
+		}
+		before = null;
+	});
 </script>
 
 {#if activePanels.length > 0}
 	<div class="panel-container" class:customScrollbar={settings.data.customScrollbar.value}>
-		{#each activePanels as panel}
-			{#if visiblePanelIds.indexOf(panel.id) > 0}
-				<div class="divider" />
-			{/if}
+		{#each activePanels as id (id)}
 			<div
 				class="panel"
-				data-panel={panel.id}
-				class:collapsed={panelValues[panel.id] >= 3 && expanded !== panel.id}
-				class:auto-size={panel.id === 'timersPanel' ||
-					panel.id === 'starredPanel' ||
-					panel.id === 'speechDropPanel' ||
-					panel.id === 'cardMirrorPanel' ||
-					(panel.id === 'collaborationPanel' && $connections.tag === 'empty') ||
-					(!documentPanelsAvailable && documentPanelIds.includes(panel.id))}
+				data-panel={id}
+				bind:this={elements[id]}
+				class:collapsed={!visiblePanelIds.includes(id)}
+				class:auto-size={autoSize(id, documentPanelsAvailable, $connections.tag !== 'empty')}
 			>
-				{#if panel.id === 'cardMirrorPanel'}
-					<CardMirrorPanel available={documentPanelsAvailable} />
-				{:else if panel.id === 'libraryPanel'}
-					<LibraryPanel available={documentPanelsAvailable} />
-				{:else if panel.id === 'transcriptPanel'}
-					<TranscriptPanel />
-				{:else if panel.id === 'collaborationPanel'}
-					<CollaborationPanel available={documentPanelsAvailable} />
-				{:else if panel.id === 'tabsPanel'}
-					<TabsPanel {selectedFlowId} {clickTab} {addFlow} {handleSort} bind:switchSpeakers />
-				{:else if panel.id === 'timersPanel'}
-					<TimersPanel />
-				{:else if panel.id === 'notesPanel'}
-					<NotesPanel editable={documentPanelsAvailable} />
-				{:else if panel.id === 'starredPanel'}
-					<StarredPanel available={documentPanelsAvailable} {selectedFlowId} {clickTab} />
-				{:else if panel.id === 'speechDropPanel'}
-					<SpeechDropPanel />
+				{#if unavailable(id, documentPanelsAvailable)}
+					<PanelPlaceholder name={panelNames[id]} />
+				{:else}
+					<div class="panel-body" in:panelIn={{ delay: stagger(id) }}>
+						{#if id === 'cardMirrorPanel'}
+							<CardMirrorPanel />
+						{:else if id === 'libraryPanel'}
+							<LibraryPanel />
+						{:else if id === 'transcriptPanel'}
+							<TranscriptPanel />
+						{:else if id === 'collaborationPanel'}
+							<CollaborationPanel />
+						{:else if id === 'coveragePanel'}
+							<CoveragePanel {selectedFlowId} {clickTab} />
+						{:else if id === 'tabsPanel'}
+							<TabsPanel {selectedFlowId} {clickTab} {addFlow} {handleSort} bind:switchSpeakers />
+						{:else if id === 'timersPanel'}
+							<TimersPanel />
+						{:else if id === 'notesPanel'}
+							<NotesPanel />
+						{:else if id === 'starredPanel'}
+							<StarredPanel {selectedFlowId} {clickTab} />
+						{:else if id === 'speechDropPanel'}
+							<SpeechDropPanel />
+						{/if}
+					</div>
 				{/if}
 			</div>
 		{/each}
-		<div class="collapsed-buttons">
-			{#each activePanels.filter((panel) => panelValues[panel.id] >= 3) as panel}
-				<Button
-					icon={panelIcons[panel.id]}
-					toggled={expanded === panel.id}
-					tooltip={panel.name}
-					ariaLabel={panel.name}
-					on:click={() => (expanded = expanded === panel.id ? null : panel.id)}
-				/>
-			{/each}
-		</div>
+		{#if collapsedPanels.length > 0}
+			<div class="panel auto-size collapsed-buttons">
+				{#each collapsedPanels as id (id)}
+					<Button
+						icon={panelIcons[id]}
+						toggled={expanded === id}
+						tooltip={panelNames[id]}
+						ariaLabel={panelNames[id]}
+						on:click={() => (expanded = expanded === id ? null : id)}
+					/>
+				{/each}
+			</div>
+		{/if}
 	</div>
 {/if}
 
 <style>
-	.panel.collapsed {
-		display: none;
-	}
-	.collapsed-buttons {
-		display: flex;
-		flex-wrap: wrap;
-		flex-shrink: 0;
-		margin-top: auto;
-	}
 	.panel-container {
 		width: 100%;
 		box-sizing: border-box;
 		display: flex;
 		flex-direction: column;
+		gap: var(--gap);
 		overflow-y: auto;
 		flex: 1;
 		min-height: 0;
 	}
+	/* Each panel is its own surface, like the title bar and flow beside it. */
 	.panel {
 		flex: 1;
 		min-height: 0;
 		display: flex;
 		flex-direction: column;
 		overflow: hidden;
+		box-sizing: border-box;
+		padding: var(--padding);
+		background: var(--background);
+		border-radius: var(--border-radius);
 	}
 	.panel.auto-size {
 		flex: 0 0 auto;
-		min-height: auto;
-		overflow: visible;
 	}
-	.divider {
-		height: 0;
-		flex-shrink: 0;
-		padding: var(--padding) 0;
+	.panel.collapsed {
+		display: none;
 	}
-	.divider::after {
-		content: '';
-		display: block;
-		height: 1px;
-		background: var(--color-fade);
+	.panel-body {
+		display: flex;
+		flex-direction: column;
+		flex: 1;
+		min-height: 0;
+	}
+	.collapsed-buttons {
+		flex-direction: row;
+		flex-wrap: wrap;
+		margin-top: auto;
 	}
 </style>

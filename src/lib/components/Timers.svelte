@@ -3,6 +3,7 @@
 	import SpeechTimer from './SpeechTimer.svelte';
 	import PacingTimer from './PacingTimer.svelte';
 	import type { TimerState, SpeechTimerState } from '$lib/models/timer';
+	import { currentSpeech as publishedSpeech, speechClock } from '$lib/models/timer';
 	import { timer } from '$lib/models/transition';
 	import { settings } from '$lib/models/settings';
 	import { onDestroy } from 'svelte';
@@ -71,6 +72,36 @@
 
 	$: currentSpeech = debateStyle.timerSpeeches[states.speech.resetTimeIndex];
 	$: pacingPalette = currentSpeech?.secondary ? 'accent-secondary' : 'accent';
+	$: if (currentSpeech) {
+		speechClock.name = currentSpeech.name;
+		speechClock.resetTime = currentSpeech.time;
+		speechClock.time = states.speech.time;
+		speechClock.running = states.speech.state.name === 'running';
+	}
+	// Publish only once the timer is in use; an untouched timer sitting on the first speech
+	// says nothing about where the round is.
+	$: timerInUse =
+		states.speech.resetTimeIndex !== 0 ||
+		states.speech.state.name === 'running' ||
+		states.speech.time !== currentSpeech?.time;
+	// Keyed by index too: policy has several speeches named CX.
+	$: publishedKey = timerInUse && currentSpeech ? states.speech.resetTimeIndex : null;
+	let lastPublishedKey: number | null = null;
+	$: if (publishedKey !== lastPublishedKey) {
+		lastPublishedKey = publishedKey;
+		publishedSpeech.set(
+			publishedKey !== null && currentSpeech
+				? {
+						name: currentSpeech.name,
+						secondary: currentSpeech.secondary,
+						upcoming: debateStyle.timerSpeeches
+							.slice(states.speech.resetTimeIndex)
+							.map((speech) => speech.name)
+				  }
+				: null
+		);
+	}
+	onDestroy(() => publishedSpeech.set(null));
 </script>
 
 <div class="top">

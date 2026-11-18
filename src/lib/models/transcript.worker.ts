@@ -1,21 +1,88 @@
 /// <reference lib="webworker" />
 import { pipeline, env, type AutomaticSpeechRecognitionPipeline } from '@huggingface/transformers';
 env.allowLocalModels = false;
+
+// Model choices, indexed by the transcriptModel setting (0 = automatic).
+type Choice = 'fast' | 'balanced' | 'accurate' | 'best';
+const models: Record<Choice, { id: string; multilingual: boolean; label: string }> = {
+	fast: { id: 'onnx-community/whisper-tiny.en', multilingual: false, label: 'Fast' },
+	balanced: { id: 'onnx-community/whisper-base.en', multilingual: false, label: 'Balanced' },
+	accurate: { id: 'onnx-community/whisper-small.en', multilingual: false, label: 'Accurate' },
+	best: { id: 'onnx-community/whisper-large-v3-turbo', multilingual: true, label: 'Best' }
+};
+
 let transcriber: AutomaticSpeechRecognitionPipeline | undefined;
-self.onmessage = async (event: MessageEvent<{ audio?: Float32Array }>) => {
+let loaded: { choice: Choice; device: 'webgpu' | 'wasm' } | undefined;
+
+async function gpu(): Promise<{ f16: boolean } | null> {
+	const nav = self.navigator as Navigator & {
+		gpu?: { requestAdapter(): Promise<{ features: Set<string> } | null> };
+	};
 	try {
-		if (!transcriber) {
-			transcriber = await pipeline(
-				'automatic-speech-recognition',
-				'onnx-community/whisper-tiny.en',
-				{ device: 'wasm', dtype: 'q8' }
-			);
+		const adapter = await nav.gpu?.requestAdapter();
+		return adapter ? { f16: adapter.features.has('shader-f16') } : null;
+	} catch {
+		return null;
+	}
+}
+
+function progress(event: { status?: string; file?: string; loaded?: number; total?: number }) {
+	if (event.status === 'progress' && event.total)
+		self.postMessage({ progress: { file: event.file, loaded: event.loaded, total: event.total } });
+}
+
+async function load(setting: number) {
+	const webgpu = await gpu();
+	const choices: Choice[] = ['fast', 'balanced', 'accurate', 'best'];
+	let choice: Choice = choices[setting - 1] ?? (webgpu ? 'accurate' : 'balanced');
+	// Large-v3-turbo is only practical with half-precision WebGPU.
+	if (choice === 'best' && !webgpu?.f16) choice = webgpu ? 'accurate' : 'balanced';
+	if (loaded?.choice === choice && transcriber) return loaded;
+	await transcriber?.dispose();
+	transcriber = undefined;
+	const model = models[choice];
+	if (webgpu) {
+		try {
+			transcriber = await pipeline('automatic-speech-recognition', model.id, {
+				device: 'webgpu',
+				// Quantizing Whisper's encoder costs accuracy; its decoder tolerates 4-bit well.
+				dtype:
+					choice === 'best'
+						? { encoder_model: 'q4f16', decoder_model_merged: 'q4f16' }
+						: { encoder_model: 'fp32', decoder_model_merged: 'q4' },
+				progress_callback: progress
+			});
+			loaded = { choice, device: 'webgpu' };
+			return loaded;
+		} catch {
+			// Fall back to the CPU build below.
 		}
+	}
+	if (choice === 'best') choice = 'accurate';
+	transcriber = await pipeline('automatic-speech-recognition', models[choice].id, {
+		device: 'wasm',
+		dtype: 'q8',
+		progress_callback: progress
+	});
+	loaded = { choice, device: 'wasm' };
+	return loaded;
+}
+
+self.onmessage = async (event: MessageEvent<{ audio?: Float32Array; model?: number }>) => {
+	try {
 		if (!event.data.audio) {
-			self.postMessage({ ready: true });
+			const { choice, device } = await load(event.data.model ?? 0);
+			self.postMessage({ ready: true, model: models[choice].label, device });
 			return;
 		}
-		const result = await transcriber(event.data.audio, { return_timestamps: false });
+		if (!transcriber || !loaded) await load(0);
+		const seconds = event.data.audio.length / 16000;
+		const result = await transcriber!(event.data.audio, {
+			return_timestamps: false,
+			// Even spreading stays under ~8 tokens a second; the cap stops runaway decoding loops.
+			max_new_tokens: Math.min(440, Math.ceil(seconds * 10) + 12),
+			...(models[loaded!.choice].multilingual ? { language: 'english', task: 'transcribe' } : {})
+		});
 		self.postMessage({
 			text: Array.isArray(result) ? result.map((item) => item.text).join(' ') : result.text
 		});

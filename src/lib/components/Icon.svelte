@@ -281,6 +281,30 @@
 <path d="M30 34L30 46" stroke-width="7" stroke-linecap="round"/>
 <path d="M50 34L50 46" stroke-width="7" stroke-linecap="round"/>
 <path d="M70 34L70 46" stroke-width="7" stroke-linecap="round"/>`
+		},
+		{
+			name: 'mic',
+			svg: `<rect x="35" y="8" width="30" height="52" rx="15" stroke-width="10"/>
+<path d="M20 46C20 62.5685 33.4315 76 50 76C66.5685 76 80 62.5685 80 46" stroke-width="10" stroke-linecap="round"/>
+<path d="M50 76V92" stroke-width="10" stroke-linecap="round"/>`
+		},
+		{
+			name: 'screen',
+			svg: `<rect x="8" y="14" width="84" height="56" rx="8" stroke-width="10"/>
+<path d="M50 70V88" stroke-width="10" stroke-linecap="round"/>
+<path d="M30 88H70" stroke-width="10" stroke-linecap="round"/>
+<path d="M38 36V48" stroke-width="10" stroke-linecap="round"/>
+<path d="M50 30V54" stroke-width="10" stroke-linecap="round"/>
+<path d="M62 36V48" stroke-width="10" stroke-linecap="round"/>`
+		},
+		{
+			name: 'checklist',
+			svg: `<path d="M10 22L18 30L32 14" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M10 56L18 64L32 48" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M48 22H90" stroke-width="10" stroke-linecap="round"/>
+<path d="M48 56H90" stroke-width="10" stroke-linecap="round"/>
+<path d="M48 86H90" stroke-width="10" stroke-linecap="round"/>
+<circle cx="21" cy="86" r="6" stroke-width="10"/>`
 		}
 	];
 	let displayIcon: { name: string; svg: string } | null;

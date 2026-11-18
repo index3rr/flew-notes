@@ -16,7 +16,7 @@ Flew Notes is a browser app for flowing (note-taking) in competitive debate. Deb
 - **Flow**: one page/tab inside a document, such as "aff" or "neg". The `Flow` node in code.
 - **Box**: one cell (argument) in a flow.
 - **Aff / neg**: the two debate sides. They map to the primary and secondary accent colors throughout the UI.
-- **Panel**: a configurable section of the left or right sidebar (tabs, timers, notes, starred, library, transcript, collaboration, SpeechDrop, CardMirror).
+- **Panel**: a configurable card in the left or right sidebar (tabs, timers, notes, coverage, starred, library, transcript, collaboration, SpeechDrop, CardMirror).
 
 ## Tech Stack
 
@@ -27,7 +27,7 @@ Flew Notes is a browser app for flowing (note-taking) in competitive debate. Deb
 - **Font**: Merriweather Sans 300 and 700 (`@fontsource/merriweather-sans`).
 - **State**: `svelte/store` writables/deriveds plus a `Settings` class.
 - **Results**: `ts-results` (`Option`, `Some`, `None`) for node lookups.
-- **Libraries**: anime.js (landing-page scenes only), exceljs (XLSX export), posthog-js (telemetry), pako (QR DEFLATE), qrcode and qr-scanner (QR sharing), `@huggingface/transformers` (local Whisper transcription, worker only), mammoth (SpeechDrop DOCX text).
+- **Libraries**: anime.js (landing-page scenes only), exceljs (XLSX export), posthog-js (telemetry), pako (QR DEFLATE), qrcode and qr-scanner (QR sharing), `@huggingface/transformers` (local Whisper transcription, worker only), mammoth (SpeechDrop DOCX text, and speech-document headings read as text, never rendered).
 - **Unused dependencies**: `@urql/svelte` and `graphql` are in `package.json` but not imported anywhere. Don't build on them.
 - **Testing**: Playwright E2E in Chromium, Firefox, and WebKit against `npm run build && npm run preview` (port 4173).
 - **Lint/format**: ESLint + Prettier 2 with `prettier-plugin-svelte`.
@@ -74,7 +74,7 @@ scripts/build-cardmirror-plugin.mjs
 static/
   sw.js                         # Service worker
   manifest.json                 # PWA manifest
-  transcript-capture.js         # AudioWorklet that forwards microphone PCM to the transcript panel
+  transcript-capture.js         # AudioWorklet that forwards microphone or tab PCM to the transcript panel
   favicon.png
 tests/                          # Playwright specs
 test-files/                     # Fixtures (including cardmirror/1NC.docx)
@@ -203,38 +203,54 @@ To refresh the cache within a release, bump only the revision suffix (`flew-note
 
 ## Panels
 
-Both sidebars are built from panels. Each panel has a radio setting with the options `['Off', 'Left', 'Right', 'Left collapsed', 'Right collapsed']` (values 0–4). Defaults: Tabs and Timers Left, Notes Right, everything else Off. The left column width is `--sidebar-width` ("Left panel width"); the right column (`.right-sidebar`, shown only when some panel is on the right) is `--panel-width` ("Right panel width").
+Both sidebars are built from panels. Each panel has a radio setting with the options `['Off', 'Left', 'Right', 'Left collapsed', 'Right collapsed']` (values 0–4). Defaults: Tabs and Timers Left, Notes and Coverage Right, everything else Off. The left column width is `--sidebar-width` ("Left panel width"); the right column (`.right-sidebar`, shown only when some panel is on the right) is `--panel-width` ("Right panel width").
 
-### `PanelContainer.svelte`
+`src/lib/models/panels.ts` is the registry: `panelIds` (render order), `panelNames`, `panelIcons`, `documentPanelIds`, and `panelSide()`. The app page and `PanelContainer` both read it; don't keep a second list anywhere.
 
-- Renders the panels for one side in the fixed order of `panelIds`, regardless of settings order.
-- Panels draw nothing between them; the container inserts a `.divider` (a `--color-fade` hairline padded by `--padding`) only between **visible** panels. Never add borders or separators inside a panel.
-- `.panel` grows (`flex: 1`) and clips; it scrolls inside its own body. `.panel.auto-size` keeps natural height. Timers, Starred, SpeechDrop, CardMirror, Collaboration while sharing is off, and every document panel without an open flow are auto-sized. Make compact panels auto-size so they don't steal height.
-- Collapsed panels (3/4) appear as icon `Button`s in a row at the bottom of their side, with the panel name as tooltip. One collapsed panel per side opens at a time. Collapsed panels stay mounted (hidden with `display: none`), so timers, transcription, and connections keep running; never destroy panel state on collapse.
-- **Document panels** (`documentPanelIds`: Library, Notes, Starred, Collaboration, CardMirror) need an open flow. Without one they render only `PanelPlaceholder` (their name in `--text-weak`, tooltip "No flow is open.") and keep their position.
+### Layout: one surface per panel
+
+- A sidebar is a transparent column of surfaces separated by `--gap`, exactly like the title bar, toolbar, and flow beside it. The left one starts with `.sidebar-head` (header buttons and document title); then `PanelContainer` renders one `.panel` card per visible panel (`--background`, `--border-radius`, `--padding`). There are no dividers or hairlines between panels.
+- `.panel` grows (`flex: 1`), clips, and its body scrolls inside itself. `.panel.auto-size` keeps natural height. Timers, Starred, SpeechDrop, CardMirror, Collaboration while sharing is off, and every document panel without an open flow are auto-sized.
+- Collapsed panels (3/4) appear as icon `Button`s in a tray card at the bottom of their side, named by `panelNames`. One collapsed panel per side opens at a time. Collapsed panels stay mounted (hidden with `display: none`), so timers, transcription, and connections keep running; never destroy panel state on collapse.
+- **Document panels** need an open flow. `PanelContainer` handles this centrally: without a flow it renders `PanelPlaceholder` (the name, styled exactly like a `PanelHeader`, tooltip "No flow is open.") instead of the panel component. Panel components never take an `available` prop.
+
+### Motion
+
+- When a panel's body replaces its placeholder (a flow opens), the body enters with `panelIn` (fade and settle from `--padding` above), staggered by the panel's position on its side. Because the placeholder and the header share a style, the name stays put and only the body arrives.
+- Whenever the set of visible panels, flow availability, or sharing state changes, `PanelContainer` measures every card before the update and animates each one to its new size with `panelResize` (a Web Animations `flex-basis` tween). Expanding a collapsed panel grows it from zero the same way.
+- Both read `--transition-speed` through `settings.data.transitionSpeed` and do nothing at 0.
+
+### Panel anatomy
+
+Build panels from the primitives in `components/panels/`, not from hand-styled elements:
+
+- **`PanelHeader`**: every panel except Tabs, Timers, and Notes (which are self-explanatory and never had one) starts with it. Name in `--text-weak` at `1em`, an optional short `detail` (counts, state, "2AC · 3 open"), an optional `tooltip` explaining the panel, and icon `Button`s in its default slot for panel-wide actions. Keep it to two or three actions; the left column is narrow. Secondary actions go in a right-aligned footer row (see Transcript).
+- **`PanelRow`**: list items. A block button styled like a `Tab` (palette text, indent on hover, active when pressed or `selected`), with an `actions` slot for trailing icon buttons. It prevents mousedown so clicking a row doesn't blur the cell being edited. Use it for arguments, files, folders, sources.
+- **`PanelStatus`**: the one status line style (`--text-weak`, `0.85em`, horizontal `--padding` so it aligns with row text, `role="status"`, or `role="alert"` with `error`). Empty states are one `PanelStatus` sentence, not a paragraph.
+- **`PanelField`**: text inputs and textareas, following the Form fields rules.
+- Content is a vertical flex column with `gap: var(--padding-small)`. Everything inside aligns to the same left edge: header name, row text, and status lines all sit one `--padding` in from the card's content box.
+- Actions are icon `Button`s with lowercase tooltips. Use text buttons only for multi-step flows inside a panel body (CardMirror pairing); they need the wrapping override (`:global(.element)` with auto width; `:global(button.top)` with `height: auto`, `min-height: calc(var(--button-size) + var(--padding) * 2)`, `white-space: normal`, `overflow-wrap: anywhere`).
+- Explanations belong in tooltips (`PanelHeader`'s or a button's), not in the body. No `<details>`, no `<h2>`/`<h3>` of your own, no labels above fields (use `aria-label` and a placeholder).
+- Side-colored content uses `palette-accent` / `palette-accent-secondary`, derived the same way the flow does (column parity XOR `invert`), never chosen by hand.
+- Floating UI (`PartnerNotifications`) sits on `--background-active` with `--border-radius` and `--padding-big`, and no shadow.
 
 ### Adding a panel
 
 1. Add a radio setting `<name>Panel` with the five standard options to `settings.ts` and to the Panels group in `settingsGroups`.
-2. In `PanelContainer.svelte`, add the id to `panelIds` (this sets its order), an icon to `panelIcons`, a sentence-case name to `allPanels`, the render branch, and, if it needs an open flow, the id to `documentPanelIds`. Decide whether it is auto-sized.
-3. Put the body in `src/lib/components/panels/<Name>Panel.svelte`. Its root gets a descriptive class (and an `aria-label` for `section`s); no background, no outer padding, no border, no fixed height.
-4. Add a `tests/panels.spec.ts` case covering placement on both sides, the collapsed state, and the no-flow placeholder if applicable.
-
-### Panel content conventions
-
-- Vertical flex columns with `gap: var(--padding-small)` (lists) or `var(--padding)` (forms). Reset `p` margins.
-- Actions are `Button`s. Long-labelled buttons in a narrow panel need the wrapping override already used by Collaboration, SpeechDrop, and CardMirror (`:global(.element)` with auto width; `:global(button.top)` with `height: auto`, `min-height: calc(var(--button-size) + var(--padding) * 2)`, `white-space: normal`, `overflow-wrap: anywhere`). Reuse it rather than inventing another.
-- Status lines: `.status` (`--text-weak`, `0.85em`, `role="status"`). Errors use `--text-error` or `role="alert"`.
-- Side-colored content (starred arguments, library page labels) uses `palette-accent` for non-inverted flows and `palette-accent-secondary` for inverted ones, chosen from the flow's `invert`.
-- Floating UI (`PartnerNotifications`) sits on `--background-active` with `--border-radius` and `--padding-big`, and no shadow.
+2. Add the id, name, and icon to `models/panels.ts` (and to `documentPanelIds` if it needs an open flow). Add the render branch in `PanelContainer.svelte` and decide whether it is auto-sized.
+3. Put the body in `src/lib/components/panels/<Name>Panel.svelte`: a root with a descriptive class and an `aria-label`, a `PanelHeader`, then content. No background, outer padding, border, or fixed height (the card provides them).
+4. Add a `tests/panels.spec.ts` case covering placement on both sides, the collapsed state, and the placeholder if applicable. Put pure logic in a model and unit-test it in `tests/roundTools.spec.ts` style (no `page` fixture, so no browser is launched).
 
 ### Panel features
 
+- **Coverage** (`models/coverage.ts`, `CoveragePanel`): for a speech, lists on every page the other side's arguments from the previous column that have no real response yet ("open"), and your arguments from two columns back that the other side skipped ("dropped"). A response is a child cell with text; extensions and blank cells count as skipped. Short lines ("ext", "no") show the top-level argument they descend from. The speech follows the speech timer once it is in use (CX and prep resolve to the next speech via `currentSpeech.upcoming`); before that it is inferred as the speech after the furthest column anyone has written in; clicking a speech pins it. "Answer" (`addResponse`) adds a response cell and focuses it; "Extend" (`extendArguments`) adds an extension where the other side was silent plus a cell reading "extend: dropped", one undo step per page.
+- **Timer state for panels** (`timer.ts`): `Timers` publishes `currentSpeech` (`name`, `secondary`, `upcoming`) only once the speech timer has been touched, and keeps `speechClock` (read with `speechElapsed()`) current every frame without being a store.
 - **Starred**: lists `starred` boxes in tab order, then by level. Clicking reveals the argument (`showArgument` unfolds ancestors). The note textarea edits `starNote` through a `PendingAction`, so it batches like cell typing.
 - **Flow library** (Off by default): compact `FlowCard` rows from the linked folder or browser saves. Clicking a page label imports it with `importFlowPage`; dragging sets `application/x-flew-page` (`{ nodes, id }`), which the app page drops between tabs. File management stays in the full library on the start screen.
-- **Transcript**: `transcript.worker.ts` runs `onnx-community/whisper-tiny.en` (q8, WASM) through Transformers.js, loaded only when transcription starts; model files download from Hugging Face on first use. `static/transcript-capture.js` (an AudioWorklet) feeds microphone PCM. The panel buffers about 5 s, drops silence, resamples to 16 kHz, and queues at most 6 segments. No audio leaves the device. `transcript.ts` compares 3-word phrases with the opponent document; under 35% overlap is flagged "Outside document", which is a review hint, not a verdict.
-- **Collaboration**: `collaboration.ts` holds `partnerNotices` (last 50), SpeechDrop room/document state, and `speechDetected`. Messages and "Send selected argument" go over the existing sharing connection. Received notices also appear as dismissible `PartnerNotifications` (rendered in `+layout.svelte`, visible even when the panel is collapsed). With sharing off, the panel is just an "Enable collaboration" button that opens Share.
-- **SpeechDrop**: the room code syncs between partners. `src/routes/api/speechdrop/[roomId]` and `[roomId]/[fileIndex]` are SvelteKit server routes (`prerender = false`, deployed as Netlify functions). They validate the room id, fetch speechdrop.net with an 8 s timeout and no redirects, cap the list at 100 files and downloads at 50 MB, and return `no-store`. DOCX text extraction uses mammoth's raw-text API; never render mammoth HTML.
+- **Transcript** (`TranscriptPanel`, `transcript.ts`, `transcript.worker.ts`): captures the microphone, or a tab/window through `getDisplayMedia` for online rounds. Microphone capture turns off echo cancellation (it would erase an online opponent coming out of the speakers) and noise suppression. The `AudioContext` runs at the device rate; `Segmenter` cuts audio at pauses with an adaptive noise floor (soft limit 7 s at a 200 ms pause, hard limit 18 s at the quietest point of the last 4 s) and never sends silence, which is what made Whisper invent text. Segments are resampled to 16 kHz. The worker loads the `transcriptModel` choice (Automatic, Fast = whisper-tiny.en, Balanced = base.en, Accurate = small.en, Best = large-v3-turbo); Automatic picks Accurate on WebGPU and Balanced otherwise. WebGPU uses an fp32 encoder with a 4-bit decoder and falls back to WASM q8. Decoding is capped by audio length, and `cleanTranscript` drops stock hallucinations and collapses loops. Lines are labeled with the speech timer's speech and time into it, grouped by speech, auto-scroll unless the user scrolled up, and "Add to flow" (`insertTextNear`) puts a line into the selected cell or below it. `compareSpeech` matches word pairs against the opponent document; under 40% is "Outside document" (likely an analytic), a review hint, not a verdict. Model files download from Hugging Face on first use; no audio leaves the device.
+- **Collaboration**: `collaboration.ts` holds `partnerNotices` (last 50), SpeechDrop room/document state, and `speechDetected`. Messages (Enter sends, Shift+Enter breaks a line) and "Send selected argument" go over the existing sharing connection. Received notices also appear as dismissible `PartnerNotifications` (rendered in `+layout.svelte`, visible even when the panel is collapsed). With sharing off, the panel is a header with an "Enable collaboration" button that opens Share.
+- **SpeechDrop**: the room code syncs between partners. `src/routes/api/speechdrop/[roomId]` and `[roomId]/[fileIndex]` are SvelteKit server routes (`prerender = false`, deployed as Netlify functions). They validate the room id, fetch speechdrop.net with an 8 s timeout and no redirects, cap the list at 100 files and downloads at 50 MB, and return `no-store`. DOCX text extraction uses mammoth's raw-text API. Each file row can download, feed the transcript comparison, open in CardMirror, or **flow its tags**; the header's upload button flows a local DOCX.
+- **Flowing a speech document** (`models/speechDoc.ts`, `DocImport` popup, `importSpeechDoc`): mammoth converts the DOCX with Verbatim's style names mapped to h1–h4, and `blocksFromHtml` reads that HTML as text with a regex (it is never rendered or parsed into the DOM). Blocks are the deepest heading level above the tags (usually h3), tags are h4. Each block is matched to a page by its words (filler like "AT", "DA", "2AC" ignored), falling back to its pocket/hat, or becomes a new page using the template where the speech comes earliest. Tags land in the speech column (from the file name, the timer, or the inferred next speech) under a spacer chain, optionally shortened to the claim before the first dash. The whole import is one undo step owned by `root`.
 - **CardMirror**: pairs with the CardMirror desktop app over a direct WebRTC connection using copy-paste keys (`src/lib/integrations/cardmirror/`, `models/cardMirror.ts`). Incoming cards are inserted with `insertionActions`/`columnInsertionActions` as single undo steps and keep provenance for "Jump to source". User workflow, commands, and limits are documented in `integrations/cardmirror/README.md`. The companion plugin (`integrations/cardmirror/plugin.ts`) and `protocol.ts` are versioned together; don't change one without the other, and leave the plugin alone unless the task is about it.
 
 ## Design System
@@ -332,7 +348,7 @@ There is no `--accent` or `--accent-secondary` variable. Use the derived tokens 
 - **Settings controls** `Toggle`, `Slider` (with a `hue` mode), `Radio` (with an optional custom value), and `ColorSelector`, rendered by `Setting.svelte`. A new setting needs only a `settings.ts` entry plus a `settingsGroups` entry; don't hand-build settings UI.
 - **`Message.svelte`** for simple info or error popups (`openPopup(Message, title, { message, error })`).
 - **Popup content components**: accept `export let closePopup` (or `export const closePopup = () => {}` if unused). Give the root a palette class (usually `palette-plain`). Reserve space for the floating close button with `padding-top: calc(var(--button-size) + var(--padding) * 2)` on the first row. Two-pane popups (Settings, Shortcuts) put the outline on `--background-secondary`.
-- **Grid surfaces** in `app/+page.svelte` (`.sidebar`, `.right-sidebar`, `.title`, `.box-control`, `.flow`) are `--background` surfaces with `--border-radius` and `--padding`, separated by `--gap`, and sized from `--main-height` / `--view-height` / `--title-height`. Content inside them (including `PanelContainer`) adds no background or padding of its own.
+- **Grid surfaces** in `app/+page.svelte` (`.sidebar-head`, each sidebar `.panel`, `.title`, `.box-control`, `.flow`) are `--background` surfaces with `--border-radius` and `--padding`, separated by `--gap`, and sized from `--main-height` / `--view-height` / `--title-height`. `.sidebar` and `.right-sidebar` themselves are transparent columns. Content inside a surface adds no background or padding of its own.
 
 ### Keeping the codebase clean
 
@@ -372,7 +388,8 @@ Run `npm run dev` and check the change:
 
 - `tests/flow.spec.ts`: editing, boxes, and flows.
 - `tests/persistancy.spec.ts`: autosave, browser saves, flow library, import/export.
-- `tests/panels.spec.ts`: placement, collapsing, placeholders, dividers, library import/drag, transcript (fake microphone and worker), timer auto-advance, starred notes.
+- `tests/panels.spec.ts`: placement, collapsing, placeholders, panel cards, library import/drag, transcript (fake microphone and worker), timer auto-advance, starred notes.
+- `tests/roundTools.spec.ts`: unit tests (no browser) for Coverage, speech-document parsing and import actions, transcript cleanup, and the pause segmenter.
 - `tests/shortcuts.spec.ts`: tooltip shortcuts match the real handlers; Help lists them.
 - `tests/collaboration.spec.ts`, `tests/share.spec.ts`: multi-peer sync, partner messages, and QR handshakes.
 - `tests/sharingQr.spec.ts`, `tests/iceCredentials.spec.ts`: codec units run in the browser.
@@ -385,7 +402,7 @@ Add or extend a spec whenever you change behavior in the models. Sharing, persis
 | Area          | Components                                                                                                                                                                                                                                                                                                  |
 | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | App shell     | `app/+page.svelte`, `Title` (flow name + delete), `BoxControl` (toolbar: undo/redo, add, extension, star/cross/bold, save), `Tab`, `AddTab`, `SortableList` (drag-reorder tabs; ignores `application/x-flew-page` drops), `DownloadUpload`                                                                  |
-| Panels        | `PanelContainer`, `panels/TabsPanel`, `TimersPanel`, `NotesPanel` (`SideDoc`), `StarredPanel`, `LibraryPanel` + `LibraryPanelRow` (compact `FlowCard`), `TranscriptPanel`, `CollaborationPanel`, `SpeechDropPanel`, `CardMirrorPanel`, `PanelPlaceholder`; global `PartnerNotifications` and `ArgumentLink` |
+| Panels        | `PanelContainer`, `panels/TabsPanel`, `TimersPanel`, `NotesPanel` (`SideDoc`), `CoveragePanel`, `StarredPanel`, `LibraryPanel` + `LibraryPanelRow` (compact `FlowCard`), `TranscriptPanel`, `CollaborationPanel`, `SpeechDropPanel` (+ `DocImport` popup), `CardMirrorPanel`; primitives `PanelHeader`, `PanelRow`, `PanelStatus`, `PanelField`, `PanelPlaceholder`; global `PartnerNotifications` and `ArgumentLink` |
 | Flow grid     | `Flow` (columns, headers, sets `invert`/`columnCount` context), `Header` (column name + hover "+"), `Box` (recursive cell, keyboard navigation), `Fold`                                                                                                                                                     |
 | Start screen  | `Prelude` → `Tutorial`/`TutorialHighlight` or `SavedFlows` → `SavedFlow`, `FlowLibrary`, `FlowCard`; `FlowLibrarySetup`                                                                                                                                                                                     |
 | Timers        | `Timers`, `SpeechTimer`, `PacingTimer`, `Timer`, `Time`                                                                                                                                                                                                                                                     |

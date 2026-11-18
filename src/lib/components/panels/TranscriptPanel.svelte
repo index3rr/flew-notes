@@ -1,32 +1,53 @@
 <script lang="ts">
-	import { onDestroy } from 'svelte';
+	import { afterUpdate, onDestroy, tick } from 'svelte';
 	import Button from '../Button.svelte';
+	import PanelHeader from './PanelHeader.svelte';
+	import PanelField from './PanelField.svelte';
+	import PanelStatus from './PanelStatus.svelte';
 	import { speechDocument, speechDetected, speechDocumentSource } from '$lib/models/collaboration';
-	import { compareSpeech } from '$lib/models/transcript';
+	import { cleanTranscript, compareSpeech, formatClock, Segmenter } from '$lib/models/transcript';
+	import { speechClock, speechElapsed } from '$lib/models/timer';
 	import { downloadString } from '$lib/models/file';
-	let entries: { text: string; outside: boolean; seconds: number; tag: string }[] = [];
+	import { settings } from '$lib/models/settings';
+	import { nodes, frozen } from '$lib/models/store';
+	import { currentArgument, showArgument } from '$lib/models/argumentNavigation';
+	import { selectedFlowId } from '$lib/models/focus';
+	import { insertTextNear } from '$lib/models/nodeDecorateAction';
+	import { resolvePendingAction } from '$lib/models/nodePendingAction';
+
+	type Entry = { id: number; text: string; outside: boolean; speech: string; at: number };
+	type Source = 'microphone' | 'tab';
+
+	let entries: Entry[] = [];
 	let status = '';
+	let error = '';
 	let active = false;
 	let loading = false;
+	let finishing = false;
+	let source: Source = 'microphone';
+	let modelLabel = '';
 	let worker: Worker | undefined;
 	let context: AudioContext | undefined;
 	let stream: MediaStream | undefined;
 	let capture: AudioWorkletNode | undefined;
-	let frames: Float32Array[] = [];
-	let samples = 0;
-	let busy = false;
-	let started = 0;
-	let segmentSeconds = 0;
-	let queue: { audio: Float32Array; seconds: number }[] = [];
+	let segmenter: Segmenter | undefined;
+	let queue: { audio: Float32Array; speech: string; at: number }[] = [];
+	let busy: { speech: string; at: number } | null = null;
+	let resampling = 0;
 	let generation = 0;
 	let detected = false;
-	let finishing = false;
-	let resampling = 0;
+	let started = 0;
+	let nextId = 0;
+	let downloads = new Map<string, { loaded: number; total: number }>();
+	const maxQueue = 12;
+
 	function stop() {
 		generation++;
 		active = false;
 		loading = false;
+		finishing = false;
 		capture?.disconnect();
+		capture?.port.close();
 		stream?.getTracks().forEach((track) => track.stop());
 		void context?.close();
 		capture = undefined;
@@ -34,46 +55,45 @@
 		stream = undefined;
 		worker?.terminate();
 		worker = undefined;
-		frames = [];
-		samples = 0;
+		segmenter = undefined;
 		queue = [];
-		busy = false;
-		finishing = false;
+		busy = null;
 		resampling = 0;
+		downloads = new Map();
 	}
-	async function enqueueFrames(rate: number, token: number) {
-		if (!samples) return;
+
+	// Label a piece of audio with the speech it belongs to and how far into that speech it began.
+	function stamp(seconds: number) {
+		if (speechClock.name)
+			return { speech: speechClock.name, at: Math.max(0, speechElapsed() - seconds * 1000) };
+		return { speech: '', at: Math.max(0, Date.now() - started - seconds * 1000) };
+	}
+
+	async function enqueue(audio: Float32Array, rate: number, token: number) {
+		const label = stamp(audio.length / rate);
 		resampling++;
 		try {
-			const audio = new Float32Array(samples);
-			let offset = 0;
-			for (const frame of frames) {
-				audio.set(frame, offset);
-				offset += frame.length;
+			let samples = audio;
+			if (rate !== 16000) {
+				const resampler = new OfflineAudioContext(
+					1,
+					Math.ceil((audio.length * 16000) / rate),
+					16000
+				);
+				const buffer = resampler.createBuffer(1, audio.length, rate);
+				buffer.copyToChannel(audio, 0);
+				const node = resampler.createBufferSource();
+				node.buffer = buffer;
+				node.connect(resampler.destination);
+				node.start();
+				samples = (await resampler.startRendering()).getChannelData(0).slice();
 			}
-			frames = [];
-			samples = 0;
-			const seconds = (Date.now() - started) / 1000 - audio.length / rate;
-			let energy = 0;
-			for (const sample of audio) energy += sample * sample;
-			if (energy / audio.length < 0.00002) return;
-			if (queue.length >= 6) {
-				status =
-					'Transcription could not keep up. Recording stopped; existing transcript is preserved.';
-				stop();
-				return;
-			}
-			const resampler = new OfflineAudioContext(1, Math.ceil((audio.length * 16000) / rate), 16000);
-			const buffer = resampler.createBuffer(1, audio.length, rate);
-			buffer.copyToChannel(audio, 0);
-			const source = resampler.createBufferSource();
-			source.buffer = buffer;
-			source.connect(resampler.destination);
-			source.start();
-			const output = await resampler.startRendering();
 			if (token !== generation) return;
-			queue.push({ audio: output.getChannelData(0).slice(), seconds });
-			next();
+			if (queue.length >= maxQueue) {
+				queue.shift();
+				status = 'Falling behind, so older audio was skipped. A faster model may keep up.';
+			}
+			queue = [...queue, { audio: samples, ...label }];
 		} finally {
 			if (token === generation) {
 				resampling--;
@@ -81,226 +101,373 @@
 			}
 		}
 	}
-	async function finish() {
-		if (loading) {
-			stop();
-			status = 'Stopped';
-			return;
-		}
-		active = false;
-		finishing = true;
-		status = 'Finishing local transcription…';
-		capture?.disconnect();
-		capture?.port.close();
-		stream?.getTracks().forEach((track) => track.stop());
-		const rate = context?.sampleRate ?? 16000;
-		void context?.close();
-		context = undefined;
-		await enqueueFrames(rate, generation);
-		next();
-	}
+
 	function next() {
 		if (finishing && !busy && !queue.length && !resampling) {
 			finishing = false;
-			status = 'Stopped';
+			status = '';
 			worker?.terminate();
 			worker = undefined;
+			return;
 		}
-
-		if (busy || !queue.length || !worker) return;
-		const item = queue.shift()!;
-		busy = true;
-		segmentSeconds = item.seconds;
+		if (busy || !queue.length || !worker || loading) return;
+		const [item, ...rest] = queue;
+		queue = rest;
+		busy = { speech: item.speech, at: item.at };
 		worker.postMessage({ audio: item.audio }, [item.audio.buffer]);
 	}
-	async function start() {
+
+	function received(raw: string) {
+		const text = cleanTranscript(raw);
+		const label = busy;
+		busy = null;
+		if (text && label) {
+			const comparison = compareSpeech(text, $speechDocument);
+			entries = [...entries, { id: nextId++, text, outside: comparison.outside, ...label }];
+			if (comparison.matched && !detected) {
+				detected = true;
+				speechDetected.update((value) => value + 1);
+			}
+		}
+		next();
+	}
+
+	async function captureStream(kind: Source): Promise<MediaStream> {
+		if (kind === 'microphone')
+			// Echo cancellation would erase an online opponent coming out of your own speakers,
+			// and noise suppression smears consonants that Whisper needs.
+			return navigator.mediaDevices.getUserMedia({
+				audio: {
+					channelCount: 1,
+					echoCancellation: false,
+					noiseSuppression: false,
+					autoGainControl: true
+				}
+			});
+		const display = await navigator.mediaDevices.getDisplayMedia({
+			video: true,
+			audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+		});
+		display.getVideoTracks().forEach((track) => track.stop());
+		if (!display.getAudioTracks().length) {
+			display.getTracks().forEach((track) => track.stop());
+			throw new Error('No audio was shared. Choose a tab and turn on “Share tab audio”.');
+		}
+		return new MediaStream(display.getAudioTracks());
+	}
+
+	async function start(kind: Source) {
 		stop();
 		const token = generation;
+		source = kind;
 		loading = true;
 		detected = false;
-		status = 'Loading local speech model (first use downloads model files)…';
+		error = '';
+		status = 'Loading the speech model…';
 		try {
 			worker = new Worker(new URL('../../models/transcript.worker.ts', import.meta.url), {
 				type: 'module'
 			});
-			await new Promise<void>((resolve, reject) => {
-				worker!.onerror = () => reject(new Error('Could not load the local speech model.'));
-				worker!.onmessage = (event) =>
-					event.data.error ? reject(new Error(event.data.error)) : resolve();
-				worker!.postMessage({});
+			const ready = await new Promise<{ model?: string; device?: string }>((resolve, reject) => {
+				worker!.onerror = () => reject(new Error('Could not load the speech model.'));
+				worker!.onmessage = (event) => {
+					if (event.data.progress) {
+						const { file, loaded, total } = event.data.progress;
+						downloads = new Map(downloads).set(file, { loaded, total });
+					} else if (event.data.error) reject(new Error(event.data.error));
+					else resolve(event.data);
+				};
+				worker!.postMessage({ model: settings.data.transcriptModel.value });
 			});
 			if (token !== generation) return;
-			const acquiredStream = await navigator.mediaDevices.getUserMedia({
-				audio: { channelCount: 1, echoCancellation: true }
-			});
+			modelLabel = ready.model ? `${ready.model}${ready.device === 'webgpu' ? ' · GPU' : ''}` : '';
+			downloads = new Map();
+			const acquired = await captureStream(kind);
 			if (token !== generation) {
-				acquiredStream.getTracks().forEach((track) => track.stop());
+				acquired.getTracks().forEach((track) => track.stop());
 				return;
 			}
-			stream = acquiredStream;
-			context = new AudioContext({ sampleRate: 16000 });
+			stream = acquired;
+			stream.getAudioTracks()[0]?.addEventListener('ended', () => {
+				if (token === generation && active) {
+					status = kind === 'tab' ? 'Tab audio stopped.' : 'Microphone disconnected.';
+					void finish();
+				}
+			});
+			// Use the device's own rate; browsers refuse to connect a stream to a mismatched context.
+			context = new AudioContext();
 			await context.audioWorklet.addModule('/transcript-capture.js');
 			if (token !== generation) return;
+			const rate = context.sampleRate;
+			segmenter = new Segmenter({ sampleRate: rate });
 			capture = new AudioWorkletNode(context, 'transcript-capture');
 			context.createMediaStreamSource(stream).connect(capture);
-			// A silent output keeps the capture graph processing without microphone playback.
+			// A silent output keeps the capture graph processing without playing audio back.
 			const mute = context.createGain();
 			mute.gain.value = 0;
 			capture.connect(mute).connect(context.destination);
 			started = Date.now();
 			worker!.onmessage = (event) => {
 				if (event.data.error) {
-					status = event.data.error;
+					error = event.data.error;
 					stop();
 					return;
 				}
-				const text = String(event.data.text ?? '').trim();
-				if (text) {
-					const comparison = compareSpeech(text, $speechDocument);
-					entries = [
-						...entries,
-						{ text, outside: comparison.outside, seconds: segmentSeconds, tag: '' }
-					];
-					if (comparison.matched && !detected) {
-						detected = true;
-						speechDetected.update((value) => value + 1);
-					}
-				}
-				busy = false;
-				next();
+				if ('text' in event.data) received(String(event.data.text ?? ''));
 			};
 			worker!.onerror = () => {
-				status = 'Local transcription failed. Try starting again.';
+				error = 'Transcription failed. Try starting again.';
 				stop();
 			};
-			capture.port.onmessage = async (event) => {
-				if (!active || !context) return;
-				frames.push(event.data);
-				samples += event.data.length;
-				if (samples < context.sampleRate * 5) return;
-				await enqueueFrames(context.sampleRate, token);
+			capture.port.onmessage = (event) => {
+				if (!active || !segmenter) return;
+				for (const audio of segmenter.push(event.data)) void enqueue(audio, rate, token);
 			};
 			await context.resume();
 			if (token !== generation) return;
 			active = true;
 			loading = false;
-			status = 'Listening locally…';
-		} catch (error) {
+			status = '';
+			next();
+		} catch (cause) {
 			if (token !== generation) return;
 			stop();
-			status = (error as Error).message;
+			const message = (cause as Error).message;
+			error =
+				(cause as Error).name === 'NotAllowedError'
+					? kind === 'tab'
+						? 'Sharing was cancelled.'
+						: 'Microphone access was blocked.'
+					: message;
 		}
 	}
+
+	async function finish() {
+		if (loading) {
+			stop();
+			return;
+		}
+		const rate = context?.sampleRate ?? 16000;
+		const rest = segmenter?.flush();
+		active = false;
+		finishing = true;
+		status = 'Finishing…';
+		capture?.disconnect();
+		capture?.port.close();
+		stream?.getTracks().forEach((track) => track.stop());
+		void context?.close();
+		context = undefined;
+		if (rest) await enqueue(rest, rate, generation);
+		next();
+	}
+
+	function exportTranscript() {
+		let speech: string | null = null;
+		const lines: string[] = [];
+		for (const entry of entries) {
+			if (entry.speech !== speech) {
+				speech = entry.speech;
+				lines.push('', `# ${speech || 'Transcript'}`);
+			}
+			lines.push(
+				`[${formatClock(entry.at)}] ${entry.outside ? '[Outside document] ' : ''}${entry.text}`
+			);
+		}
+		downloadString(lines.join('\n').trim() + '\n', 'transcript.txt');
+	}
+
+	async function addToFlow(entry: Entry) {
+		if ($frozen || !$selectedFlowId) return;
+		resolvePendingAction($nodes);
+		const id = insertTextNear($selectedFlowId, currentArgument()?.id ?? null, entry.text);
+		await tick();
+		if (id) showArgument(id);
+	}
+
+	$: downloadProgress = (() => {
+		let loaded = 0;
+		let total = 0;
+		for (const file of downloads.values()) {
+			loaded += file.loaded;
+			total += file.total;
+		}
+		return total ? Math.round((loaded / total) * 100) : null;
+	})();
+	$: running = active || loading;
+	$: detail = loading
+		? downloadProgress !== null
+			? `downloading ${downloadProgress}%`
+			: 'loading…'
+		: active
+		? `${source === 'tab' ? 'tab audio' : 'listening'}${modelLabel ? ` · ${modelLabel}` : ''}${
+				queue.length > 1 ? ` · ${queue.length} behind` : ''
+		  }`
+		: null;
+
+	// Keep the newest line in view unless the user has scrolled up to read.
+	let list: HTMLDivElement;
+	let pinnedToBottom = true;
+	afterUpdate(() => {
+		if (list && pinnedToBottom) list.scrollTop = list.scrollHeight;
+	});
 	onDestroy(stop);
 </script>
 
-<div class="transcript">
-	<p>
-		Local transcription. Model files download on first use; microphone audio stays on this device.
-	</p>
-	<Button
-		icon={active || loading ? 'pause' : 'play'}
-		text={finishing ? 'Finishing…' : active || loading ? 'Stop' : 'Start transcription'}
-		disabled={finishing}
-		on:click={() => (active || loading ? finish() : start())}
+<section class="transcript" aria-label="Transcript">
+	<PanelHeader name="Transcript" {detail}>
+		{#if running || finishing}
+			<Button
+				icon="pause"
+				ariaLabel="Stop"
+				tooltip="stop and finish transcribing what was heard"
+				disabled={finishing}
+				disabledReason="Finishing"
+				on:click={finish}
+			/>
+		{:else}
+			<Button
+				icon="mic"
+				ariaLabel="Start transcription"
+				tooltip="transcribe the microphone on this device; audio never leaves it"
+				on:click={() => start('microphone')}
+			/>
+			<Button
+				icon="screen"
+				ariaLabel="Transcribe tab audio"
+				tooltip="transcribe a tab or window, for online rounds"
+				on:click={() => start('tab')}
+			/>
+		{/if}
+	</PanelHeader>
+	<PanelField
+		multiline
+		rows={2}
+		ariaLabel="Opponent speech document"
+		placeholder="paste the opponent's speech document to mark analytics"
+		bind:value={$speechDocument}
 	/>
-	<p role="status">{status}</p>
-	<label
-		>Opponent speech document<textarea
-			aria-label="Opponent speech document"
-			bind:value={$speechDocument}
-			placeholder="Paste text or choose a SpeechDrop document"
-		/></label
+	{#if $speechDocumentSource}<PanelStatus>Comparing with {$speechDocumentSource.name}</PanelStatus
+		>{/if}
+	{#if error}<PanelStatus error>{error}</PanelStatus>{:else if status}<PanelStatus
+			>{status}</PanelStatus
+		>{/if}
+	<div
+		class="entries"
+		class:customScrollbar={settings.data.customScrollbar.value}
+		bind:this={list}
+		on:scroll={() => (pinnedToBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 8)}
+		aria-live="polite"
 	>
-	{#if $speechDocumentSource}<p class="comparison-source">
-			Comparing with {$speechDocumentSource.name}
-		</p>{/if}
-	<p>“Outside document” marks phrases to review; transcription and matching can be inaccurate.</p>
-	<Button
-		icon="download"
-		text="Export transcript"
-		disabled={!entries.length}
-		on:click={() =>
-			downloadString(
-				entries
-					.map(
-						(entry) =>
-							`[${Math.max(0, entry.seconds).toFixed(0)}s] ${
-								entry.outside ? '[Outside document] ' : ''
-							}${entry.tag ? `[${entry.tag}] ` : ''}${entry.text}`
-					)
-					.join('\n'),
-				'transcript.txt'
-			)}
-	/>
-	<div class="entries">
-		{#each entries as entry}
-			<div class="entry">
-				<small
-					>{Math.max(0, entry.seconds).toFixed(0)}s {entry.outside
-						? ' · Outside document'
-						: ''}</small
-				>
-				<p>{entry.text}</p>
-				<input aria-label="Transcript tag" placeholder="Tag" bind:value={entry.tag} />
+		{#each entries as entry, index (entry.id)}
+			{#if entry.speech !== entries[index - 1]?.speech || index === 0}
+				<p class="speech">{entry.speech || 'Transcript'}</p>
+			{/if}
+			<div class="entry" class:outside={entry.outside}>
+				<p class="text">
+					<span class="meta"
+						>{formatClock(entry.at)}{#if entry.outside}<span class="flag">
+								· Outside document</span
+							>{/if}</span
+					>
+					{entry.text}
+				</p>
+				<Button
+					icon="addRight"
+					ariaLabel="Add to flow"
+					tooltip="put this line in the flow below the selected cell"
+					disabled={$frozen || !$selectedFlowId}
+					disabledReason="Open a flow page first"
+					on:click={() => addToFlow(entry)}
+				/>
 			</div>
+		{:else}
+			{#if !running && !finishing}
+				<PanelStatus
+					>Transcribes on this device. Lines that aren't in the opponent's document are marked,
+					since those are the analytics you have to catch by ear.</PanelStatus
+				>
+			{/if}
 		{/each}
 	</div>
-</div>
+	{#if entries.length}
+		<div class="footer">
+			<Button
+				icon="download"
+				ariaLabel="Export transcript"
+				tooltip="export transcript"
+				disabled={!entries.length}
+				disabledReason="Nothing transcribed yet"
+				on:click={exportTranscript}
+			/>
+			<Button
+				icon="trash"
+				ariaLabel="Clear transcript"
+				tooltip="clear transcript"
+				disabled={!entries.length || running || finishing}
+				on:click={() => (entries = [])}
+			/>
+		</div>
+	{/if}
+</section>
 
 <style>
-	.comparison-source {
-		color: var(--text-weak);
-		font-size: 0.85em;
-	}
 	.transcript {
-		overflow-y: auto;
-	}
-	/* Keep content at its natural height so a short panel scrolls instead of overlapping. */
-	.transcript > :global(*) {
-		flex-shrink: 0;
-	}
-	.transcript,
-	label {
 		display: flex;
 		flex-direction: column;
-		gap: var(--padding);
+		gap: var(--padding-small);
 		min-height: 0;
-	}
-	p {
-		margin: 0;
-	}
-	small {
-		color: var(--text-weak);
-	}
-	textarea,
-	input {
-		font: inherit;
-		color: var(--text);
-		background: var(--background-indent);
-		border: none;
-		border-radius: var(--border-radius);
-		outline: none;
-		padding: var(--padding);
-		min-width: 0;
-		transition: background var(--transition-speed);
-	}
-	textarea:focus,
-	input:focus {
-		background: var(--background-active);
-	}
-	textarea::placeholder,
-	input::placeholder {
-		color: var(--text-weak);
-	}
-	textarea {
-		min-height: 5em;
-		resize: vertical;
+		flex: 1;
 	}
 	.entries {
-		overflow: auto;
+		display: flex;
+		flex-direction: column;
+		overflow-y: auto;
+		min-height: 0;
+		flex: 1;
+	}
+	.speech {
+		margin: 0;
+		padding: var(--padding) var(--padding) 0;
+		color: var(--text-weak);
+		font-weight: var(--font-weight-bold);
+		font-size: 0.85em;
 	}
 	.entry {
-		padding: var(--padding) 0;
+		display: flex;
+		align-items: flex-start;
+		border-radius: var(--border-radius);
+		transition: background var(--transition-speed);
+	}
+	.entry:hover {
+		background: var(--background-indent);
+	}
+	.entry :global(button.top) {
+		opacity: 0;
+		transition: opacity var(--transition-speed), background var(--transition-speed);
+	}
+	.entry:hover :global(button.top),
+	.entry :global(button.top:focus-visible) {
+		opacity: 1;
+	}
+	.text {
+		flex: 1;
+		min-width: 0;
+		margin: 0;
+		padding: var(--padding);
+		line-height: 1.5em;
+		overflow-wrap: anywhere;
+	}
+	.meta {
+		color: var(--text-weak);
+		font-size: 0.85em;
+		padding-right: var(--padding-small);
+	}
+	.footer {
+		display: flex;
+		justify-content: flex-end;
+		flex-shrink: 0;
+	}
+	.outside .flag {
+		color: var(--text);
 	}
 </style>

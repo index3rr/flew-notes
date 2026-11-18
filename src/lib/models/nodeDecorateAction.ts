@@ -1,5 +1,6 @@
 import { validProvenance } from '../integrations/cardmirror/protocol';
 import type { DebateStyleFlow } from './debateStyle';
+import { speechDocActions, type DocPlanItem } from './speechDoc';
 import {
 	getNode,
 	getParentFlowId,
@@ -327,4 +328,98 @@ export const importFlowPage = decorate(function (
 	}
 	copyChildren(id, original.children);
 	return { action: actions, owner: 'root', ret: id };
+});
+
+// Add an empty response at the end of an argument's replies and return it for focusing.
+export const addResponse = decorate(function (nodes: Nodes, parent: BoxId) {
+	const node = getNode(nodes, parent).unwrap();
+	const flowId = getParentFlowId(nodes, parent).unwrap();
+	const action = newBoxAction(parent, flowId, node.children.length);
+	trackBoxCreated(node.level);
+	return { action, owner: flowId, ret: action.id };
+});
+
+// Carry dropped arguments into the next speech as one undo step: an extension cell where the
+// other side said nothing, then a cell in this speech. Existing blank cells are reused.
+export const extendArguments = decorate(function (nodes: Nodes, ids: BoxId[]) {
+	const content = 'extend: dropped';
+	const actions: ActionBundle = [];
+	let owner: FlowId | null = null;
+	let first: BoxId | null = null;
+	for (const id of ids) {
+		const node = nodes[id];
+		if (node?.value.tag !== 'box') continue;
+		const flowId = node.value.flowId;
+		owner ??= flowId;
+		const extensionId = node.children.find((child) => nodes[child]?.value.isExtension) as
+			| BoxId
+			| undefined;
+		if (extensionId) {
+			const extension = nodes[extensionId]!;
+			const blank = extension.children.find((child) => {
+				const value = nodes[child]?.value;
+				return value?.tag === 'box' && !value.content.trim() && !value.isExtension;
+			}) as BoxId | undefined;
+			if (blank) {
+				const value = nodes[blank]!.value as Box;
+				actions.push(newUpdateAction(blank, { ...value, content }));
+				first ??= blank;
+			} else {
+				const add = newBoxAction(extensionId, flowId, extension.children.length);
+				add.value.content = content;
+				actions.push(add);
+				first ??= add.id;
+			}
+		} else {
+			const newExtension = newBoxId();
+			const add = newBoxAction(newExtension, flowId, 0);
+			add.value.content = content;
+			actions.push(newExtensionAction(id, flowId, newExtension), add);
+			first ??= add.id;
+		}
+	}
+	return {
+		action: actions,
+		owner: owner ?? ('root' as const),
+		ret: first
+	};
+});
+
+// Flow a speech document's tags into the flow as one undo step.
+export const importSpeechDoc = decorate(function (
+	nodes: Nodes,
+	speech: string,
+	items: DocPlanItem[],
+	templates: DebateStyleFlow[],
+	shorten: boolean
+) {
+	const { actions, first, pages } = speechDocActions(nodes, speech, items, templates, shorten);
+	return { action: actions, owner: 'root' as const, ret: { first, pages } };
+});
+
+// Put text into the flow next to where the user is working: fill the focused cell if it is
+// blank, otherwise add a cell right below it; with nothing focused, add a row to the page.
+export const insertTextNear = decorate(function (
+	nodes: Nodes,
+	flowId: FlowId,
+	target: BoxId | null,
+	content: string
+) {
+	const node = target ? nodes[target] : null;
+	if (node?.value.tag === 'box' && !node.value.empty && !node.value.isExtension) {
+		if (!node.value.content.trim() && !node.children.length)
+			return {
+				action: newUpdateAction(target as BoxId, { ...node.value, content }),
+				owner: flowId,
+				ret: target
+			};
+		const parent = node.parent as BoxId | FlowId;
+		const index = (nodes[parent]?.children as BoxId[]).indexOf(target as BoxId) + 1;
+		const add = newBoxAction(parent, flowId, index);
+		add.value.content = content;
+		return { action: add, owner: flowId, ret: add.id };
+	}
+	const add = newBoxAction(flowId, flowId, nodes[flowId]?.children.length ?? 0);
+	add.value.content = content;
+	return { action: add, owner: flowId, ret: add.id };
 });

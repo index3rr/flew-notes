@@ -4,7 +4,7 @@ import { settings } from '../models/settings';
 
 export function boxIn(node: HTMLElement, { skip }: { skip: boolean }) {
 	// don't do transition if skip
-	if (skip || settings.data.transitionSpeed.value as number === 0) {
+	if (skip || (settings.data.transitionSpeed.value as number) === 0) {
 		return {
 			duration: 0,
 			css: () => ''
@@ -28,7 +28,7 @@ export function boxIn(node: HTMLElement, { skip }: { skip: boolean }) {
 }
 export function boxOut(node: HTMLElement, { skip }: { skip: boolean }) {
 	// don't do transition if skip
-	if (skip || settings.data.transitionSpeed.value as number === 0) {
+	if (skip || (settings.data.transitionSpeed.value as number) === 0) {
 		return {
 			duration: 0,
 			css: () => ''
@@ -304,7 +304,7 @@ export function instructionOut(node: HTMLElement, { reverse }: { reverse: boolea
 }
 
 export function settingIn(node: HTMLElement, { skip }: { skip: boolean }) {
-	if (skip || settings.data.transitionSpeed.value as number === 0) {
+	if (skip || (settings.data.transitionSpeed.value as number) === 0) {
 		return {
 			duration: 0,
 			css: () => ''
@@ -331,7 +331,7 @@ export function settingIn(node: HTMLElement, { skip }: { skip: boolean }) {
 
 export function settingOut(node: HTMLElement, { skip }: { skip: boolean }) {
 	// don't do transition if skip
-	if (skip || settings.data.transitionSpeed.value as number === 0) {
+	if (skip || (settings.data.transitionSpeed.value as number) === 0) {
 		return {
 			duration: 0,
 			css: () => ''
@@ -356,7 +356,7 @@ export function settingOut(node: HTMLElement, { skip }: { skip: boolean }) {
 
 export function settingScrollerIn(node: HTMLElement, { skip }: { skip: boolean }) {
 	// don't do transition if skip
-	if (skip || settings.data.transitionSpeed.value as number === 0) {
+	if (skip || (settings.data.transitionSpeed.value as number) === 0) {
 		return {
 			duration: 0,
 			css: () => ''
@@ -379,7 +379,7 @@ export function settingScrollerIn(node: HTMLElement, { skip }: { skip: boolean }
 
 export function settingScrollerOut(node: HTMLElement, { skip }: { skip: boolean }) {
 	// don't do transition if skip
-	if (skip || settings.data.transitionSpeed.value as number === 0) {
+	if (skip || (settings.data.transitionSpeed.value as number) === 0) {
 		return {
 			duration: 0,
 			css: () => ''
@@ -401,7 +401,7 @@ export function settingScrollerOut(node: HTMLElement, { skip }: { skip: boolean 
 }
 
 export function settingTitleInOut(node: HTMLElement, { skip }: { skip: boolean }) {
-	if (skip || settings.data.transitionSpeed.value as number === 0) {
+	if (skip || (settings.data.transitionSpeed.value as number) === 0) {
 		return {
 			duration: 0,
 			css: () => ''
@@ -420,4 +420,35 @@ export function settingTitleInOut(node: HTMLElement, { skip }: { skip: boolean }
         `;
 		}
 	};
+}
+// Panel bodies unroll below their header. The header row (the same size as the placeholder it
+// replaces) is visible from the first frame, so the panel's name never blinks.
+export function panelIn(_node: HTMLElement, { delay = 0 }: { delay?: number } = {}) {
+	const duration = settings.data.transitionSpeed.value as number;
+	if (duration === 0) return { duration: 0, css: () => '' };
+	const header = 'calc(var(--button-size) + var(--padding) * 2)';
+	return {
+		delay: Math.min(delay, duration),
+		duration: duration * 1.5,
+		css: (t: number) => {
+			const eased = quadOut(t);
+			return `
+				clip-path: inset(0 0 max(0px, calc((100% - ${header}) * ${1 - eased})) 0);
+				opacity: ${0.4 + 0.6 * t};
+			`;
+		}
+	};
+}
+
+// Animate a flex item's size change after the DOM has already moved to its new layout.
+export function panelResize(node: HTMLElement, from: number, to: number) {
+	const duration = settings.data.transitionSpeed.value as number;
+	if (duration === 0 || Math.abs(from - to) < 1 || !node.animate) return;
+	node.animate(
+		[
+			{ flex: `0 0 ${from}px`, overflow: 'hidden' },
+			{ flex: `0 0 ${to}px`, overflow: 'hidden' }
+		],
+		{ duration, easing: 'cubic-bezier(0.25, 0.46, 0.45, 0.94)' }
+	);
 }

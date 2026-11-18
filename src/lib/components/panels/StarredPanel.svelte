@@ -1,6 +1,7 @@
 <script lang="ts">
-	import PanelPlaceholder from './PanelPlaceholder.svelte';
-	export let available = true;
+	import PanelHeader from './PanelHeader.svelte';
+	import PanelRow from './PanelRow.svelte';
+	import PanelStatus from './PanelStatus.svelte';
 	import { nodes, pendingAction, frozen } from '$lib/models/store';
 	import { type Box, type BoxId, type FlowId, type Node } from '$lib/models/node';
 	import { newUpdateAction, toggleBoxFormat } from '$lib/models/nodeDecorateAction';
@@ -36,6 +37,11 @@
 		return flow?.value.tag === 'flow' && flow.value.invert ? 'accent-secondary' : 'accent';
 	}
 
+	function grow(element: HTMLTextAreaElement) {
+		element.style.height = 'auto';
+		element.style.height = `${element.scrollHeight}px`;
+	}
+
 	let editingNote: BoxId | null = null;
 	let ownPending: PendingAction | null = null;
 	function editNote(id: BoxId, value: string) {
@@ -60,35 +66,43 @@
 	}
 </script>
 
-<section class="starred-panel">
-	{#if !available}
-		<PanelPlaceholder name="Starred arguments" />
-	{:else if starred.length === 0}
-		<div class="empty">Starred arguments</div>
+<section class="starred-panel" aria-label="Starred arguments">
+	<PanelHeader name="Starred arguments" detail={starred.length ? String(starred.length) : null} />
+	{#if starred.length === 0}
+		<PanelStatus>Star an argument to keep it here.</PanelStatus>
 	{:else}
 		<div class="list">
 			{#each starred as { id, node } (id)}
 				<article class={`palette-${flowPalette(node.value.flowId)}`}>
-					<div class="argument">
-						<button class="content" on:click={() => goToBox(id, node.value.flowId)}>
-							{node.value.content || '(empty argument)'}
-						</button>
-						<Button
-							icon="star"
-							palette={flowPalette(node.value.flowId)}
-							toggled={true}
-							disabled={$frozen}
-							disabledReason="Wait for synchronization"
-							tooltip="unstar argument"
-							onclick={() => toggleBoxFormat(id, 'starred')}
-						/>
-					</div>
+					<PanelRow
+						palette={flowPalette(node.value.flowId)}
+						weak={!node.value.content}
+						on:click={() => goToBox(id, node.value.flowId)}
+					>
+						{node.value.content || 'empty argument'}
+						<svelte:fragment slot="actions">
+							<Button
+								icon="star"
+								palette={flowPalette(node.value.flowId)}
+								toggled={true}
+								disabled={$frozen}
+								disabledReason="Wait for synchronization"
+								tooltip="unstar"
+								onclick={() => toggleBoxFormat(id, 'starred')}
+							/>
+						</svelte:fragment>
+					</PanelRow>
 					<textarea
 						value={node.value.starNote ?? ''}
 						placeholder="add note"
 						aria-label="Note for starred argument"
 						readonly={$frozen}
-						on:input={(event) => editNote(id, event.currentTarget.value)}
+						rows="1"
+						on:input={(event) => {
+							editNote(id, event.currentTarget.value);
+							grow(event.currentTarget);
+						}}
+						use:grow
 					/>
 				</article>
 			{/each}
@@ -100,56 +114,30 @@
 	.starred-panel {
 		display: flex;
 		flex-direction: column;
-	}
-	.empty {
-		color: var(--text-weak);
-		white-space: nowrap;
+		gap: var(--padding-small);
 	}
 	.list {
 		display: flex;
 		flex-direction: column;
-	}
-	.argument {
-		display: flex;
-		align-items: flex-start;
-		width: 100%;
-	}
-	.content {
-		flex: 1;
-		min-width: 0;
-		padding: var(--padding);
-		border: none;
-		border-radius: var(--border-radius);
-		background: none;
-		color: var(--this-text);
-		font: inherit;
-		text-align: left;
-		white-space: pre-wrap;
-		transition: background var(--transition-speed);
-	}
-	.content:hover {
-		background: var(--this-background-indent);
-	}
-	.content:active {
-		background: var(--this-background-active);
-		transition: none;
-	}
-	article :global(button.top) {
-		flex-shrink: 0;
+		gap: var(--padding-small);
 	}
 	textarea {
 		display: block;
 		box-sizing: border-box;
 		width: 100%;
-		min-height: calc(2em + var(--padding) * 2);
 		line-height: 1.5em;
-		padding: var(--padding);
+		padding: 0 var(--padding) var(--padding);
 		resize: none;
+		overflow: hidden;
 		border: none;
 		background: none;
-		color: inherit;
+		color: var(--text-weak);
 		font: inherit;
+		font-size: 0.85em;
 		outline: none;
+	}
+	textarea:focus {
+		color: var(--text);
 	}
 	textarea::placeholder {
 		color: var(--text-weak);

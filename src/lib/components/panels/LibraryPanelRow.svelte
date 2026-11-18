@@ -1,5 +1,6 @@
 <script lang="ts">
 	import FlowCard from '../FlowCard.svelte';
+	import PanelStatus from './PanelStatus.svelte';
 	import type { SavedNodesData } from '$lib/models/autoSave';
 	import { documentOpen } from '$lib/models/autoSave';
 	import { frozen } from '$lib/models/store';
@@ -63,4 +64,4 @@
 	on:importPage={(event) => copyPage(event.detail)}
 	on:dragPage={dragPage}
 />
-{#if error}<p role="alert">{error}</p>{/if}
+{#if error}<PanelStatus error>{error}</PanelStatus>{/if}

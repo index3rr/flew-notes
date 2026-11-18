@@ -12,6 +12,12 @@
 
 - [x] Star, delete, cross-out, and popup-close tooltips show the matching shortcuts. Help includes selection, paste, timer fields, and document titles, with matching key labels.
 
+- [x] Panels are their own cards, like the title bar and flow, and share one header, row, status, and field style. Explanations moved into tooltips.
+- [x] Panels animate: bodies settle in when a flow opens, and cards resize smoothly when panels open, collapse, or fill in.
+- [x] Coverage panel: for the next speech, what's still unanswered on every page and what the other side dropped, with one-click answer and extend. Follows the speech timer.
+- [x] Flow a speech document: SpeechDrop files (or a local DOCX) drop their tags into the right speech column, matched to pages by block name, with new pages for new positions.
+- [x] Transcription rebuilt: cuts at pauses instead of every 5 s, never sends silence, filters Whisper hallucinations and loops, bigger models (WebGPU when available), no echo cancellation eating online opponents, tab audio capture, lines labeled by speech and time, and add-to-flow.
+
 # Upstream changelog and roadmap
 
 The following is retained from main for reference.

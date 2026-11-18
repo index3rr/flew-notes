@@ -78,7 +78,7 @@ class Settings {
 		this.setValue('colorTheme', 3);
 		for (const key in this.data) {
 			const s = this.data[key];
-			if (key === 'maxLocalSaves') continue;
+			if (key === 'maxLocalSaves' || key === 'transcriptModel') continue;
 			if (s.type === 'slider') {
 				const speed = 0.5 + Math.random() * 2;
 				const min = s.detail.min;
@@ -224,7 +224,13 @@ class Settings {
 	randomize() {
 		for (const key in this.data) {
 			// never randomize fun mode or telemetry (gdpr)
-			if (key === 'funMode' || key === 'telemetry' || key === 'maxLocalSaves') continue;
+			if (
+				key === 'funMode' ||
+				key === 'telemetry' ||
+				key === 'maxLocalSaves' ||
+				key === 'transcriptModel'
+			)
+				continue;
 			const setting = this.data[key];
 			if (setting.type == 'slider') {
 				this.setValue(
@@ -841,6 +847,22 @@ export const settings: Settings = new Settings({
 		type: 'radio',
 		detail: { options: ['Off', 'Left', 'Right', 'Left collapsed', 'Right collapsed'] }
 	},
+	coveragePanel: {
+		name: 'Coverage',
+		value: 2,
+		auto: 2,
+		type: 'radio',
+		info: 'Lists arguments the next speech still has to answer and arguments the other side dropped',
+		detail: { options: ['Off', 'Left', 'Right', 'Left collapsed', 'Right collapsed'] }
+	},
+	transcriptModel: {
+		name: 'Transcription model',
+		value: 0,
+		auto: 0,
+		type: 'radio',
+		info: 'Automatic picks Accurate when your browser supports WebGPU and Balanced otherwise. Larger models download more the first time (Fast ~40 MB, Balanced ~80 MB, Accurate ~250–600 MB, Best ~560 MB and needs WebGPU).',
+		detail: { options: ['Automatic', 'Fast', 'Balanced', 'Accurate', 'Best'] }
+	},
 	speechDropPanel: {
 		name: 'SpeechDrop',
 		value: 0,
@@ -977,8 +999,10 @@ export const settingsGroups: SettingsGroup[] = [
 		name: 'Panels',
 		settings: [
 			'tabsPanel',
+			'coveragePanel',
 			'libraryPanel',
 			'transcriptPanel',
+			'transcriptModel',
 			'collaborationPanel',
 			'cardMirrorPanel',
 			'notesPanel',

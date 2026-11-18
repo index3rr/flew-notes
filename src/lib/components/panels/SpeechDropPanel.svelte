@@ -5,6 +5,13 @@
 	import { cardMirror, cardMirrorDocuments, openCardMirrorDocument } from '$lib/models/cardMirror';
 	import { settings } from '$lib/models/settings';
 	import Button from '$lib/components/Button.svelte';
+	import PanelHeader from './PanelHeader.svelte';
+	import PanelField from './PanelField.svelte';
+	import PanelRow from './PanelRow.svelte';
+	import PanelStatus from './PanelStatus.svelte';
+	import DocImport from '../DocImport.svelte';
+	import { openPopup } from '$lib/models/popup';
+	import { nodes } from '$lib/models/store';
 
 	type SpeechDropFile = { index: number; name: string; ctime?: number };
 	type RoomIndex = { files: SpeechDropFile[]; error?: string };
@@ -216,7 +223,10 @@
 		}
 	}
 
-	async function documentAction(file: SpeechDropFile, action: 'download' | 'compare' | 'open') {
+	async function documentAction(
+		file: SpeechDropFile,
+		action: 'download' | 'compare' | 'open' | 'flow'
+	) {
 		if (fileBusy !== null) return;
 		const request = requestNumber,
 			room = loadedRoomCode;
@@ -250,6 +260,12 @@
 				cached = { room, index: file.index, name: file.name, ctime: file.ctime, blob };
 			}
 			if (!current()) return;
+			if (action === 'flow') {
+				if (!/\.docx$/i.test(file.name))
+					throw new Error('Only DOCX speech documents can be flowed.');
+				openPopup(DocImport, 'Flow speech document', { name: file.name, blob });
+				return;
+			}
 			if (action === 'compare') {
 				let text: string;
 				if (/\.docx$/i.test(file.name)) {
@@ -306,73 +322,109 @@
 		fileController?.abort();
 		stopRoomConnections();
 	});
+	let localFile: HTMLInputElement;
+	function flowLocalFile() {
+		const file = localFile.files?.[0];
+		localFile.value = '';
+		if (file) openPopup(DocImport, 'Flow speech document', { name: file.name, blob: file });
+	}
+	$: flowOpen = $nodes.root.children.length > 0;
+	$: canOpenInCardMirror = $cardMirror.state === 'connected' && $cardMirrorDocuments.supported;
 </script>
 
-<div class="speechdrop-panel">
-	<div class="room-entry">
-		<input
-			aria-label="SpeechDrop room code"
-			placeholder="SpeechDrop Code"
-			bind:value={roomCode}
-			on:input={() => {
-				shareSpeechDropCode(roomCode);
-				editRoomCode();
-			}}
+<section class="speechdrop-panel" aria-label="SpeechDrop">
+	<PanelHeader name="SpeechDrop" detail={files.length ? String(files.length) : null}>
+		<Button
+			icon="upload"
+			ariaLabel="Flow a DOCX from this device"
+			tooltip="flow tags from a DOCX on this device"
+			disabled={!flowOpen}
+			disabledReason="Open a flow first"
+			on:click={() => localFile.click()}
 		/>
-	</div>
+	</PanelHeader>
+	<input
+		bind:this={localFile}
+		type="file"
+		accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+		hidden
+		on:change={flowLocalFile}
+	/>
+	<PanelField
+		ariaLabel="SpeechDrop room code"
+		placeholder="room code"
+		spellcheck={false}
+		bind:value={roomCode}
+		on:input={() => {
+			shareSpeechDropCode(roomCode);
+			editRoomCode();
+		}}
+	/>
 	{#if loading}
-		<p class="status">Connecting…</p>
+		<PanelStatus>Connecting…</PanelStatus>
 	{:else if error}
-		<p class="status error" role="status">{error}</p>
+		<PanelStatus error>{error}</PanelStatus>
 	{/if}
-	{#if $cardMirror.state === 'connected' && $cardMirrorDocuments.supported}
+	{#if canOpenInCardMirror}
 		<label class="auto-open"
 			><input
 				type="checkbox"
 				checked={autoOpen}
 				on:change={(e) => settings.setValue('cardMirrorOpenSpeechDrop', e.currentTarget.checked)}
-			/> Open DOCX downloads in CardMirror</label
+			/>open DOCX downloads in CardMirror</label
 		>
 	{/if}
-	{#if status}<p class="status" role="status">{status}</p>{/if}
-	{#if $cardMirrorDocuments.sending}<p class="status" role="status">
+	{#if status}<PanelStatus>{status}</PanelStatus>{/if}
+	{#if $cardMirrorDocuments.sending}<PanelStatus>
 			Sending {$cardMirrorDocuments.sending}: {$cardMirrorDocuments.progress}%
-		</p>{/if}
+		</PanelStatus>{/if}
 	{#if files.length > 0}
 		<ul class="file-list">
-			{#each files as file}
+			{#each files as file (file.index)}
+				{@const docx = /\.docx$/i.test(file.name)}
 				<li>
-					<Button
-						icon="download"
-						text={file.name}
-						tooltip="download this file from the room"
-						on:click={() => documentAction(file, 'download')}
+					<PanelRow
+						ariaLabel={file.name}
+						title="download"
 						disabled={fileBusy !== null}
-					/>
-
-					<div class="file-actions">
-						<Button
-							icon="file"
-							text="Use for transcript"
-							toggled={$speechDocumentSource?.room === loadedRoomCode &&
-								$speechDocumentSource.index === file.index}
-							disabled={fileBusy !== null}
-							on:click={() => documentAction(file, 'compare')}
-						/>
-						{#if /\.docx$/i.test(file.name) && $cardMirror.state === 'connected' && $cardMirrorDocuments.supported}<Button
-								icon="arrowRight"
-								text="Open in CardMirror"
-								disabled={fileBusy !== null || !!$cardMirrorDocuments.sending}
-								on:click={() => documentAction(file, 'open')}
-							/>{/if}
-					</div>
+						selected={fileBusy === file.index}
+						on:click={() => documentAction(file, 'download')}
+					>
+						{file.name}
+						<svelte:fragment slot="actions">
+							{#if docx}<Button
+									icon="checklist"
+									ariaLabel="Flow tags"
+									tooltip="flow this document's tags"
+									disabled={fileBusy !== null || !flowOpen}
+									disabledReason={flowOpen ? 'busy' : 'Open a flow first'}
+									on:click={() => documentAction(file, 'flow')}
+								/>{/if}
+							<Button
+								icon="mic"
+								ariaLabel="Use for transcript"
+								tooltip="compare the transcript with this document"
+								toggled={$speechDocumentSource?.room === loadedRoomCode &&
+									$speechDocumentSource.index === file.index}
+								disabled={fileBusy !== null}
+								on:click={() => documentAction(file, 'compare')}
+							/>
+							{#if docx && canOpenInCardMirror}<Button
+									icon="arrowRight"
+									ariaLabel="Open in CardMirror"
+									tooltip="open in CardMirror"
+									disabled={fileBusy !== null || !!$cardMirrorDocuments.sending}
+									on:click={() => documentAction(file, 'open')}
+								/>{/if}
+						</svelte:fragment>
+					</PanelRow>
 				</li>
 			{/each}
 		</ul>
 	{:else if loadedRoomCode && !error}
-		<p class="status">This room has no files.</p>
+		<PanelStatus>This room has no files.</PanelStatus>
 	{/if}
-</div>
+</section>
 
 <style>
 	.speechdrop-panel {
@@ -381,67 +433,17 @@
 		flex-direction: column;
 		gap: var(--padding-small);
 	}
-	.file-actions {
-		display: flex;
-		flex-wrap: wrap;
-	}
 	.auto-open {
 		display: flex;
-		align-items: flex-start;
-		gap: var(--padding-small);
-		color: var(--text-weak);
-	}
-	.file-list li {
-		width: 100%;
-		min-width: 0;
-	}
-	.file-list :global(.element) {
-		width: auto;
-		min-width: 0;
-		max-width: 100%;
-	}
-	.file-list :global(button.top) {
-		max-width: 100%;
-		box-sizing: border-box;
-		height: auto;
-		min-height: calc(var(--button-size) + var(--padding) * 2);
-		white-space: normal;
-		overflow-wrap: anywhere;
-	}
-	.room-entry {
-		display: flex;
 		align-items: center;
-		gap: var(--padding-small);
-	}
-	.room-entry input {
-		min-width: 0;
-		flex: 1;
-		box-sizing: border-box;
-		padding: var(--padding);
-		border: none;
-		border-radius: var(--border-radius);
-		outline: none;
-		background: var(--background-indent);
-		color: var(--text);
-		font: inherit;
-		transition: background var(--transition-speed);
-	}
-	.room-entry input:focus {
-		background: var(--background-active);
-	}
-	.room-entry input::placeholder {
-		color: var(--text-weak);
-	}
-	.auto-open input {
-		accent-color: var(--color-accent);
-	}
-	.status {
-		margin: 0;
+		gap: var(--padding);
+		padding: 0 var(--padding);
 		color: var(--text-weak);
 		font-size: 0.85em;
 	}
-	.status.error {
-		color: var(--text-error);
+	.auto-open input {
+		accent-color: var(--color-accent);
+		margin: 0;
 	}
 	.file-list {
 		list-style: none;
@@ -449,8 +451,7 @@
 		margin: 0;
 		display: flex;
 		flex-direction: column;
-		align-items: flex-start;
-		overflow-y: auto;
+		gap: var(--padding-small);
 		min-height: 0;
 	}
 </style>

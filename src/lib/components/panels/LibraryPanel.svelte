@@ -1,14 +1,16 @@
 <script lang="ts">
-	import PanelPlaceholder from './PanelPlaceholder.svelte';
+	import PanelHeader from './PanelHeader.svelte';
+	import PanelRow from './PanelRow.svelte';
+	import PanelStatus from './PanelStatus.svelte';
 	import LibraryPanelRow from './LibraryPanelRow.svelte';
 	import { savedNodesDatas } from '$lib/models/autoSave';
+	import { settings } from '$lib/models/settings';
 	import {
 		library,
 		refreshLibrary,
 		readLibraryFile,
 		directFolderAccess
 	} from '$lib/models/flowLibrary';
-	export let available = true;
 	let error = '';
 	async function navigate(path: string[]) {
 		try {
@@ -24,19 +26,23 @@
 </script>
 
 <section class="library-panel" aria-label="Flow library panel">
-	{#if !available}
-		<PanelPlaceholder name="Flow library" />
-	{:else}
-		{#if error}<p role="alert">{error}</p>{/if}
+	<PanelHeader
+		name="Flow library"
+		detail={directFolderAccess && $library.name
+			? [$library.name, ...$library.path].join('/')
+			: null}
+		tooltip="click a page to copy it into this flow, or drag it between tabs"
+	/>
+	{#if error}<PanelStatus error>{error}</PanelStatus>{/if}
+	<div class="list" class:customScrollbar={settings.data.customScrollbar.value}>
 		{#if directFolderAccess && $library.name}
-			{#if $library.path.length}<button
-					class="folder"
-					aria-label="Up one folder"
-					on:click={() => navigate($library.path.slice(0, -1))}>../</button
+			{#if $library.path.length}<PanelRow
+					weak
+					ariaLabel="Up one folder"
+					on:click={() => navigate($library.path.slice(0, -1))}>../</PanelRow
 				>{/if}
-			{#each $library.folders as name}<button
-					class="folder"
-					on:click={() => navigate([...$library.path, name])}>{name}/</button
+			{#each $library.folders as name}<PanelRow on:click={() => navigate([...$library.path, name])}
+					>{name}/</PanelRow
 				>{/each}
 			{#each $library.files as name, index (name)}
 				<LibraryPanelRow
@@ -56,38 +62,26 @@
 						return raw;
 					}}
 				/>
+			{:else}
+				<PanelStatus>No saved flows yet.</PanelStatus>
 			{/each}
 		{/if}
-	{/if}
+	</div>
 </section>
 
 <style>
 	.library-panel {
-		overflow: auto;
-		min-height: 0;
 		display: flex;
 		flex-direction: column;
 		gap: var(--padding-small);
+		min-height: 0;
+		flex: 1;
 	}
-	.folder {
-		border: none;
-		background: none;
-		color: var(--text);
-		text-align: left;
-		font: inherit;
-		padding: var(--padding);
-		border-radius: var(--border-radius);
-		transition: background var(--transition-speed);
-	}
-	.folder:hover {
-		background: var(--background-indent);
-	}
-	.folder:active {
-		transition: none;
-		background: var(--background-active);
-	}
-	p {
-		margin: 0;
-		color: var(--text-weak);
+	.list {
+		display: flex;
+		flex-direction: column;
+		gap: var(--padding-small);
+		overflow: auto;
+		min-height: 0;
 	}
 </style>

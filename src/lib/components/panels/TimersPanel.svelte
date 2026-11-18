@@ -8,10 +8,6 @@
 
 <style>
 	.timer-panel {
-		display: flex;
-		flex-direction: column;
-		gap: var(--padding);
 		width: 100%;
-		overflow-y: auto;
 	}
 </style>
