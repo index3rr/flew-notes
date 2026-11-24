@@ -1,5 +1,12 @@
+import { outlineRead, outlineInsert, disposeOutline } from './outline';
 import { Connection } from '../../src/lib/integrations/cardmirror/connection';
-import { record, string } from '../../src/lib/integrations/cardmirror/protocol';
+import { captureEvidence } from './evidence';
+import {
+	record,
+	string,
+	validEvidence,
+	type ExportItem
+} from '../../src/lib/integrations/cardmirror/protocol';
 import type { Api, Definition } from './api';
 import { DocumentReceiver } from '../../src/lib/integrations/cardmirror/documents';
 
@@ -41,8 +48,31 @@ const documents = new DocumentReceiver(
 );
 const peer = new Connection(
 	async (method, params) => {
-		if (method === 'integration.capabilities' || method.startsWith('document.'))
-			return documents.handle(method, params);
+		if (method === 'outline.read' && record(params)) return outlineRead(params.speech === true);
+		if (method === 'outline.insert' && record(params)) {
+			const items =
+				params.items ??
+				(Array.isArray(params.texts) ? params.texts.map((text) => ({ text })) : null);
+			if (
+				!Array.isArray(items) ||
+				!items.length ||
+				items.length > 500 ||
+				!items.every(
+					(item) =>
+						record(item) &&
+						string(item.text) &&
+						(item.evidence === undefined ||
+							(Array.isArray(item.evidence) &&
+								item.evidence.length <= 500 &&
+								item.evidence.every(validEvidence)))
+				)
+			)
+				throw new Error('Invalid CardMirror arguments.');
+			return outlineInsert(params.speech === true, items as ExportItem[]);
+		}
+		if (method === 'integration.capabilities')
+			return { ...((await documents.handle(method, params)) as object), evidence: true };
+		if (method.startsWith('document.')) return documents.handle(method, params);
 		if (method !== 'source.jump' || !record(params) || !string(params.token) || !host)
 			throw new Error('Invalid source request.');
 		return host.jumpToSource(params.token);
@@ -62,6 +92,7 @@ const peer = new Connection(
 	}
 );
 function dispose() {
+	disposeOutline();
 	documents.clear();
 	peer.close();
 	dialog?.close();
@@ -109,6 +140,10 @@ function connect(api: Api) {
 	offer.style.width = '100%';
 	offerLabel.append(offer);
 	dialog.append(offerLabel);
+	const replyLink = element('a', 'Confirm in Flew');
+	replyLink.target = '_blank';
+	replyLink.rel = 'noreferrer';
+	replyLink.hidden = true;
 	const replyLabel = element('label', 'CardMirror reply key');
 	const reply = element('textarea');
 	reply.setAttribute('aria-label', 'CardMirror reply key');
@@ -140,9 +175,14 @@ function connect(api: Api) {
 		button('Create reply key', async () => {
 			reply.value = '';
 			reply.value = await peer.answer(offer.value);
+			const url = new URL('https://flew-notes.netlify.app/app');
+			url.hash = new URLSearchParams({ cardMirrorReply: reply.value }).toString();
+			replyLink.href = url.href;
+			replyLink.hidden = false;
 		})
 	);
 	dialog.append(
+		replyLink,
 		replyLabel,
 		button('Copy reply key', () => navigator.clipboard.writeText(reply.value)),
 		status
@@ -208,7 +248,10 @@ async function send(api: Api, mode?: 'column' | 'cell', placement?: 'responses')
 						: 0,
 				items: selection.items.map((item) => ({
 					...item,
-					key: selection.docId + '|' + item.text.toLowerCase()
+					key: selection.docId + '|' + item.text.toLowerCase(),
+					evidence: ['tag', 'cite', 'undertag', 'analytic'].includes(item.kind)
+						? captureEvidence(item.source)
+						: undefined
 				}))
 			});
 		},

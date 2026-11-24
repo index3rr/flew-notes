@@ -1,8 +1,9 @@
 <script lang="ts">
+	import PartnerMessage from '../PartnerMessage.svelte';
 	import PanelHeader from './PanelHeader.svelte';
 	import PanelField from './PanelField.svelte';
 	import PanelStatus from './PanelStatus.svelte';
-	import { partnerNotices } from '$lib/models/collaboration';
+	import { partnerNotices, enablePartnerNotifications } from '$lib/models/collaboration';
 	import { sendPartnerMessage } from '$lib/models/sharingChannel';
 	import Button from '../Button.svelte';
 	import Share from '../Share.svelte';
@@ -11,8 +12,6 @@
 	import { nodes } from '$lib/models/store';
 	import { focusId, lastFocusIds, selectedFlowId } from '$lib/models/focus';
 	import { currentArgument } from '$lib/models/argumentNavigation';
-	import { getColumnName } from '$lib/models/node';
-	import ArgumentLink from '../ArgumentLink.svelte';
 	import { resolvePendingAction } from '$lib/models/nodePendingAction';
 	$: argument = currentArgument($nodes, $selectedFlowId, $focusId, $lastFocusIds);
 	let text = '';
@@ -24,7 +23,8 @@
 	}
 	let error = '';
 	function send() {
-		if (sendPartnerMessage(text)) {
+		const match = text.match(/\[\[argument:([^\]]+)\]\]/);
+		if (sendPartnerMessage(text, match?.[1] as import('$lib/models/node').BoxId | undefined)) {
 			text = '';
 			error = '';
 		} else error = 'Connect to a partner using Share before sending a message.';
@@ -33,34 +33,24 @@
 		resolvePendingAction($nodes);
 		const selected = currentArgument();
 		if (!selected) return;
-		const page = $nodes[selected.node.value.flowId]?.value.content || 'Untitled page';
-		const message = `${text.trim() || 'Please review'}: ${page} · ${
-			getColumnName($nodes, selected.id) || 'Argument'
-		}\n${selected.node.value.content.slice(0, 1200)}`;
-		if (sendPartnerMessage(message, selected.id)) {
-			text = '';
-			error = '';
-		} else error = 'Connect to a partner using Share before sending a message.';
+		text += `${text && !text.endsWith(' ') ? ' ' : ''}[[argument:${selected.id}]]`;
 	}
 </script>
 
 <section class="collaboration-panel" aria-label="Collaboration">
 	<PanelHeader name="Collaboration">
+		<Button
+			icon="screen"
+			ariaLabel="Enable partner notifications"
+			tooltip="enable system notifications"
+			on:click={enablePartnerNotifications}
+		/>
 		{#if $connections.tag === 'empty'}
 			<Button
 				icon="people"
 				ariaLabel="Enable collaboration"
 				tooltip="share this flow with your partner"
 				on:click={() => openPopup(Share, 'Share')}
-			/>
-		{:else}
-			<Button
-				icon="arrowRight"
-				ariaLabel="Send selected argument"
-				tooltip="send your partner a link to the selected argument"
-				disabled={!argument}
-				disabledReason="Select an argument first"
-				on:click={sendArgument}
 			/>
 		{/if}
 	</PanelHeader>
@@ -70,14 +60,25 @@
 		<div class="messages" aria-live="polite">
 			{#each $partnerNotices as notice (notice.id)}
 				<div class="message" class:received={notice.received}>
-					<p><span class="from">{notice.received ? 'Partner' : 'You'}</span>{notice.text}</p>
-					{#if notice.argumentId}<ArgumentLink id={notice.argumentId} />{/if}
+					<p>
+						<span class="from">{notice.received ? 'Partner' : 'You'}</span><PartnerMessage
+							text={notice.text}
+							argumentId={notice.argumentId}
+						/>
+					</p>
 				</div>
 			{:else}
 				<PanelStatus>Messages to and from your partner show up here.</PanelStatus>
 			{/each}
 		</div>
 		<form class="compose" on:submit|preventDefault>
+			<Button
+				icon="link"
+				ariaLabel="Insert selected argument link"
+				tooltip="insert a link to the selected argument"
+				disabled={!argument}
+				on:click={sendArgument}
+			/>
 			<PanelField
 				multiline
 				rows={2}

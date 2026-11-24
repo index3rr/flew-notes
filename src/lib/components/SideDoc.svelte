@@ -1,10 +1,12 @@
 <script lang="ts">
 	import { settings } from '$lib/models/settings';
-	import { sideDocText } from '$lib/models/store';
+	import { documentOpen } from '$lib/models/document';
+	import { sideDocText, frozen } from '$lib/models/store';
 </script>
 
 <div class="document">
 	<textarea
+		disabled={$frozen || !$documentOpen}
 		class="text"
 		placeholder="type notes here"
 		aria-label="Notes"

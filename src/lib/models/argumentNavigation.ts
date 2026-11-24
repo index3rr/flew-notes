@@ -14,7 +14,7 @@ export function currentArgument(
 	if (!page) return null;
 	for (const id of [active, last[page]]) {
 		const node = id ? tree[id] : null;
-		if (id && node?.value.tag === 'box' && node.value.flowId === page)
+		if (id && node?.value?.tag === 'box' && node.value.flowId === page)
 			return { id: id as BoxId, node: node as Node<Box> };
 	}
 	return null;

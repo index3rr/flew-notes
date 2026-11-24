@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { readPageDrag } from '$lib/models/panelDrag';
+	import AddTab from '$lib/components/AddTab.svelte';
 	import Button from '$lib/components/Button.svelte';
 	import FlowLibrarySetup from '$lib/components/FlowLibrarySetup.svelte';
 	import { documentTitle } from '$lib/models/document';
@@ -30,7 +32,7 @@
 	import { dev } from '$app/environment';
 	import { openPopup } from '$lib/models/popup';
 	import type { FlowId, Nodes } from '$lib/models/node';
-	import { disconnectCardMirror } from '$lib/models/cardMirror';
+	import { disconnectCardMirror, acceptCardMirrorLink } from '$lib/models/cardMirror';
 	import { onDestroy, onMount } from 'svelte';
 	import { activeMouse, nodes, pendingAction, frozen } from '$lib/models/store';
 	import { createKeyDownHandler } from '$lib/models/key';
@@ -76,6 +78,7 @@
 	}
 
 	onMount(() => {
+		acceptCardMirrorLink();
 		libraryBusy = true;
 		void restoreLibrary().finally(() => {
 			libraryBusy = false;
@@ -182,6 +185,7 @@
 	async function deleteFlowAndFocus() {
 		if ($selectedFlowId == null) return;
 
+		history.setNextBeforeFocus($selectedFlowId, 'root');
 		blurFlow();
 
 		let oldIndex = $nodes.root.children.indexOf($selectedFlowId);
@@ -213,17 +217,7 @@
 		$activeMouse = true;
 	}
 	const keyDownHandler = createKeyDownHandler({
-		control: {
-			n: {
-				handle: () => {
-					const style = getDebateStyleFlow('primary');
-					if (style == null) return;
-					addFlow(style);
-				},
-				require: () => $documentOpen && getDebateStyleFlow('primary') != null
-			}
-		},
-		'control shift': {
+		'commandControl alt shift': {
 			n: {
 				handle: () => {
 					const style = getDebateStyleFlow('secondary');
@@ -234,14 +228,17 @@
 			}
 		},
 		'commandControl shift': {
+			s: {
+				handle: saveFlow,
+				require: () => $documentOpen && !$frozen && !libraryBusy,
+				preventDefault: 'always'
+			},
 			z: {
 				handle: () => {
-					if ($selectedFlowId == null) return;
-					history.redo($selectedFlowId, $pendingAction);
+					history.redo($selectedFlowId ?? 'root', $pendingAction);
 				},
 				require: () => {
-					if ($selectedFlowId == null) return false;
-					return history.canRedo($selectedFlowId, $pendingAction);
+					return history.canRedo($selectedFlowId ?? 'root', $pendingAction);
 				},
 				stopRepeat: false,
 				preventDefault: 'always'
@@ -250,26 +247,31 @@
 		commandControl: {
 			s: {
 				handle: () => {
-					if ($library.imported) void saveNodes();
-					else saveFlow();
+					void saveDocument();
 				},
 				require: () => $documentOpen && !$frozen && !libraryBusy,
 				preventDefault: 'always'
 			},
 			z: {
 				handle: () => {
-					if ($selectedFlowId == null) return;
-					history.undo($selectedFlowId, $pendingAction);
+					history.undo($selectedFlowId ?? 'root', $pendingAction);
 				},
 				require: () => {
-					if ($selectedFlowId == null) return false;
-					return history.canUndo($selectedFlowId, $pendingAction);
+					return history.canUndo($selectedFlowId ?? 'root', $pendingAction);
 				},
 				stopRepeat: false,
 				preventDefault: 'always'
 			}
 		},
 		'commandControl alt': {
+			n: {
+				handle: () => {
+					const style = getDebateStyleFlow('primary');
+					if (style == null) return;
+					addFlow(style);
+				},
+				require: () => $documentOpen && getDebateStyleFlow('primary') != null
+			},
 			ArrowUp: {
 				handle: () => {
 					if ($selectedFlowId == null) return;
@@ -365,12 +367,17 @@
 
 	function dropPage(event: DragEvent) {
 		const raw = event.dataTransfer?.getData('application/x-flew-page');
-		if (!raw || $frozen || !$documentOpen) return;
+		if (
+			!raw ||
+			$frozen ||
+			!$documentOpen ||
+			(event.target instanceof Element &&
+				event.target.closest('[data-box-id], .autoflow-panel, .transcript'))
+		)
+			return;
 		event.preventDefault();
 		try {
-			const data = JSON.parse(raw);
-			const source = loadNodes({ version: 1, nodes: data.nodes }, false);
-			if (!source.root.children.includes(data.id)) throw new Error('Invalid page');
+			const { source, ids } = readPageDrag(raw);
 			let index = $nodes.root.children.length;
 			const tabs = event.target instanceof Element ? event.target.closest('.tabs') : null;
 			const targetRow =
@@ -390,8 +397,10 @@
 				});
 				if (before) index = Number(before.dataset.index);
 			}
-			const id = importFlowPage(source, data.id, index);
-			if (id) clickTab(id);
+			for (const sourceId of ids) {
+				const id = importFlowPage(source, sourceId, index++);
+				if (id) clickTab(id);
+			}
 		} catch (error) {
 			libraryError = (error as Error).message;
 		}
@@ -479,7 +488,7 @@
 		hidden
 		on:change={(event) => readUpload(event, $library.connected && !$library.imported)}
 	/>
-	<div class="grid" class:showPrelude={!($nodes.root.children.length > 0)}>
+	<div class="grid" class:showPrelude={!$documentOpen}>
 		<div class="sidebar">
 			<div class="sidebar-head">
 				<div class="header">
@@ -592,7 +601,7 @@
 				bind:switchSpeakers
 			/>
 		</div>
-		{#if $nodes.root.children.length > 0}
+		{#if $documentOpen}
 			{#if $selectedFlowId != null && $nodes[$selectedFlowId]}
 				{#key $selectedFlowId}
 					<div class="title">
@@ -609,6 +618,17 @@
 						<Flow on:focusFlow={focusFlow} flowId={$selectedFlowId} />
 					</div>
 				{/key}
+			{:else}
+				<div class="flow empty-flow">
+					<div class="empty-document">
+						<AddTab {addFlow} bind:switchSpeakers /><Button
+							icon="undo"
+							text="Undo"
+							disabled={!history.canUndo('root', $pendingAction)}
+							on:click={() => history.undo('root', $pendingAction)}
+						/>
+					</div>
+				</div>
 			{/if}
 		{:else}
 			<div class="prelude">
@@ -637,6 +657,19 @@
 </main>
 
 <style>
+	.empty-flow {
+		grid-row: 1 / -1;
+		grid-column: 2 / 4;
+	}
+	.empty-document {
+		min-height: 100%;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: var(--padding-big);
+		font-size: 1.5em;
+	}
 	:global(body.app) {
 		overflow-x: clip;
 		overflow-y: clip;

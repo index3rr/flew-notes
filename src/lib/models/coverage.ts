@@ -63,8 +63,20 @@ function hasText(node: Node<Box>) {
 	return node.value.content.trim().length > 0;
 }
 
-// A real response is a child cell with words in it. Extensions and blank cells mean "skipped".
-function isAnswered(nodes: Nodes, node: Node<Box>) {
+// A real response is a child cell with words in it, or a grouped reply that lists this cell in
+// `respondsTo`. Extensions and blank cells mean "skipped".
+function groupAnswered(nodes: Nodes): Set<BoxId> {
+	const answered = new Set<BoxId>();
+	for (const node of Object.values(nodes)) {
+		if (node?.value.tag !== 'box' || !node.value.respondsTo?.length) continue;
+		if (node.value.isExtension || node.value.empty || !node.value.content.trim()) continue;
+		for (const id of node.value.respondsTo) answered.add(id);
+	}
+	return answered;
+}
+
+function isAnswered(nodes: Nodes, id: BoxId, node: Node<Box>, grouped: Set<BoxId>) {
+	if (grouped.has(id)) return true;
 	return node.children.some((id) => {
 		const child = box(nodes, id);
 		return !!child && !child.value.isExtension && !child.value.empty && hasText(child);
@@ -115,6 +127,7 @@ function item(nodes: Nodes, id: BoxId, node: Node<Box>): CoverageItem {
 
 export function computeCoverage(nodes: Nodes, speech: string): Coverage {
 	const pages: CoveragePage[] = [];
+	const grouped = groupAnswered(nodes);
 	for (const flowId of nodes.root.children) {
 		const flow = nodes[flowId]?.value;
 		if (flow?.tag !== 'flow') continue;
@@ -133,7 +146,7 @@ export function computeCoverage(nodes: Nodes, speech: string): Coverage {
 			const node = box(nodes, id);
 			if (!node || node.value.empty || node.value.isExtension || node.value.crossed) continue;
 			if (!hasText(node)) continue;
-			if (isAnswered(nodes, node)) page.answered++;
+			if (isAnswered(nodes, id, node, grouped)) page.answered++;
 			else page.toAnswer.push(item(nodes, id, node));
 		}
 		if (column >= 2)
@@ -143,7 +156,7 @@ export function computeCoverage(nodes: Nodes, speech: string): Coverage {
 				if (!hasText(node) && !node.value.isExtension) continue;
 				// An extension cell of yours stands for the argument it carries forward.
 				if (node.value.isExtension && !rootText(nodes, node)) continue;
-				if (!isAnswered(nodes, node)) page.dropped.push(item(nodes, id, node));
+				if (!isAnswered(nodes, id, node, grouped)) page.dropped.push(item(nodes, id, node));
 			}
 		if (page.toAnswer.length || page.answered || page.dropped.length) pages.push(page);
 	}

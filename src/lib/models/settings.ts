@@ -31,6 +31,7 @@ type SliderSetting = SettingBasic<number> & {
 	};
 };
 export type Hexcode = `#${string}`;
+type TextSetting = SettingBasic<string> & { type: 'text' };
 type ColorSetting = SettingBasic<Hexcode> & {
 	type: 'color';
 };
@@ -39,7 +40,7 @@ export type SaveableSettings = {
 	isSettings: boolean;
 	version: number;
 };
-export type Setting = ToggleSetting | RadioSetting | SliderSetting | ColorSetting;
+export type Setting = ToggleSetting | RadioSetting | SliderSetting | ColorSetting | TextSetting;
 class Settings {
 	data: { [key: string]: Setting };
 	callbacks: { [key: string]: ((key: string) => void)[] } = { any: [] };
@@ -50,7 +51,7 @@ class Settings {
 	init() {
 		this.loadFromLocalStorage();
 	}
-	setValue(key: string, value: boolean | number | Hexcode): void {
+	setValue(key: string, value: boolean | number | string): void {
 		const changed = this.data[key].value !== value;
 		this.data[key].value = value;
 		if (key === 'funMode') {
@@ -68,7 +69,7 @@ class Settings {
 		for (const callback of this.callbacks['any']) {
 			callback(key);
 		}
-		if (changed && key !== 'telemetry' && key !== 'funMode') {
+		if (changed && key !== 'telemetry' && key !== 'funMode' && this.data[key].type !== 'text') {
 			trackSettingChanged(key, value);
 		}
 	}
@@ -97,7 +98,11 @@ class Settings {
 			setInterval(() => {
 				if (!(this.data.funMode.value as boolean)) return;
 				const keys = Object.keys(this.data).filter(
-					(k) => this.data[k].type !== 'slider' && k !== 'funMode' && k !== 'colorTheme'
+					(k) =>
+						this.data[k].type !== 'slider' &&
+						k !== 'funMode' &&
+						k !== 'colorTheme' &&
+						k !== 'speechDropPromo'
 				);
 				if (keys.length === 0) return;
 				const k = keys[Math.floor(Math.random() * keys.length)];
@@ -228,7 +233,8 @@ class Settings {
 				key === 'funMode' ||
 				key === 'telemetry' ||
 				key === 'maxLocalSaves' ||
-				key === 'transcriptModel'
+				key === 'transcriptModel' ||
+				key === 'speechDropPromo'
 			)
 				continue;
 			const setting = this.data[key];
@@ -268,7 +274,8 @@ export const settings: Settings = new Settings({
 				'Parli',
 				'Classic',
 				'British Parliamentary',
-				'International Public Policy Forum'
+				'International Public Policy Forum',
+				'Extemp Debate'
 			]
 		},
 		info: "Already created flows won't be affected by this setting"
@@ -779,12 +786,65 @@ export const settings: Settings = new Settings({
 		auto: true,
 		type: 'toggle'
 	},
+
+	autoflowPanel: {
+		name: 'Autoflow',
+		value: 0,
+		auto: 0,
+		type: 'radio',
+		detail: { options: ['Off', 'Left', 'Right', 'Left collapsed', 'Right collapsed'] }
+	},
+	transcriptSource: {
+		name: 'Transcription audio controls',
+		value: 2,
+		auto: 2,
+		type: 'radio',
+		detail: { options: ['Microphone', 'Tab audio', 'Both'] }
+	},
+	transcriptAnalyticsOnly: {
+		name: 'Only show analytics while recording',
+		value: false,
+		auto: false,
+		type: 'toggle'
+	},
+	timerStartOnPhrase: {
+		name: 'Start speech timer on a phrase',
+		value: false,
+		auto: false,
+		type: 'toggle'
+	},
+	timerStartPhrases: {
+		name: 'Timer start phrases',
+		value: 'begin, start',
+		auto: 'begin, start',
+		type: 'text',
+		info: 'Separate phrases with commas. Requires transcription.'
+	},
+	timerExcludeCx: {
+		name: 'Exclude CX and prep from automatic starts',
+		value: true,
+		auto: true,
+		type: 'toggle'
+	},
+	pacingWordWeight: {
+		name: 'Weight pacing by cell word count',
+		value: false,
+		auto: false,
+		type: 'toggle'
+	},
 	cardMirrorPanel: {
 		name: 'CardMirror',
 		value: 0,
 		auto: 0,
 		type: 'radio',
 		detail: { options: ['Off', 'Left', 'Right', 'Left collapsed', 'Right collapsed'] }
+	},
+	speechDropPromo: {
+		name: 'Add Flew Notes promo to uploaded DOCX files',
+		value: false,
+		auto: false,
+		type: 'toggle',
+		info: "Appends: your opponent is using flew-notes.netlify.app, the only flowing app that doesn't suck"
 	},
 	cardMirrorOpenSpeechDrop: {
 		name: 'Open SpeechDrop DOCX downloads in connected CardMirror',
@@ -860,7 +920,7 @@ export const settings: Settings = new Settings({
 		value: 0,
 		auto: 0,
 		type: 'radio',
-		info: 'Automatic picks Accurate when your browser supports WebGPU and Balanced otherwise. Larger models download more the first time (Fast ~40 MB, Balanced ~80 MB, Accurate ~250–600 MB, Best ~560 MB and needs WebGPU).',
+		info: 'Automatic favors Best on half-precision WebGPU and Accurate otherwise. Larger models download more the first time (Fast ~40 MB, Balanced ~80 MB, Accurate ~250–600 MB, Best ~560 MB and needs WebGPU).',
 		detail: { options: ['Automatic', 'Fast', 'Balanced', 'Accurate', 'Best'] }
 	},
 	speechDropPanel: {
@@ -941,6 +1001,7 @@ export const settings: Settings = new Settings({
 	},
 	pacingEnabled: {
 		name: 'Enable pacing',
+		info: "Type ':30' in a cell to fix that cell's allocation at 30 seconds.",
 		type: 'toggle',
 		value: false,
 		auto: false
@@ -1003,6 +1064,11 @@ export const settingsGroups: SettingsGroup[] = [
 			'libraryPanel',
 			'transcriptPanel',
 			'transcriptModel',
+			'transcriptSource',
+			'transcriptAnalyticsOnly',
+			'autoflowPanel',
+			'cardMirrorOpenSpeechDrop',
+			'speechDropPromo',
 			'collaborationPanel',
 			'cardMirrorPanel',
 			'notesPanel',
@@ -1104,7 +1170,16 @@ export const settingsGroups: SettingsGroup[] = [
 	},
 	{
 		name: 'Timers',
-		settings: ['timerAutoAdvance', 'timerStartOnSpeech', 'pacingEnabled', 'pacingGracePeriod']
+		settings: [
+			'timerAutoAdvance',
+			'timerStartOnSpeech',
+			'timerStartOnPhrase',
+			'timerStartPhrases',
+			'timerExcludeCx',
+			'pacingEnabled',
+			'pacingWordWeight',
+			'pacingGracePeriod'
+		]
 	},
 	{ name: 'Fun', settings: ['funMode'] }
 ];

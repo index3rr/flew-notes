@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Button from './Button.svelte';
 	import { downloadJson, downloadXlsx } from '$lib/models/file';
+	import { documentOpen } from '$lib/models/document';
 	import { nodes } from '$lib/models/store';
 	import { resolvePendingAction } from '$lib/models/nodePendingAction';
 
@@ -24,7 +25,7 @@
 				downloadJson($nodes);
 				closePopup();
 			}}
-			disabled={$nodes.root.children.length == 0}
+			disabled={!$documentOpen}
 			disabledReason={'nothing to download'}
 			palette="accent"
 		/>

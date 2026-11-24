@@ -43,9 +43,13 @@
 	}
 </script>
 
-<div class="top" bind:this={element} in:settingIn={{skip: false}} out:settingOut={{skip: false}}>
-	<div class="spotlight" style={`--spotlight:${$spotlight}`}>
-	</div>
+<div
+	class="top"
+	bind:this={element}
+	in:settingIn={{ skip: false }}
+	out:settingOut={{ skip: false }}
+>
+	<div class="spotlight" style={`--spotlight:${$spotlight}`} />
 	<span class="above">
 		<div class="titleReset">
 			<h2>{setting.name}</h2>
@@ -78,6 +82,14 @@
 			on:forceUpdate={() => setValue(value)}
 		/>
 	{/if}
+	{#if setting.type == 'text'}
+		<input
+			class="text-setting"
+			aria-label={setting.name}
+			bind:value
+			on:input={() => setValue(value)}
+		/>
+	{/if}
 	{#if setting.type == 'slider'}
 		<Slider bind:value auto={setting.auto} detail={setting.detail} />
 	{/if}
@@ -87,6 +99,20 @@
 </div>
 
 <style>
+	.text-setting {
+		box-sizing: border-box;
+		width: 100%;
+		background: var(--background-indent);
+		color: var(--text);
+		font: inherit;
+		border: none;
+		outline: none;
+		border-radius: var(--border-radius);
+		padding: var(--padding);
+	}
+	.text-setting:focus {
+		background: var(--background-active);
+	}
 	.top {
 		position: relative;
 		border-radius: var(--border-radius);
@@ -103,8 +129,8 @@
 		position: absolute;
 		height: 100%;
 		width: 100%;
-		top: calc(-1 * var(--padding)/2);
-		left: calc(-1 * var(--padding)/2);
+		top: calc(-1 * var(--padding) / 2);
+		left: calc(-1 * var(--padding) / 2);
 	}
 	.above {
 		position: relative;

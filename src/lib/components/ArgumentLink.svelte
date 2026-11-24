@@ -11,7 +11,7 @@
 	icon="arrowRight"
 	text="Show argument"
 	tooltip="Open the argument your partner linked"
-	disabled={$nodes[id]?.value.tag !== 'box'}
+	disabled={$nodes[id]?.value?.tag !== 'box'}
 	disabledReason="This argument is no longer in the open flow"
 	on:click={() => {
 		if (showArgument(id) && location.pathname !== '/app') void goto('/app');

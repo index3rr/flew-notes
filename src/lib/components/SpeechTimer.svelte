@@ -4,7 +4,8 @@
 	import Button from './Button.svelte';
 	import Timer from './Timer.svelte';
 	import { get } from 'svelte/store';
-	import { speechDetected } from '$lib/models/collaboration';
+	import { matchesStartPhrase } from '$lib/models/transcript';
+	import { speechDetected, transcribedPhrase } from '$lib/models/collaboration';
 	import { settings } from '$lib/models/settings';
 
 	export let resetTimeIndex: number;
@@ -72,11 +73,29 @@
 			if (
 				value > previousDetection &&
 				settings.data.timerStartOnSpeech.value &&
+				(!settings.data.timerExcludeCx.value ||
+					!/cx|cross|prep/i.test(speeches[resetTimeIndex].name)) &&
 				state.name === 'paused' &&
 				time > 0
 			)
 				start?.();
 			previousDetection = value;
+		})
+	);
+	let lastPhrase = get(transcribedPhrase).id;
+	onDestroy(
+		transcribedPhrase.subscribe(({ id, text }) => {
+			if (
+				id > lastPhrase &&
+				settings.data.timerStartOnPhrase.value &&
+				state.name === 'paused' &&
+				time > 0 &&
+				(!settings.data.timerExcludeCx.value ||
+					!/cx|cross|prep/i.test(speeches[resetTimeIndex].name)) &&
+				matchesStartPhrase(text, String(settings.data.timerStartPhrases.value))
+			)
+				start?.();
+			lastPhrase = id;
 		})
 	);
 	let pause: () => void;

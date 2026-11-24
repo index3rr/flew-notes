@@ -7,7 +7,6 @@
 	import {
 		cardMirror,
 		cardMirrorOffer,
-		cardMirrorDestination,
 		cardMirrorDocuments,
 		createCardMirrorOffer,
 		confirmCardMirror,
@@ -18,8 +17,7 @@
 	import { focusId, lastFocusIds, selectedFlowId } from '$lib/models/focus';
 	import { nodes } from '$lib/models/store';
 	import { currentArgument } from '$lib/models/argumentNavigation';
-	import type { FlowId, BoxId } from '$lib/models/node';
-	import { getColumnName } from '$lib/models/node';
+	import type { BoxId } from '$lib/models/node';
 	import { resolvePendingAction } from '$lib/models/nodePendingAction';
 
 	let reply = '';
@@ -39,13 +37,7 @@
 			sources: sources.slice(0, sourceLimit).filter((source) => source.documentTitle === title)
 		})
 	);
-	$: receivingId = $cardMirrorDestination?.flowId ?? $selectedFlowId;
-	$: page = receivingId ? $nodes[receivingId] : null;
-	$: column = $cardMirrorDestination
-		? page?.value.columns[$cardMirrorDestination.column]
-		: argument
-		? getColumnName($nodes, argument.id)
-		: page?.value.columns[0];
+
 	async function perform(action: () => Promise<unknown>) {
 		busy = true;
 		error = '';
@@ -65,16 +57,7 @@
 		link.click();
 		link.remove();
 	}
-	function chooseDestination(id: string) {
-		cardMirrorDestination.set(
-			id
-				? {
-						flowId: id as FlowId,
-						column: argument?.node.value.flowId === id ? argument.node.level - 1 : 0
-				  }
-				: null
-		);
-	}
+
 	function copyArgument() {
 		resolvePendingAction($nodes);
 		const text = currentArgument()?.node.value.content ?? '';
@@ -91,12 +74,12 @@
 
 <section class="cardmirror-panel" aria-label="CardMirror integration">
 	<PanelHeader name="CardMirror">
-		<Button
-			icon="download"
-			ariaLabel="Download CardMirror plugin"
-			tooltip="download the plugin, then load it from CardMirror's plugin settings and run “Connect to Flew”"
-			on:click={downloadPlugin}
-		/>
+		{#if $cardMirror.state !== 'connected'}<Button
+				icon="download"
+				ariaLabel="Download CardMirror plugin"
+				tooltip="download the plugin, then load it from CardMirror's plugin settings and run “Connect to Flew”"
+				on:click={downloadPlugin}
+			/>{/if}
 		{#if $cardMirror.state !== 'disconnected'}<Button
 				icon="delete"
 				ariaLabel="Disconnect CardMirror"
@@ -117,7 +100,6 @@
 			: 'Not connected'}
 	</PanelStatus>
 	{#if $cardMirror.state !== 'connected'}
-		<PanelStatus>Send arguments and open SpeechDrop documents in the desktop app.</PanelStatus>
 		<div class="steps">
 			<Button
 				icon="link"
@@ -159,40 +141,6 @@
 			{/if}
 		</div>
 	{:else}
-		<div class="destination">
-			<select
-				aria-label="CardMirror receiving page"
-				value={$cardMirrorDestination?.flowId ?? ''}
-				on:change={(e) => chooseDestination(e.currentTarget.value)}
-			>
-				<option value="">follow selected cell</option>
-				{#each $nodes.root.children as id}<option value={id}
-						>{$nodes[id]?.value.content || 'Untitled page'}</option
-					>{/each}
-			</select>
-			{#if $cardMirrorDestination && page}
-				<select
-					aria-label="CardMirror receiving column"
-					value={$cardMirrorDestination.column}
-					on:change={(e) => {
-						if ($cardMirrorDestination)
-							cardMirrorDestination.set({
-								...$cardMirrorDestination,
-								column: Number(e.currentTarget.value)
-							});
-					}}
-				>
-					{#each page.value.columns as name, index}<option value={index}>{name}</option>{/each}
-				</select>
-			{/if}
-		</div>
-		{#if $cardMirrorDestination && !page}<PanelStatus error>
-				The pinned page was closed. Choose another destination or follow the selected cell.
-			</PanelStatus>{:else}<PanelStatus>
-				Receiving in {page?.value.content || 'Untitled page'}{column
-					? ` · ${column}`
-					: ''}{$cardMirrorDestination ? ', pinned while you browse other flows' : ''}
-			</PanelStatus>{/if}
 		{#if $cardMirror.notice}<PanelStatus>{$cardMirror.notice}</PanelStatus>{/if}
 		{#if $cardMirrorDocuments.sending}<PanelStatus>
 				Sending {$cardMirrorDocuments.sending}: {$cardMirrorDocuments.progress}%
@@ -221,8 +169,10 @@
 				<PanelStatus>{group.title || 'Untitled document'}</PanelStatus>
 				{#each group.sources as source}<PanelRow
 						ariaLabel="Jump to source"
-						title="return to the original evidence in CardMirror"
-						disabled={busy || $cardMirror.state !== 'connected'}
+						title={source.token
+							? 'return to the original evidence in CardMirror'
+							: 'saved evidence attached; original document link unavailable'}
+						disabled={busy || $cardMirror.state !== 'connected' || !source.token}
 						on:click={() => perform(() => jumpToCardMirror(source.token))}
 						>{source.kind === 'cite' ? 'Citation: ' : ''}{excerpt(source.excerpt)}</PanelRow
 					>{/each}
@@ -243,27 +193,10 @@
 		min-width: 0;
 	}
 	.steps,
-	.destination,
 	.source {
 		display: flex;
 		flex-direction: column;
 		gap: var(--padding-small);
-	}
-	select {
-		width: 100%;
-		min-width: 0;
-		box-sizing: border-box;
-		padding: var(--padding);
-		font: inherit;
-		background: var(--background-indent);
-		color: var(--text);
-		border: none;
-		border-radius: var(--border-radius);
-		outline: none;
-		transition: background var(--transition-speed);
-	}
-	select:focus {
-		background: var(--background-active);
 	}
 	.steps :global(.element) {
 		width: auto;

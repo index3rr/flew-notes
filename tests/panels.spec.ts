@@ -1,4 +1,6 @@
 import { test, expect } from '@playwright/test';
+test.use({ serviceWorkers: 'block' });
+
 import { compareSpeech } from '../src/lib/models/transcript';
 
 async function settings(
@@ -296,7 +298,7 @@ test('notes and library keep their positions and show placeholders without a flo
 	const library = page.locator('.sidebar [data-panel="libraryPanel"]');
 	const notes = page.locator('.right-sidebar [data-panel="notesPanel"] .panel-placeholder');
 	await expect(library).toBeVisible();
-	await expect(library.locator('.panel-placeholder')).toHaveText('Flow library');
+	await expect(library.locator('.library-panel')).toBeVisible();
 	await expect(notes).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Notes', exact: true })).toHaveCount(0);
 	await expect(page.getByRole('button', { name: 'Flow library', exact: true })).toHaveCount(0);
@@ -304,7 +306,7 @@ test('notes and library keep their positions and show placeholders without a flo
 	await expect(page.locator('.right-sidebar').getByPlaceholder('type notes here')).toBeEditable();
 	await expect(library.locator('.panel-placeholder')).toHaveCount(0);
 	await page.getByRole('button', { name: 'Close flow', exact: true }).click();
-	await expect(library.locator('.panel-placeholder')).toHaveText('Flow library');
+	await expect(library.locator('.library-panel')).toBeVisible();
 	await expect(notes).toBeVisible();
 });
 
@@ -314,9 +316,7 @@ test('configured collapsed notes and library remain usable for viewing placehold
 	await settings(page, { notesPanel: 4, libraryPanel: 3, timersPanel: 0 });
 	await page.goto('/app');
 	await page.getByRole('button', { name: 'Flow library', exact: true }).click();
-	await expect(page.locator('[data-panel="libraryPanel"] .panel-placeholder')).toHaveText(
-		'Flow library'
-	);
+	await expect(page.locator('[data-panel="libraryPanel"] .library-panel')).toBeVisible();
 	await page.getByRole('button', { name: 'Notes', exact: true }).click();
 	await expect(page.locator('[data-panel="notesPanel"] .panel-placeholder')).toHaveText('Notes');
 });
@@ -333,7 +333,7 @@ for (const side of ['left', 'right'] as const) {
 		page
 	}) => {
 		const position = side === 'left' ? 1 : 2;
-		const ids = ['libraryPanel', 'notesPanel', 'starredPanel', 'collaborationPanel'] as const;
+		const ids = ['notesPanel', 'starredPanel'] as const;
 		await settings(page, {
 			...Object.fromEntries(ids.map((id) => [id, position])),
 			timersPanel: 0
@@ -362,19 +362,11 @@ for (const side of ['left', 'right'] as const) {
 				};
 			});
 			expect(Math.abs(size.panel - size.text)).toBeLessThan(1);
-			await expect(panel.locator('textarea, input, button')).toHaveCount(0);
-			await panel.locator('.panel-placeholder').hover();
-			await expect(panel.getByText('No flow is open.', { exact: true })).toBeVisible();
-			await page.mouse.move(0, 0);
+			await expect(panel.getByRole('button', { name: /Open a flow for/ })).toBeVisible();
 		}
 		await page.getByRole('button', { name: 'New flow', exact: true }).click();
 		await expect(container.getByPlaceholder('type notes here')).toBeEditable();
-		await expect(
-			container.getByRole('button', { name: 'Enable collaboration', exact: true })
-		).toBeVisible();
-		for (const id of ['libraryPanel', 'notesPanel']) {
-			await expect(container.locator(`[data-panel="${id}"]`)).not.toHaveClass(/auto-size/);
-		}
+
 		await page.getByRole('button', { name: 'Close flow', exact: true }).click();
 		for (const id of ids)
 			await expect(container.locator(`[data-panel="${id}"] .panel-placeholder`)).toBeVisible();
@@ -444,4 +436,235 @@ test('switching starred notes preserves both edits and starred links reveal fold
 	await expect(cells.nth(1)).toBeFocused();
 	await expect(notes.first()).toHaveValue('Partner covers the case');
 	await expect(notes.nth(1)).toHaveValue('I cover this response');
+});
+
+test('deleting the last page shows creation choices and can be undone', async ({ page }) => {
+	await settings(page, { notesPanel: 0, timersPanel: 0 });
+	await page.goto('/app');
+	await page.getByRole('button', { name: 'New flow', exact: true }).click();
+	await page.locator('.flow .box textarea').first().fill('Restore this argument');
+	await page.locator('.title').getByRole('button').click();
+	await expect(page.locator('.empty-document')).toBeVisible();
+	await page.keyboard.press('Control+z');
+	await expect(page.locator('.flow .box textarea').first()).toHaveValue('Restore this argument');
+});
+
+test('Autoflow loads a local DOCX and accepts document drops without navigating away', async ({
+	page
+}) => {
+	await settings(page, { autoflowPanel: 2, notesPanel: 0, timersPanel: 0, transcriptPanel: 1 });
+	await page.goto('/app');
+	const panel = page.locator('[data-panel="autoflowPanel"]');
+	await panel.locator('input[type=file]').setInputFiles('test-files/autoflow/headings.docx');
+	await expect(panel.locator('.blocks .panel-row')).not.toHaveCount(0, { timeout: 15000 });
+	await expect(panel.getByRole('alert')).toHaveCount(0);
+	await page.getByRole('button', { name: 'New flow', exact: true }).click();
+	await panel
+		.locator('.blocks [draggable=true]')
+		.first()
+		.dragTo(page.locator('.flow [data-box-id]').first());
+	await expect(page.locator('.flow .box textarea').first()).not.toHaveValue('');
+	await page.keyboard.press('Control+z');
+	const blocks = panel.locator('.blocks .panel-row .content');
+	await blocks.first().click();
+	await blocks.nth(1).click({ modifiers: ['Shift'] });
+	await panel
+		.locator('.blocks [draggable=true]')
+		.first()
+		.dragTo(page.locator('.flow [data-box-id]').first());
+	await expect(page.locator('.flow .box textarea')).toHaveCount(3);
+});
+
+for (const side of [1, 2, 3, 4])
+	test(`Autoflow is available at panel position ${side} without an open flow`, async ({ page }) => {
+		await settings(page, { autoflowPanel: side, notesPanel: 0, timersPanel: 0 });
+		await page.goto('/app');
+		if (side >= 3) await page.getByRole('button', { name: 'Autoflow', exact: true }).click();
+		await expect(page.locator('[data-panel="autoflowPanel"]')).toBeVisible();
+		await expect(
+			page.getByRole('button', { name: 'Load speech document', exact: true })
+		).toBeEnabled();
+	});
+
+test('SpeechDrop uploads and deletes files and drags a reference document into Transcript', async ({
+	page
+}) => {
+	await settings(page, { speechDropPanel: 1, transcriptPanel: 2, notesPanel: 0, timersPanel: 0 });
+	let removed = false,
+		uploaded = false;
+	await page.route('**/api/speechdrop/roomABC', async (route) => {
+		if (route.request().method() === 'POST') {
+			uploaded = route.request().postDataBuffer()?.includes(Buffer.from('new.txt')) ?? false;
+			await route.fulfill({ json: { ok: true } });
+			return;
+		}
+		await route.fulfill({ json: { files: removed ? [] : [{ index: 0, name: 'speech.txt' }] } });
+	});
+	await page.route('**/api/speechdrop/roomABC/0', async (route) => {
+		if (route.request().method() === 'DELETE') {
+			removed = true;
+			await route.fulfill({ json: { ok: true } });
+		} else await route.fulfill({ body: 'Economic growth solves poverty.' });
+	});
+	await page.goto('/app');
+	await page.getByRole('textbox', { name: 'SpeechDrop room code' }).fill('roomABC');
+	await expect(
+		page.locator('.speechdrop-panel').getByRole('button', { name: 'speech.txt', exact: true })
+	).toBeVisible();
+	await page.locator('.speechdrop-panel li').dragTo(page.locator('.transcript'));
+	await expect(page.getByRole('textbox', { name: 'Opponent speech document' })).toHaveValue(
+		'Economic growth solves poverty.'
+	);
+	await page
+		.locator('.speechdrop-panel input[type=file]')
+		.setInputFiles({ name: 'new.txt', mimeType: 'text/plain', buffer: Buffer.from('New upload') });
+	await expect.poll(() => uploaded).toBe(true);
+	page.once('dialog', (dialog) => dialog.accept());
+	await page.getByRole('button', { name: 'Delete file', exact: true }).click();
+	await expect(page.locator('.speechdrop-panel')).toContainText('This room has no files.');
+});
+
+test('multiple library pages drop as responses in a populated cell and replace a blank cell', async ({
+	page
+}) => {
+	await settings(page, { libraryPanel: 1, notesPanel: 0, timersPanel: 0 });
+	await page.addInitScript(() => {
+		const source = {
+			version: 1,
+			nodes: {
+				root: {
+					value: { tag: 'root' },
+					level: -1,
+					parent: null,
+					children: ['source-aff', 'source-neg']
+				},
+				'source-aff': {
+					value: {
+						tag: 'flow',
+						content: 'First source',
+						invert: false,
+						columns: ['AC', 'NC', 'AR']
+					},
+					level: 0,
+					parent: 'root',
+					children: ['source-a']
+				},
+				'source-neg': {
+					value: {
+						tag: 'flow',
+						content: 'Second source',
+						invert: true,
+						columns: ['NC', 'AR', 'NR']
+					},
+					level: 0,
+					parent: 'root',
+					children: ['source-b']
+				},
+				'source-a': {
+					value: { tag: 'box', content: 'Source argument A', flowId: 'source-aff' },
+					level: 1,
+					parent: 'source-aff',
+					children: []
+				},
+				'source-b': {
+					value: { tag: 'box', content: 'Source argument B', flowId: 'source-neg' },
+					level: 1,
+					parent: 'source-neg',
+					children: []
+				}
+			}
+		};
+		localStorage.setItem('flow:library-multi', JSON.stringify(source));
+		localStorage.setItem(
+			'savedFlows',
+			JSON.stringify({
+				'flow:library-multi': {
+					title: 'Multi source',
+					created: new Date().toISOString(),
+					modified: new Date().toISOString(),
+					flowInfos: [
+						{ content: 'First source', invert: false },
+						{ content: 'Second source', invert: true }
+					]
+				}
+			})
+		);
+	});
+	await page.goto('/app');
+	await page.getByRole('button', { name: 'New flow', exact: true }).click();
+	const first = page.getByRole('button', { name: 'Import First source', exact: true }),
+		second = page.getByRole('button', { name: 'Import Second source', exact: true });
+	await first.click({ modifiers: ['Control'] });
+	await second.click({ modifiers: ['Control'] });
+	await expect(first).toHaveAttribute('aria-pressed', 'true');
+	await expect(second).toHaveAttribute('aria-pressed', 'true');
+	const cells = page.locator('.flow .box textarea');
+	await cells.first().fill('Target');
+	await first.dragTo(page.locator('.flow [data-box-id]').first());
+	await expect(cells).toHaveCount(3);
+	expect(
+		await cells.evaluateAll((elements) => elements.map((el) => (el as HTMLTextAreaElement).value))
+	).toEqual(['Target', 'Source argument A', 'Source argument B']);
+	await page.keyboard.press('Control+z');
+	await expect(cells).toHaveCount(1);
+	await cells.first().fill('');
+	await first.dragTo(page.locator('.flow [data-box-id]').first());
+	await expect(cells).toHaveCount(2);
+	await expect(cells.first()).toHaveValue('Source argument A');
+});
+
+test('SpeechDrop optionally appends the promo to the uploaded DOCX copy', async ({ page }) => {
+	const { default: JSZip } = await import('jszip');
+	const { readFile } = await import('node:fs/promises');
+	const { promoFooter } = await import('../src/lib/models/speechDropPromo');
+	await settings(page, {
+		speechDropPanel: 1,
+		speechDropPromo: true,
+		notesPanel: 0,
+		timersPanel: 0
+	});
+	// WebKit's network debugging protocol omits multipart file bytes. Inspect the actual
+	// File submitted to fetch, then let the mocked server acknowledge that same request.
+	await page.addInitScript(() => {
+		const fetcher = window.fetch.bind(window);
+		window.fetch = async (input, init) => {
+			if (
+				typeof input === 'string' &&
+				input.includes('/api/speechdrop/promoRoom') &&
+				init?.body instanceof FormData
+			) {
+				const file = init.body.get('file');
+				if (file instanceof File)
+					Object.assign(window, {
+						__uploadedDocx: Array.from(new Uint8Array(await file.arrayBuffer()))
+					});
+			}
+			return fetcher(input, init);
+		};
+	});
+	await page.route('**/api/speechdrop/promoRoom', (route) =>
+		route.fulfill({ json: route.request().method() === 'POST' ? { ok: true } : { files: [] } })
+	);
+	await page.goto('/app');
+	await page.getByLabel('SpeechDrop room code').fill('promoRoom');
+	await expect(
+		page.getByRole('button', { name: 'Upload to SpeechDrop', exact: true })
+	).toBeEnabled();
+	await page
+		.locator('.speechdrop-panel input[type=file]')
+		.setInputFiles('test-files/autoflow/headings.docx');
+	await expect
+		.poll(() =>
+			page.evaluate(
+				() => (window as unknown as { __uploadedDocx?: number[] }).__uploadedDocx?.length ?? 0
+			)
+		)
+		.toBeGreaterThan(0);
+	const bytes = await page.evaluate(
+		() => (window as unknown as { __uploadedDocx: number[] }).__uploadedDocx
+	);
+	const uploaded = await JSZip.loadAsync(Uint8Array.from(bytes));
+	expect(await uploaded.file('word/document.xml')!.async('string')).toContain(promoFooter);
+	const original = await JSZip.loadAsync(await readFile('test-files/autoflow/headings.docx'));
+	expect(await original.file('word/document.xml')!.async('string')).not.toContain(promoFooter);
 });

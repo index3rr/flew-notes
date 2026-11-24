@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { settings } from '$lib/models/settings';
 	import { afterUpdate, beforeUpdate, onDestroy } from 'svelte';
+	import AutoflowPanel from './panels/AutoflowPanel.svelte';
 	import TabsPanel from './panels/TabsPanel.svelte';
 	import TimersPanel from './panels/TimersPanel.svelte';
 	import NotesPanel from './panels/NotesPanel.svelte';
@@ -13,7 +14,8 @@
 	import CardMirrorPanel from './panels/CardMirrorPanel.svelte';
 	import PanelPlaceholder from './panels/PanelPlaceholder.svelte';
 	import Button from './Button.svelte';
-	import { nodes, connections } from '$lib/models/store';
+	import { connections } from '$lib/models/store';
+	import { documentOpen } from '$lib/models/document';
 	import type { FlowId } from '$lib/models/node';
 	import {
 		panelIds,
@@ -43,7 +45,7 @@
 		})
 	);
 
-	$: documentPanelsAvailable = $nodes.root.children.length > 0;
+	$: documentPanelsAvailable = $documentOpen;
 	$: activePanels = panelIds.filter((id) => panelSide(panelValues[id]) === side);
 	$: collapsedPanels = activePanels.filter((id) => panelValues[id] >= 3);
 	$: if (expanded && !collapsedPanels.includes(expanded)) expanded = null;
@@ -107,7 +109,9 @@
 					<PanelPlaceholder name={panelNames[id]} />
 				{:else}
 					<div class="panel-body" in:panelIn={{ delay: stagger(id) }}>
-						{#if id === 'cardMirrorPanel'}
+						{#if id === 'autoflowPanel'}
+							<AutoflowPanel />
+						{:else if id === 'cardMirrorPanel'}
 							<CardMirrorPanel />
 						{:else if id === 'libraryPanel'}
 							<LibraryPanel />

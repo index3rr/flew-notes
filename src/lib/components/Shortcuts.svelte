@@ -20,16 +20,17 @@
 			context: 'Inside an open flow document',
 			shortcuts: [
 				{
-					keys: ['control', 'n'],
+					keys: ['commandControl', 'option', 'n'],
 					description: 'Add primary flow page'
 				},
 				{
-					keys: ['control', 'shift', 'n'],
+					keys: ['commandControl', 'option', 'shift', 'n'],
 					description: 'Add secondary flow page'
 				},
 				{ keys: ['commandControl', 'z'], description: 'Undo' },
 				{ keys: ['commandControl', 'shift', 'z'], description: 'Redo' },
 				{ keys: ['commandControl', 's'], description: 'Save flow' },
+				{ keys: ['commandControl', 'shift', 's'], description: 'Save a copy / export flow' },
 				{
 					keys: ['commandControl', 'option', 'up'],
 					description: 'Switch to previous tab',
@@ -91,10 +92,15 @@
 					keys: ['return'],
 					description: 'Focus or add cell below'
 				},
-				{ keys: ['shift', 'return'], description: 'Add response (child cell)' },
+				{
+					keys: ['shift', 'return'],
+					description: 'Add response (child cell)',
+					note: 'With multiple cells selected, reply to all selected cells in the leftmost selected column. On grouped cards, add another response to the group.'
+				},
 				{
 					keys: ['option', 'return'],
-					description: 'Focus or add cell above'
+					description: 'Focus or add cell above',
+					note: 'Not available on extension cells'
 				},
 				{
 					keys: ['option', 'shift', 'return'],
@@ -108,27 +114,44 @@
 			shortcuts: [
 				{
 					keys: ['commandControl', 'b'],
-					description: 'Toggle bold'
+					description: 'Toggle bold',
+					note: 'Not available on extension cells'
 				},
 				{
 					keys: ['control', 'shift', 'x'],
-					description: 'Toggle crossed out'
+					description: 'Toggle crossed out',
+					note: 'Not available on extension cells'
 				},
 				{
-					keys: ['commandControl', 'shift', 's'],
-					description: 'Toggle starred argument'
+					keys: ['commandControl', 'shift', '8'],
+					description: 'Toggle starred argument',
+					note: 'Not available on extension cells'
 				},
 				{
 					keys: ['control', 'l'],
-					description: 'Fold / collapse cell'
+					description: 'Fold / collapse cell',
+					note: 'Only when cell has children'
 				},
 				{
 					keys: ['commandControl', 'e'],
-					description: 'Extend cell'
+					description: 'Extend cell',
+					note: 'Not available on extension cells'
+				},
+				{
+					keys: ['commandControl', 'c'],
+					description: 'Copy selected cells',
+					note: 'Drag a rectangle, Shift-click a range, or Ctrl/Cmd-click individual cells'
+				},
+				{ keys: ['esc'], description: 'Cancel an active cell selection drag' },
+				{
+					keys: ['commandControl', 'x'],
+					description: 'Cut cell',
+					note: 'Only when no text is selected'
 				},
 				{
 					keys: ['backspace'],
-					description: 'Delete empty cell or extension'
+					description: 'Delete empty cell or extension',
+					note: 'Only when it has no children'
 				},
 				{
 					keys: ['commandControl', 'backspace'],

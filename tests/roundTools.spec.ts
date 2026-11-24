@@ -13,7 +13,13 @@ import {
 	speechDocActions,
 	speechFromFileName
 } from '../src/lib/models/speechDoc';
-import { cleanTranscript, Segmenter } from '../src/lib/models/transcript';
+import {
+	cleanTranscript,
+	Segmenter,
+	matchesStartPhrase,
+	pacingAllocation,
+	transcriptSpans
+} from '../src/lib/models/transcript';
 import type { Nodes } from '../src/lib/models/node';
 
 const aff = ['1AC', '1NC', '2AC', '2NC/1NR', '1AR', '2NR', '2AR'];
@@ -106,6 +112,22 @@ test.describe('coverage', () => {
 		]);
 		const page = computeCoverage(extended, '2AC').pages[0];
 		expect(page.dropped[0].extended).toBe(true);
+	});
+
+	test('a grouped reply answers every card it groups', () => {
+		const grouped = build([
+			{
+				name: 'Hospitals',
+				invert: true,
+				boxes: [['k2 ag', [['no link']]], ['farmers feed the world']]
+			}
+		]);
+		const [first, second] = grouped.root.children.flatMap((id) => grouped[id]!.children);
+		const reply = grouped[first]!.children[0];
+		(grouped[reply]!.value as { respondsTo?: string[] }).respondsTo = [second];
+		const page = computeCoverage(grouped, '2AC').pages[0];
+		expect(page.toAnswer).toEqual([]);
+		expect(page.answered).toBe(2);
 	});
 
 	test('short lines carry the argument they answer as context', () => {
@@ -234,4 +256,55 @@ test.describe('transcript', () => {
 		expect(out.length).toBeGreaterThanOrEqual(2);
 		for (const segment of out) expect(segment.length / rate).toBeLessThanOrEqual(18.1);
 	});
+});
+
+test('timer phrases match complete customized words and pacing respects fixed allocations', () => {
+	expect(matchesStartPhrase('Ready? Let us begin.', 'start, let us begin')).toBe(true);
+	expect(matchesStartPhrase('The beginning of the argument', 'begin')).toBe(false);
+	expect(matchesStartPhrase('start', ', ,')).toBe(false);
+	expect(pacingAllocation(60000, ['one', 'one two three', ':10'], [0, 0, 10000], true)).toEqual([
+		12500, 37500, 10000
+	]);
+	expect(pacingAllocation(5000, ['one', ':10'], [0, 10000], false)).toEqual([0, 10000]);
+});
+
+test('analytics are classified separately from adjoining read evidence', () => {
+	const spans = transcriptSpans(
+		'Economic growth solves poverty. Also their evidence was written before the latest crash.',
+		'Economic growth solves poverty.'
+	);
+	expect(spans).toEqual([
+		{ text: 'Economic growth solves poverty.', outside: false },
+		{ text: 'Also their evidence was written before the latest crash.', outside: true }
+	]);
+});
+
+test('overlapping recognition windows do not duplicate a repeated prefix', async () => {
+	const { deduplicateTranscript } = await import('../src/lib/models/transcript');
+	expect(
+		deduplicateTranscript(
+			'The plan solves food insecurity.',
+			'food insecurity. Now their evidence is outdated.'
+		)
+	).toBe('Now their evidence is outdated.');
+	expect(deduplicateTranscript('No, this is new.', 'No, this is a different argument.')).toBe(
+		'No, this is a different argument.'
+	);
+});
+
+test('document alignment separates an analytic without punctuation and tolerates a misheard card word', () => {
+	const spans = transcriptSpans(
+		'Economic growth solves poverty and their evidence was written before the crash',
+		'Economic growth solves poverty'
+	);
+	expect(spans).toEqual([
+		{ text: 'Economic growth solves poverty', outside: false },
+		{ text: 'and their evidence was written before the crash', outside: true }
+	]);
+	expect(
+		transcriptSpans(
+			'Economic growth completely solves poverty',
+			'Economic growth solves poverty'
+		).every((span) => !span.outside)
+	).toBe(true);
 });

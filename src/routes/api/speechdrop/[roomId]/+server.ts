@@ -1,3 +1,4 @@
+import { writeSpeechDrop } from '$lib/server/speechDrop';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 
@@ -57,5 +58,24 @@ export const GET: RequestHandler = async ({ params, fetch }) => {
 		return json({ files }, { headers: { 'cache-control': 'no-store' } });
 	} catch {
 		return json({ error: 'Could not connect to SpeechDrop. Please try again.' }, { status: 502 });
+	}
+};
+
+export const POST: RequestHandler = async ({ params, request, fetch }) => {
+	if (!validRoomId(params.roomId)) return json({ error: 'Invalid room code.' }, { status: 400 });
+	if (Number(request.headers.get('content-length')) > 50 * 1024 * 1024 + 65536)
+		return json({ error: 'Upload limit is 50 MB.' }, { status: 413 });
+	try {
+		const form = await request.formData();
+		const file = form.get('file');
+		if (!(file instanceof File) || !file.size || file.size > 50 * 1024 * 1024)
+			return json({ error: 'Choose a file up to 50 MB.' }, { status: 400 });
+		const body = new FormData();
+		body.append('file', file, file.name);
+		const response = await writeSpeechDrop(fetch, params.roomId, 'upload', body);
+		if (!response.ok) return json({ error: 'SpeechDrop rejected the upload.' }, { status: 502 });
+		return json({ ok: true }, { headers: { 'cache-control': 'no-store' } });
+	} catch {
+		return json({ error: 'Could not upload to SpeechDrop.' }, { status: 502 });
 	}
 };

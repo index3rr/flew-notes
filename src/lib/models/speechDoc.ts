@@ -7,7 +7,12 @@ import { columnForSpeech } from './coverage';
 // (h3, usually one per off-case position or answer block), and tags (h4) are the arguments.
 // Flowing a document drops each block's tags into the speech's column on a matching page.
 
-export type DocBlock = { title: string; group: string; tags: string[] };
+export type DocBlock = {
+	title: string;
+	group: string;
+	tags: string[];
+	provenance?: (import('../integrations/cardmirror/protocol').Provenance | null)[];
+};
 
 // Verbatim names its heading styles; mammoth only maps the built-in Heading 1-4 by default.
 export const speechDocStyleMap = [

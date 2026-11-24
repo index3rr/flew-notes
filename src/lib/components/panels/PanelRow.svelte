@@ -4,6 +4,7 @@
 	export let weak = false;
 	export let selected = false;
 	export let disabled = false;
+	export let draggable = false;
 	export let ariaLabel: string | null = null;
 	export let title: string | null = null;
 </script>
@@ -14,10 +15,14 @@
 		class:weak
 		class:selected
 		{disabled}
+		{draggable}
+		on:dragstart
 		{title}
 		aria-label={ariaLabel ?? undefined}
 		on:click
-		on:mousedown|preventDefault
+		on:mousedown={(event) => {
+			if (!draggable) event.preventDefault();
+		}}
 	>
 		<slot />
 	</button>

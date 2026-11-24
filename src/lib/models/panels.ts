@@ -5,6 +5,7 @@ export const panelIds = [
 	'coveragePanel',
 	'starredPanel',
 	'speechDropPanel',
+	'autoflowPanel',
 	'timersPanel',
 	'libraryPanel',
 	'transcriptPanel',
@@ -19,6 +20,7 @@ export const panelNames: Record<PanelId, string> = {
 	coveragePanel: 'Coverage',
 	starredPanel: 'Starred arguments',
 	speechDropPanel: 'SpeechDrop',
+	autoflowPanel: 'Autoflow',
 	timersPanel: 'Timers',
 	libraryPanel: 'Flow library',
 	transcriptPanel: 'Transcript',
@@ -32,6 +34,7 @@ export const panelIcons: Record<PanelId, string> = {
 	coveragePanel: 'checklist',
 	starredPanel: 'star',
 	speechDropPanel: 'download',
+	autoflowPanel: 'checklist',
 	timersPanel: 'clock',
 	libraryPanel: 'folder',
 	transcriptPanel: 'mic',
@@ -40,14 +43,7 @@ export const panelIcons: Record<PanelId, string> = {
 };
 
 // These need an open flow; without one they show only their name.
-export const documentPanelIds: readonly PanelId[] = [
-	'libraryPanel',
-	'notesPanel',
-	'coveragePanel',
-	'starredPanel',
-	'collaborationPanel',
-	'cardMirrorPanel'
-];
+export const documentPanelIds: readonly PanelId[] = ['notesPanel', 'coveragePanel', 'starredPanel'];
 
 export const panelPositions = ['Off', 'Left', 'Right', 'Left collapsed', 'Right collapsed'];
 export function panelSide(position: number): 'left' | 'right' | null {

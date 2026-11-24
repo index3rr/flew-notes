@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { fileMime } from '$lib/models/panelDrag';
 	import { onDestroy, onMount } from 'svelte';
 	import { speechDropCode, speechDocument, speechDocumentSource } from '$lib/models/collaboration';
 	import { shareSpeechDropCode } from '$lib/models/sharingChannel';
@@ -9,9 +10,6 @@
 	import PanelField from './PanelField.svelte';
 	import PanelRow from './PanelRow.svelte';
 	import PanelStatus from './PanelStatus.svelte';
-	import DocImport from '../DocImport.svelte';
-	import { openPopup } from '$lib/models/popup';
-	import { nodes } from '$lib/models/store';
 
 	type SpeechDropFile = { index: number; name: string; ctime?: number };
 	type RoomIndex = { files: SpeechDropFile[]; error?: string };
@@ -223,10 +221,7 @@
 		}
 	}
 
-	async function documentAction(
-		file: SpeechDropFile,
-		action: 'download' | 'compare' | 'open' | 'flow'
-	) {
+	async function documentAction(file: SpeechDropFile, action: 'download' | 'compare' | 'open') {
 		if (fileBusy !== null) return;
 		const request = requestNumber,
 			room = loadedRoomCode;
@@ -260,12 +255,7 @@
 				cached = { room, index: file.index, name: file.name, ctime: file.ctime, blob };
 			}
 			if (!current()) return;
-			if (action === 'flow') {
-				if (!/\.docx$/i.test(file.name))
-					throw new Error('Only DOCX speech documents can be flowed.');
-				openPopup(DocImport, 'Flow speech document', { name: file.name, blob });
-				return;
-			}
+
 			if (action === 'compare') {
 				let text: string;
 				if (/\.docx$/i.test(file.name)) {
@@ -323,22 +313,78 @@
 		stopRoomConnections();
 	});
 	let localFile: HTMLInputElement;
-	function flowLocalFile() {
-		const file = localFile.files?.[0];
-		localFile.value = '';
-		if (file) openPopup(DocImport, 'Flow speech document', { name: file.name, blob: file });
+	let writing = false;
+	async function uploadFiles(files: FileList | null) {
+		if (!loadedRoomCode || !files || writing) return;
+		writing = true;
+		error = '';
+		try {
+			for (const file of Array.from(files)) {
+				const body = new FormData();
+				if (file.size > 50 * 1024 * 1024) throw new Error('Choose a file up to 50 MB.');
+				const upload =
+					settings.data.speechDropPromo.value && /\.docx$/i.test(file.name)
+						? await (await import('$lib/models/speechDropPromo')).addPromoToDocx(file)
+						: file;
+				body.append('file', upload);
+				const response = await fetch(`/api/speechdrop/${encodeURIComponent(loadedRoomCode)}`, {
+					method: 'POST',
+					body
+				});
+				if (!response.ok) throw new Error((await response.json()).error);
+			}
+			await refreshRoom(loadedRoomCode, requestNumber);
+		} catch (cause) {
+			error = (cause as Error).message;
+		} finally {
+			writing = false;
+		}
 	}
-	$: flowOpen = $nodes.root.children.length > 0;
+	async function removeFile(file: SpeechDropFile) {
+		if (writing || !window.confirm(`Delete ${file.name} from this SpeechDrop room?`)) return;
+		writing = true;
+		error = '';
+		try {
+			const response = await fetch(
+				`/api/speechdrop/${encodeURIComponent(loadedRoomCode)}/${file.index}`,
+				{ method: 'DELETE' }
+			);
+			if (!response.ok) throw new Error((await response.json()).error);
+			cached = null;
+			await refreshRoom(loadedRoomCode, requestNumber);
+		} catch (cause) {
+			error = (cause as Error).message;
+		} finally {
+			writing = false;
+		}
+	}
+
 	$: canOpenInCardMirror = $cardMirror.state === 'connected' && $cardMirrorDocuments.supported;
 </script>
 
-<section class="speechdrop-panel" aria-label="SpeechDrop">
+<section
+	class="speechdrop-panel"
+	aria-label="SpeechDrop"
+	on:dragover={(e) => {
+		if (e.dataTransfer?.types.includes('Files')) {
+			e.preventDefault();
+			e.stopPropagation();
+		}
+	}}
+	on:drop={(e) => {
+		if (e.dataTransfer?.files.length) {
+			e.preventDefault();
+			e.stopPropagation();
+			void uploadFiles(e.dataTransfer.files);
+		}
+	}}
+>
 	<PanelHeader name="SpeechDrop" detail={files.length ? String(files.length) : null}>
 		<Button
 			icon="upload"
-			ariaLabel="Flow a DOCX from this device"
-			tooltip="flow tags from a DOCX on this device"
-			disabled={!flowOpen}
+			ariaLabel="Upload to SpeechDrop"
+			tooltip="upload files to this room"
+			disabled={!loadedRoomCode || writing}
 			disabledReason="Open a flow first"
 			on:click={() => localFile.click()}
 		/>
@@ -346,9 +392,12 @@
 	<input
 		bind:this={localFile}
 		type="file"
-		accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+		multiple
 		hidden
-		on:change={flowLocalFile}
+		on:change={() => {
+			void uploadFiles(localFile.files);
+			localFile.value = '';
+		}}
 	/>
 	<PanelField
 		ariaLabel="SpeechDrop room code"
@@ -365,15 +414,7 @@
 	{:else if error}
 		<PanelStatus error>{error}</PanelStatus>
 	{/if}
-	{#if canOpenInCardMirror}
-		<label class="auto-open"
-			><input
-				type="checkbox"
-				checked={autoOpen}
-				on:change={(e) => settings.setValue('cardMirrorOpenSpeechDrop', e.currentTarget.checked)}
-			/>open DOCX downloads in CardMirror</label
-		>
-	{/if}
+
 	{#if status}<PanelStatus>{status}</PanelStatus>{/if}
 	{#if $cardMirrorDocuments.sending}<PanelStatus>
 			Sending {$cardMirrorDocuments.sending}: {$cardMirrorDocuments.progress}%
@@ -382,8 +423,17 @@
 		<ul class="file-list">
 			{#each files as file (file.index)}
 				{@const docx = /\.docx$/i.test(file.name)}
-				<li>
+				<li
+					draggable="true"
+					on:dragstart={(e) => {
+						e.dataTransfer?.setData(
+							fileMime,
+							JSON.stringify({ room: loadedRoomCode, index: file.index, name: file.name })
+						);
+					}}
+				>
 					<PanelRow
+						draggable
 						ariaLabel={file.name}
 						title="download"
 						disabled={fileBusy !== null}
@@ -392,14 +442,14 @@
 					>
 						{file.name}
 						<svelte:fragment slot="actions">
-							{#if docx}<Button
-									icon="checklist"
-									ariaLabel="Flow tags"
-									tooltip="flow this document's tags"
-									disabled={fileBusy !== null || !flowOpen}
-									disabledReason={flowOpen ? 'busy' : 'Open a flow first'}
-									on:click={() => documentAction(file, 'flow')}
-								/>{/if}
+							<Button
+								icon="trash"
+								ariaLabel="Delete file"
+								tooltip="delete from room"
+								disabled={writing}
+								on:click={() => removeFile(file)}
+							/>
+
 							<Button
 								icon="mic"
 								ariaLabel="Use for transcript"
@@ -432,18 +482,6 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--padding-small);
-	}
-	.auto-open {
-		display: flex;
-		align-items: center;
-		gap: var(--padding);
-		padding: 0 var(--padding);
-		color: var(--text-weak);
-		font-size: 0.85em;
-	}
-	.auto-open input {
-		accent-color: var(--color-accent);
-		margin: 0;
 	}
 	.file-list {
 		list-style: none;

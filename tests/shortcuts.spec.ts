@@ -12,10 +12,10 @@ test('format tooltips show the real shortcuts and star works with Ctrl and Comma
 	await expect(star).toBeEnabled();
 	await star.hover();
 	const starTip = page.locator('.tooltip').filter({ hasText: 'toggle starred argument' });
-	await expect(starTip.locator('kbd')).toHaveText(['cmd/ctrl', 'shift', 'S']);
-	await cell.press('Control+Shift+s');
+	await expect(starTip.locator('kbd')).toHaveText(['cmd/ctrl', 'shift', '8']);
+	await cell.press('Control+Shift+8');
 	await expect(star).toHaveClass(/toggled/);
-	await cell.press('Meta+Shift+s');
+	await cell.press('Meta+Shift+8');
 	await expect(star).not.toHaveClass(/toggled/);
 	await page.getByRole('button', { name: 'Toggle crossed out', exact: true }).hover();
 	await expect(
@@ -39,10 +39,10 @@ test('Help documents the application shortcuts and their contexts', async ({ pag
 		await expect(item.locator('kbd')).toHaveText(keys);
 		return item;
 	}
-	await row('Add primary flow page', ['ctrl', 'N']);
-	await row('Add secondary flow page', ['ctrl', 'shift', 'N']);
+	await row('Add primary flow page', ['cmd/ctrl', 'alt', 'N']);
+	await row('Add secondary flow page', ['cmd/ctrl', 'alt', 'shift', 'N']);
 	await row('Toggle crossed out', ['ctrl', 'shift', 'X']);
-	await row('Toggle starred argument', ['cmd/ctrl', 'shift', 'S']);
+	await row('Toggle starred argument', ['cmd/ctrl', 'shift', '8']);
 	await row('Paste copied cells and their responses', ['cmd/ctrl', 'V']);
 	await row('Select through the cell above', ['shift', '↑']);
 	await row('Select a range of cells', ['shift', 'CLICK']);
@@ -57,4 +57,18 @@ test('Help documents the application shortcuts and their contexts', async ({ pag
 	]);
 	await page.keyboard.press('Escape');
 	await expect(page.locator('.screen')).toHaveCount(0);
+});
+
+test('page creation uses browser-safe shortcuts from a focused cell', async ({ page }) => {
+	await page.goto('/app');
+	await page.getByRole('button', { name: 'New flow', exact: true }).click();
+	await expect(page.locator('.tabs li')).toHaveCount(1);
+	await page.locator('.flow textarea').first().press('Control+Alt+n');
+	await expect(page.locator('.tabs li')).toHaveCount(2);
+	await page.locator('.flow textarea').first().press('Control+Alt+Shift+n');
+	await expect(page.locator('.tabs li')).toHaveCount(3);
+	await page.locator('.addTab .buttons button').first().hover();
+	await expect(
+		page.locator('.tooltip').filter({ hasText: 'create new aff flow' }).locator('kbd')
+	).toHaveText(['cmd/ctrl', 'alt', 'N']);
 });

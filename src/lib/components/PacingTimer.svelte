@@ -1,7 +1,9 @@
 <script lang="ts">
+	import { pacingAllocation } from '$lib/models/transcript';
 	import { onDestroy } from 'svelte';
 	import { focusId } from '$lib/models/focus';
 	import Button from './Button.svelte';
+	import Tooltip from './Tooltip.svelte';
 	import { checkIdBox, getColumnBoxes } from '$lib/models/node';
 	import type { Nodes, BoxId, Box } from '$lib/models/node';
 	import { settings } from '$lib/models/settings';
@@ -37,25 +39,14 @@
 		const remaining = boxes.slice(currentIndex);
 		const graceMs = (settings.data.pacingGracePeriod.value as number) * 1000;
 
-		let fixedSum = 0;
-		let variableCount = 0;
-		for (const id of remaining) {
-			const fixed = timeOverride.get(id) ?? 0;
-			if (fixed > 0) fixedSum += fixed;
-			else variableCount++;
-		}
-
-		const distributable = Math.max(0, mainTimerTime - graceMs - fixedSum);
-		const tpb = variableCount > 0 ? Math.floor(distributable / variableCount) : 0;
-
-		const currentFixed = timeOverride.get(boxes[currentIndex]) ?? 0;
-		if (currentFixed > 0) {
-			pacingCountdown = currentFixed;
-			ogTime = currentFixed;
-		} else {
-			pacingCountdown = tpb;
-			ogTime = tpb;
-		}
+		const allocations = pacingAllocation(
+			mainTimerTime - graceMs,
+			remaining.map((id) => nodes[id]?.value.content ?? ''),
+			remaining.map((id) => timeOverride.get(id) ?? 0),
+			Boolean(settings.data.pacingWordWeight.value)
+		);
+		pacingCountdown = allocations[0] ?? 0;
+		ogTime = pacingCountdown;
 		startTimestamp = Date.now();
 		stopInterval();
 		if (isRunning) {
@@ -127,7 +118,10 @@
 	$: currentBox = currentIndex >= 0 ? nodes[boxes[currentIndex]] : null;
 	$: boxContent = currentBox?.value?.content || '';
 	$: displayMinutes = String(Math.floor(Math.max(0, pacingCountdown) / 60000)).padStart(2, '0');
-	$: displaySeconds = String(Math.floor((Math.max(0, pacingCountdown) % 60000) / 1000)).padStart(2, '0');
+	$: displaySeconds = String(Math.floor((Math.max(0, pacingCountdown) % 60000) / 1000)).padStart(
+		2,
+		'0'
+	);
 	$: isDone = pacingCountdown <= 0 && isRunning;
 
 	onDestroy(() => {
@@ -138,11 +132,14 @@
 {#if prevFocusId && boxes.length > 0}
 	<div class="pacing">
 		<div class="top palette-{palette}">
-			<Button icon="arrowLeft" palette={palette} on:click={() => advance('prev')} />
-			<div class="time" class:done={isDone}>
-				{displayMinutes}:{displaySeconds}
-			</div>
-			<Button icon="arrowRight" palette={palette} on:click={() => advance('next')} />
+			<Button icon="arrowLeft" {palette} on:click={() => advance('prev')} />
+			<Tooltip
+				content="remaining time for this argument; type ':30' in a cell to fix its allocation at 30 seconds"
+				><div class="time" class:done={isDone}>
+					{displayMinutes}:{displaySeconds}
+				</div></Tooltip
+			>
+			<Button icon="arrowRight" {palette} on:click={() => advance('next')} />
 		</div>
 		<div class="info">
 			<span class="name">{boxContent || '(empty)'}</span>
@@ -169,13 +166,19 @@
 		width: 100%;
 	}
 	.time {
-		font-size: 1.5rem;
+		font-size: 1.5em;
 		color: var(--this-text);
 	}
 	@keyframes done {
-		0% { color: var(--this-text); }
-		50% { color: var(--this-color); }
-		100% { color: var(--this-text); }
+		0% {
+			color: var(--this-text);
+		}
+		50% {
+			color: var(--this-color);
+		}
+		100% {
+			color: var(--this-text);
+		}
 	}
 	.done {
 		animation: done 1s infinite;
@@ -187,7 +190,7 @@
 		align-items: center;
 		width: 100%;
 		gap: var(--padding);
-		font-size: 0.85rem;
+		font-size: 0.85em;
 		color: var(--this-text-weak);
 		overflow: hidden;
 	}

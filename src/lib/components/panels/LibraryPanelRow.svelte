@@ -12,6 +12,22 @@
 	export let read: () => Promise<string>;
 	export let alternate = false;
 	let source: Nodes | undefined;
+	let selectedPages: number[] = [];
+	let anchor = 0;
+	function selectPage({ detail }: CustomEvent<{ index: number; event: MouseEvent }>) {
+		const { index, event } = detail;
+		if (event.shiftKey)
+			selectedPages = Array.from(
+				{ length: Math.abs(index - anchor) + 1 },
+				(_, i) => Math.min(index, anchor) + i
+			);
+		else {
+			selectedPages = selectedPages.includes(index)
+				? selectedPages.filter((i) => i !== index)
+				: [...selectedPages, index];
+			anchor = index;
+		}
+	}
 	let error = '';
 	let busy = false;
 	let request = 0;
@@ -50,7 +66,12 @@
 		}
 		detail.event.dataTransfer?.setData(
 			'application/x-flew-page',
-			JSON.stringify({ nodes: source, id: source.root.children[detail.index] })
+			JSON.stringify({
+				nodes: source,
+				ids: (selectedPages.includes(detail.index) ? selectedPages : [detail.index])
+					.sort((a, b) => a - b)
+					.map((index) => source!.root.children[index])
+			})
 		);
 	}
 </script>
@@ -59,6 +80,8 @@
 	{flowData}
 	{alternate}
 	compact
+	{selectedPages}
+	on:selectPage={selectPage}
 	disabled={busy || $frozen || !$documentOpen}
 	draggable={!!source}
 	on:importPage={(event) => copyPage(event.detail)}

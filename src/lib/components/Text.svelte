@@ -1,13 +1,14 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
+	import { frozen } from '$lib/models/store';
 	import { settings } from '$lib/models/settings';
 
 	export let value: string;
-	export let placeholder: string = '';
+	export let placeholder = '';
 	export let multiline = false;
-	export let nowrap: boolean = false;
-	export let strikethrough: boolean = false;
-	export let readonly: boolean = false;
+	export let nowrap = false;
+	export let strikethrough = false;
+	export let readonly = false;
 	export let bold: boolean | undefined = undefined;
 
 	export let textHeight = 0; // Should be readonly at higher levels
@@ -38,7 +39,9 @@
 		}
 	}
 	onDestroy(settings.subscribe(['fontSize'], () => autoHeight(true)));
-	onMount(() => {requestAnimationFrame(() => autoHeight())});
+	onMount(() => {
+		requestAnimationFrame(() => autoHeight());
+	});
 	export const focus = () => {
 		// only focus if not already focused
 		textarea.focus();
@@ -59,7 +62,7 @@
 	{placeholder}
 	style={`--white-space:${whiteSpaceCss};`}
 	class:strikethrough
-	readonly={readonly}
+	readonly={readonly || $frozen}
 />
 
 <style>

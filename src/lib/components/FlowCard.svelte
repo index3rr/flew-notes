@@ -8,8 +8,10 @@
 	export let compact = false;
 	export let disabled = false;
 	export let draggable = false;
+	export let selectedPages: number[] = [];
 	const dispatch = createEventDispatcher<{
 		importPage: number;
+		selectPage: { index: number; event: MouseEvent };
 		dragPage: { index: number; event: DragEvent };
 	}>();
 	export let filename: string | null = null;
@@ -61,13 +63,19 @@
 					<button
 						type="button"
 						class="info page"
+						class:selected={selectedPages.includes(index)}
+						aria-pressed={selectedPages.includes(index)}
 						aria-label={`Import ${info.content || 'Untitled page'}`}
 						class:palette-accent={!info.invert}
 						class:palette-accent-secondary={info.invert}
 						{disabled}
 						{draggable}
 						title="Click to import page, or drag it into your flow"
-						on:click={() => dispatch('importPage', index)}
+						on:click={(event) => {
+							if (event.shiftKey || event.ctrlKey || event.metaKey)
+								dispatch('selectPage', { index, event });
+							else dispatch('importPage', index);
+						}}
 						on:dragstart={(event) => dispatch('dragPage', { index, event })}
 						>{info.content || 'Untitled page'}</button
 					>
@@ -125,6 +133,9 @@
 		font-weight: var(--font-weight);
 		max-width: 100%;
 		transition: background var(--transition-speed);
+	}
+	.page.selected {
+		background: var(--this-background-active);
 	}
 	.page:hover,
 	.page:active {

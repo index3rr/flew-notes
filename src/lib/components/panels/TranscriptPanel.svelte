@@ -1,12 +1,25 @@
 <script lang="ts">
+	import { droppedDocument, documentText } from '$lib/models/panelDrag';
 	import { afterUpdate, onDestroy, tick } from 'svelte';
 	import Button from '../Button.svelte';
 	import PanelHeader from './PanelHeader.svelte';
 	import PanelField from './PanelField.svelte';
 	import PanelStatus from './PanelStatus.svelte';
-	import { speechDocument, speechDetected, speechDocumentSource } from '$lib/models/collaboration';
-	import { cleanTranscript, compareSpeech, formatClock, Segmenter } from '$lib/models/transcript';
-	import { speechClock, speechElapsed } from '$lib/models/timer';
+	import {
+		speechDocument,
+		speechDetected,
+		speechDocumentSource,
+		transcribedPhrase
+	} from '$lib/models/collaboration';
+	import {
+		cleanTranscript,
+		deduplicateTranscript,
+		compareSpeech,
+		transcriptSpans,
+		formatClock,
+		Segmenter
+	} from '$lib/models/transcript';
+	import { speechClock, speechElapsed, currentSpeech } from '$lib/models/timer';
 	import { downloadString } from '$lib/models/file';
 	import { settings } from '$lib/models/settings';
 	import { nodes, frozen } from '$lib/models/store';
@@ -36,6 +49,22 @@
 	let resampling = 0;
 	let generation = 0;
 	let detected = false;
+	let hasRecorded = false;
+	onDestroy(
+		speechDocument.subscribe(() => {
+			detected = false;
+		})
+	);
+	let previousSpeech = '';
+	onDestroy(
+		currentSpeech.subscribe((speech) => {
+			const key = speech?.upcoming.join('|') ?? '';
+			if (key !== previousSpeech) {
+				detected = false;
+				previousSpeech = key;
+			}
+		})
+	);
 	let started = 0;
 	let nextId = 0;
 	let downloads = new Map<string, { loaded: number; total: number }>();
@@ -118,12 +147,26 @@
 	}
 
 	function received(raw: string) {
-		const text = cleanTranscript(raw);
+		const text = deduplicateTranscript(
+			entries
+				.slice(-3)
+				.map((entry) => entry.text)
+				.join(' '),
+			cleanTranscript(raw)
+		);
 		const label = busy;
 		busy = null;
 		if (text && label) {
 			const comparison = compareSpeech(text, $speechDocument);
-			entries = [...entries, { id: nextId++, text, outside: comparison.outside, ...label }];
+			transcribedPhrase.update((value) => ({ id: value.id + 1, text }));
+			entries = [
+				...entries,
+				...transcriptSpans(text, $speechDocument).map((span) => ({
+					id: nextId++,
+					...span,
+					...label
+				}))
+			];
 			if (comparison.matched && !detected) {
 				detected = true;
 				speechDetected.update((value) => value + 1);
@@ -226,6 +269,7 @@
 			await context.resume();
 			if (token !== generation) return;
 			active = true;
+			hasRecorded = true;
 			loading = false;
 			status = '';
 			next();
@@ -293,7 +337,38 @@
 		}
 		return total ? Math.round((loaded / total) * 100) : null;
 	})();
+	let controls = Number(settings.data.transcriptSource.value);
+	let analyticsOnly = Boolean(settings.data.transcriptAnalyticsOnly.value);
+	onDestroy(
+		settings.subscribe(['transcriptSource', 'transcriptAnalyticsOnly'], () => {
+			controls = Number(settings.data.transcriptSource.value);
+			analyticsOnly = Boolean(settings.data.transcriptAnalyticsOnly.value);
+		})
+	);
+	async function drop(event: DragEvent) {
+		event.preventDefault();
+		event.stopPropagation();
+		if (active || finishing) return;
+		try {
+			const file = await droppedDocument(event);
+			if (file) speechDocument.set(await documentText(file.name, file.blob));
+		} catch (cause) {
+			error = (cause as Error).message;
+		}
+	}
 	$: running = active || loading;
+	$: visibleEntries = entries
+		.filter(
+			(entry) =>
+				entry.outside || !$speechDocument.trim() || ((running || finishing) && !analyticsOnly)
+		)
+		.reduce((all: Entry[], entry) => {
+			const last = all[all.length - 1];
+			if (last && !last.outside && !entry.outside && last.speech === entry.speech)
+				last.text += ' ' + entry.text;
+			else all.push({ ...entry });
+			return all;
+		}, []);
 	$: detail = loading
 		? downloadProgress !== null
 			? `downloading ${downloadProgress}%`
@@ -313,7 +388,15 @@
 	onDestroy(stop);
 </script>
 
-<section class="transcript" aria-label="Transcript">
+<section
+	class="transcript"
+	aria-label="Transcript"
+	on:dragover={(e) => {
+		e.preventDefault();
+		e.stopPropagation();
+	}}
+	on:drop={drop}
+>
 	<PanelHeader name="Transcript" {detail}>
 		{#if running || finishing}
 			<Button
@@ -325,27 +408,27 @@
 				on:click={finish}
 			/>
 		{:else}
-			<Button
-				icon="mic"
-				ariaLabel="Start transcription"
-				tooltip="transcribe the microphone on this device; audio never leaves it"
-				on:click={() => start('microphone')}
-			/>
-			<Button
-				icon="screen"
-				ariaLabel="Transcribe tab audio"
-				tooltip="transcribe a tab or window, for online rounds"
-				on:click={() => start('tab')}
-			/>
+			{#if controls !== 1}<Button
+					icon="mic"
+					ariaLabel="Start transcription"
+					tooltip="transcribe the microphone on this device; audio never leaves it"
+					on:click={() => start('microphone')}
+				/>{/if}
+			{#if controls !== 0}<Button
+					icon="screen"
+					ariaLabel="Transcribe tab audio"
+					tooltip="transcribe a tab or window, for online rounds"
+					on:click={() => start('tab')}
+				/>{/if}
 		{/if}
 	</PanelHeader>
-	<PanelField
-		multiline
-		rows={2}
-		ariaLabel="Opponent speech document"
-		placeholder="paste the opponent's speech document to mark analytics"
-		bind:value={$speechDocument}
-	/>
+	{#if !running && !finishing}<PanelField
+			multiline
+			rows={2}
+			ariaLabel="Opponent speech document"
+			placeholder="paste the opponent's speech document to mark analytics"
+			bind:value={$speechDocument}
+		/>{/if}
 	{#if $speechDocumentSource}<PanelStatus>Comparing with {$speechDocumentSource.name}</PanelStatus
 		>{/if}
 	{#if error}<PanelStatus error>{error}</PanelStatus>{:else if status}<PanelStatus
@@ -358,16 +441,14 @@
 		on:scroll={() => (pinnedToBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 8)}
 		aria-live="polite"
 	>
-		{#each entries as entry, index (entry.id)}
-			{#if entry.speech !== entries[index - 1]?.speech || index === 0}
+		{#each visibleEntries as entry, index (entry.id)}
+			{#if entry.speech !== visibleEntries[index - 1]?.speech || index === 0}
 				<p class="speech">{entry.speech || 'Transcript'}</p>
 			{/if}
 			<div class="entry" class:outside={entry.outside}>
 				<p class="text">
 					<span class="meta"
-						>{formatClock(entry.at)}{#if entry.outside}<span class="flag">
-								· Outside document</span
-							>{/if}</span
+						>{#if entry.outside}<span class="flag"> · Outside document</span>{/if}</span
 					>
 					{entry.text}
 				</p>

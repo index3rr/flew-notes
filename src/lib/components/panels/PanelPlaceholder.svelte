@@ -1,11 +1,17 @@
 <script lang="ts">
-	import Tooltip from '../Tooltip.svelte';
+	import Button from '../Button.svelte';
+	import { createDocument } from '$lib/models/autoSave';
 	export let name: string;
 </script>
 
-<Tooltip content="No flow is open.">
-	<p class="panel-placeholder">{name}</p>
-</Tooltip>
+<div class="panel-placeholder">
+	<span>{name}</span><Button
+		icon="add"
+		ariaLabel={'Open a flow for ' + name}
+		tooltip="create a flow to use this panel"
+		on:click={() => createDocument()}
+	/>
+</div>
 
 <style>
 	/* Matches PanelHeader so the name stays put when the panel's body arrives. */
@@ -18,6 +24,7 @@
 		padding: 0 var(--padding);
 		color: var(--text-weak);
 		white-space: nowrap;
-		cursor: help;
+		justify-content: space-between;
+		gap: var(--padding-small);
 	}
 </style>

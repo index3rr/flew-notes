@@ -6,51 +6,17 @@ import {
 } from './sharingChannel';
 import { openPopup } from './popup';
 import Message from '$lib/components/Message.svelte';
-import { connections } from './store';
+import { connections, nodes } from './store';
+import { get } from 'svelte/store';
+import { resolvePendingAction } from './nodePendingAction';
 import { trackSharingStarted } from './telemetry';
 import { getIceServers } from './iceServers';
 import { setSharingLocalDescription, sharingRoomId, sharingLocalOffer } from './sharingIce';
 
-const MESSAGE_CHANNEL_NAME = 'messageChannel';
+import { Channel } from './sharingTransport';
+export { Channel } from './sharingTransport';
 
-export class Channel<SendMessage, RecieveMessage> {
-	#channel: RTCDataChannel;
-	queuedMessages: SendMessage[];
-	constructor(channel: RTCDataChannel) {
-		this.#channel = channel;
-		this.queuedMessages = [];
-		this.onOpen(() => {
-			for (const message of this.queuedMessages) {
-				this.send(message);
-			}
-			this.queuedMessages = [];
-		});
-	}
-	send(message: SendMessage) {
-		const payload = JSON.stringify(message);
-		if (this.#channel.readyState == 'open') {
-			const channel = this.#channel;
-			channel.send(payload);
-		} else {
-			this.queuedMessages.push(message);
-		}
-	}
-	onOpen(fn: () => void) {
-		if (this.#channel.readyState == 'open') {
-			fn();
-			return;
-		}
-		this.#channel.addEventListener('open', fn, { once: true });
-	}
-	onClose(fn: () => void) {
-		this.#channel.addEventListener('close', fn);
-	}
-	onMessage(fn: (event: RecieveMessage) => void) {
-		this.#channel.addEventListener('message', function (event: MessageEvent<string>) {
-			fn(JSON.parse(event.data));
-		});
-	}
-}
+const MESSAGE_CHANNEL_NAME = 'messageChannel';
 
 export type GuestKey = {
 	qrRelayCandidate?: string;
@@ -203,7 +169,7 @@ export function addHostConnection(): ConnectionId {
 			connections.update(function (connections) {
 				if (connections.tag != 'host') return connections;
 				const connection = connections.holder[id];
-				if (connection.tag == 'hostAwaitingGuestKey' && message.tag == 'guestKey') {
+				if (connection?.tag == 'hostAwaitingGuestKey' && message.tag == 'guestKey') {
 					let response: Broadcast;
 					if (connection.key.broadcastId == message.key.broadcastId) {
 						giveHostGuestKey(message.key);
@@ -229,7 +195,7 @@ export function addHostConnection(): ConnectionId {
 				connections.update(function (connections) {
 					if (connections.tag != 'host') return connections;
 					const connection = connections.holder[id];
-					if (connection.tag != 'hostCreatingKey') return connections;
+					if (connection?.tag != 'hostCreatingKey') return connections;
 					connections.holder[id] = {
 						tag: 'hostAwaitingGuestKey',
 						pc: connection.pc,
@@ -258,7 +224,7 @@ export function addHostConnection(): ConnectionId {
 								connections.update(function (connections) {
 									if (connections.tag != 'host') return connections;
 									const connection = connections.holder[id];
-									if (connection.tag != 'hostCreatingKey') return connections;
+									if (connection?.tag != 'hostCreatingKey') return connections;
 									connections.holder[id] = {
 										tag: 'hostAwaitingGuestKey',
 										pc: connection.pc,
@@ -304,7 +270,7 @@ export function giveHostGuestKey(key: GuestKey) {
 		const id = oldConnections.building;
 		if (id == null) return oldConnections;
 		const connection = oldConnections.holder[id];
-		if (connection.tag != 'hostAwaitingGuestKey') return oldConnections;
+		if (connection?.tag != 'hostAwaitingGuestKey') return oldConnections;
 		if (connection.key.broadcastId != key.broadcastId) return oldConnections;
 		const _remoteOffer = new RTCSessionDescription(JSON.parse(key.localOffer));
 		getIceServers()
@@ -316,7 +282,7 @@ export function giveHostGuestKey(key: GuestKey) {
 				connections.update(function (oldConnections) {
 					if (oldConnections.tag != 'host') return oldConnections;
 					const connection = oldConnections.holder[id];
-					if (connection.tag != 'hostAwaitingGuestKey') return oldConnections;
+					if (connection?.tag != 'hostAwaitingGuestKey') return oldConnections;
 					connection.broadcastChannel.close();
 					// make sure the broadcast id matches
 					const name = generateGuestName(oldConnections.holder);
@@ -502,6 +468,7 @@ export function cancelBuilding() {
 		if (connections.tag == 'host' && connections.building != null) {
 			connections.holder[connections.building].pc.close();
 			delete connections.holder[connections.building];
+			connections.building = null;
 		} else if (connections.tag == 'guest' && connections.building) {
 			connections.connection.pc.close();
 			connections = {
@@ -557,6 +524,7 @@ export function parseConfirmLink(): GuestKey | null {
 }
 
 export function requestSync() {
+	resolvePendingAction(get(nodes));
 	connections.update(function (connections) {
 		if (
 			connections.tag == 'guest' &&

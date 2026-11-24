@@ -144,7 +144,7 @@ test('companion plugin exchanges real WebRTC messages with Flew, persists source
 	await configure(page);
 	await page.goto('/app');
 	await expect(page.locator('[data-panel="cardMirrorPanel"]')).toContainText('CardMirror');
-	await expect(page.getByRole('button', { name: 'Create connection key' })).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'Create connection key' })).toBeVisible();
 	await page.getByRole('button', { name: 'New flow', exact: true }).click();
 	const context = await browser.newContext({ baseURL });
 	const host = await context.newPage();
@@ -328,7 +328,25 @@ test('source references survive JSON import/export, cell copying and page import
 				key: 'doc|argument',
 				token: 'opaque-source-token',
 				documentTitle: 'Evidence',
-				excerpt: 'Argument'
+				excerpt: 'Argument',
+				evidence: {
+					version: 1,
+					id: 'doc|card-one',
+					node: {
+						type: 'card',
+						content: [
+							{ type: 'tag', content: [{ type: 'text', text: 'Argument' }] },
+							{ type: 'cite_paragraph', content: [{ type: 'text', text: 'Author 2026' }] },
+							{
+								type: 'card_body',
+								content: [
+									{ type: 'text', text: 'Complete saved evidence', marks: [{ type: 'strong' }] }
+								]
+							}
+						]
+					},
+					html: '<div class="pmd-card"><h4 class="pmd-tag">Argument</h4><p class="pmd-cite-para">Author 2026</p><p class="pmd-card-body"><strong>Complete saved evidence</strong></p></div>'
+				}
 			}
 		]
 	};
@@ -406,59 +424,31 @@ test('source references survive JSON import/export, cell copying and page import
 	await expect(cells.last()).toHaveValue('Argument\nCitation');
 });
 
-test('pin the 2AC destination while browsing the neg flow, then send responses to an argument', async ({
+test('CardMirror follows the selected page and can append responses without a destination picker', async ({
 	page,
 	browser,
 	baseURL
 }) => {
-	test.setTimeout(120_000);
 	await configure(page);
 	await page.goto('/app');
 	await page.getByRole('button', { name: 'New flow', exact: true }).click();
-	await page.getByPlaceholder('type name here', { exact: true }).fill('Case');
-	await page.getByPlaceholder('type name here', { exact: true }).press('Enter');
-	await page.locator('.box textarea').first().fill('Existing 1AC argument');
 	const context = await browser.newContext({ baseURL }),
 		host = await context.newPage();
 	try {
 		await mockHost(host);
 		await pair(page, host);
-		const pages = page.getByLabel('CardMirror receiving page');
-		await pages.selectOption({ label: 'Case' });
-		await page.getByLabel('CardMirror receiving column').selectOption({ label: '2AC' });
+		await expect(page.getByLabel('CardMirror receiving page')).toHaveCount(0);
 		await page.locator('.addTab').getByRole('button', { name: 'neg', exact: true }).click();
-		await page.getByPlaceholder('type name here', { exact: true }).fill('Politics');
-		await page.getByPlaceholder('type name here', { exact: true }).press('Enter');
-		const active = page.locator('.box textarea').first();
-		await active.fill('Politics DA');
-		await run(host, 'sendColumn');
-		await expect(active).toHaveValue('Politics DA');
-		await expect(active).toBeFocused();
-		await expect(
-			page.getByText('Received selection in Case · 2AC.', { exact: true })
-		).toBeVisible();
-		await page.locator('.tabs li').filter({ hasText: 'Case' }).getByRole('button').first().click();
 		const cells = page.locator('.box textarea');
-		await expect(cells.first()).toHaveValue('Existing 1AC argument');
+		await cells.first().fill('Politics DA');
+		await run(host, 'sendColumn');
+		await expect(cells.first()).toHaveValue('Politics DA');
 		await expect(cells.nth(1)).toHaveValue('Climate policy');
-		const level = await cells.nth(1).evaluate((el) => {
-			let parent = el.closest('.box')?.parentElement?.closest('.box');
-			let depth = 1;
-			while (parent) {
-				depth++;
-				parent = parent.parentElement?.closest('.box');
-			}
-			return depth;
-		});
-		expect(level).toBeGreaterThanOrEqual(3);
-		await pages.selectOption('');
+		const count = await cells.count();
 		await cells.first().click();
 		await run(host, 'sendResponses');
-		await expect
-			.poll(() => host.evaluate(() => (window as unknown as Host).toasts.at(-1)))
-			.toContain('Sent to Flew');
-		await expect(cells.first()).toHaveValue('Existing 1AC argument');
-		await expect(cells).toHaveCount(7);
+		await expect.poll(() => cells.count()).toBeGreaterThan(count);
+		await expect(cells.first()).toHaveValue('Politics DA');
 	} finally {
 		await context.close();
 	}
@@ -504,7 +494,7 @@ test('a SpeechDrop download streams to CardMirror once and remains usable for tr
 		await mockHost(host);
 		await pair(page, host);
 		await page.getByLabel('SpeechDrop room code').fill('round');
-		await expect(page.getByLabel('Open DOCX downloads in CardMirror')).toBeChecked();
+		await expect(page.getByLabel('Open DOCX downloads in CardMirror')).toHaveCount(0);
 		await expect(page.getByRole('button', { name: '1NC.docx', exact: true })).toBeVisible();
 		const downloaded = page.waitForEvent('download', { timeout: 10_000 });
 		await page.getByRole('button', { name: '1NC.docx', exact: true }).click();
@@ -524,7 +514,16 @@ test('a SpeechDrop download streams to CardMirror once and remains usable for tr
 			/SpeechDrop 1NC evidence/
 		);
 		expect(downloads).toBe(1);
-		await page.getByLabel('Open DOCX downloads in CardMirror').uncheck();
+		await page.locator('.sidebar .header .buttons div:nth-child(2) > .top').first().click();
+		await page
+			.getByRole('heading', {
+				name: 'Open SpeechDrop DOCX downloads in connected CardMirror',
+				exact: true
+			})
+			.locator('../..')
+			.locator('label')
+			.click();
+		await page.locator('.upper > .element > .top').click();
 		const second = page.waitForEvent('download');
 		await page.getByRole('button', { name: '1NC.docx', exact: true }).click();
 		await second;

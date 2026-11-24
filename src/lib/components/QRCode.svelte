@@ -30,10 +30,19 @@
 <style>
 	img {
 		display: block;
-		width: min(40rem, 100%);
+		/* Leave room for the popup header, instructions and controls. */
+		width: min(
+			40rem,
+			100%,
+			max(
+				calc(var(--button-size) * 2),
+				calc(100dvh - var(--button-size) * 6 - var(--padding-big) * 6)
+			)
+		);
 		height: auto;
+		box-sizing: border-box;
 		background: white;
-		padding: 0.4rem;
+		padding: var(--padding-small);
 		border-radius: var(--border-radius);
 	}
 </style>

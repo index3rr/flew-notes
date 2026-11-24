@@ -65,9 +65,9 @@
 						on:click={() => addFlow(flow)}
 						tooltip={`create new ${flow.name} flow`}
 						shortcut={index === 0
-							? ['control', 'n']
+							? ['commandControl', 'option', 'n']
 							: index === 1
-							? ['control', 'shift', 'n']
+							? ['commandControl', 'option', 'shift', 'n']
 							: null}
 					/>
 				</TutorialHighlight>

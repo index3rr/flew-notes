@@ -9,11 +9,20 @@
 	import { nodes, pendingAction } from '$lib/models/store';
 	import {
 		addNewBox,
+		addGroupReply,
+		addGroupResponse,
 		addNewExtension,
 		deleteBox,
 		toggleBoxFormat
 	} from '$lib/models/nodeDecorateAction';
+	import {
+		selectedBoxIds,
+		groupReplyTargets,
+		clearSelection,
+		consumeAnchorCapture
+	} from '$lib/models/selection';
 	import { folded } from '$lib/models/fold';
+	import { groupReplyParents } from '$lib/models/groupReply';
 
 	export let flowId: FlowId;
 
@@ -73,6 +82,21 @@
 	}
 
 	function addChild() {
+		const targets = groupReplyTargets($nodes, $selectedBoxIds);
+		const groupParent = targetId && $groupReplyParents.get(targetId);
+		if (
+			targetId &&
+			groupParent &&
+			(!targets || targets.every((target) => $groupReplyParents.get(target) === groupParent))
+		) {
+			focusGroupReply(addGroupResponse(targetId), groupParent);
+			return;
+		}
+		if (targets) {
+			const reply = addGroupReply(targets);
+			focusGroupReply(reply, targets[0]);
+			return;
+		}
 		if (targetId == null) return;
 		if ($selectedFlowId == null) return;
 		let target = $nodes[targetId];
@@ -88,6 +112,16 @@
 		if (target.level < currentFlow.value.columns.length) {
 			addNewBox(targetId, addIndex);
 		}
+	}
+
+	function focusGroupReply(reply: BoxId | null | undefined, parent: BoxId) {
+		if (!reply || !$nodes[reply]) return;
+		consumeAnchorCapture();
+		clearSelection();
+		$folded.delete(parent);
+		$folded = $folded;
+		$focusId = reply;
+		history.setPrevAfterFocus(reply);
 	}
 
 	function addSibling(direction: number) {
@@ -170,7 +204,9 @@
 					icon: 'addRight',
 					onclick: addChild,
 					disabled: targetId == null,
-					tooltip: 'add response',
+					tooltip: groupReplyTargets($nodes, $selectedBoxIds)
+						? 'respond to selected cells'
+						: 'add response',
 					shortcut: ['shift', 'return'],
 					disabledReason
 				},
@@ -228,7 +264,7 @@
 					disabled: targetId == null || targetBox()?.value.isExtension,
 					tooltip: 'toggle starred argument',
 					ariaLabel: 'Toggle starred argument',
-					shortcut: ['commandControl', 'shift', 's'],
+					shortcut: ['commandControl', 'shift', '8'],
 					toggled: targetBox()?.value?.starred,
 					disabledReason: targetBox()?.value.isExtension
 						? "can't star an extension"
@@ -273,7 +309,7 @@
 	function updateButtonGroups() {
 		buttonGroups = getButtonGroups();
 	}
-	$: targetId, $nodes, $pendingAction, $folded, updateButtonGroups();
+	$: targetId, $nodes, $pendingAction, $folded, $selectedBoxIds, updateButtonGroups();
 
 	let buttonGroupsShow: { [key: string]: boolean } = {};
 	for (let key of Object.keys(buttonGroups)) {

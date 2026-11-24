@@ -1,9 +1,10 @@
+import { writeSpeechDrop } from '$lib/server/speechDrop';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 
 const ROOM_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 const SPEECHDROP_ORIGIN = 'https://speechdrop.net';
-const MEDIA_ORIGIN = 'https://media.speechdrop.net/uploads';
+const MEDIA_ORIGIN = 'https://speechdrop.net/media/uploads';
 const MAX_DOWNLOAD_SIZE = 50 * 1024 * 1024;
 
 type SpeechDropFile = { name: string };
@@ -11,7 +12,11 @@ type SpeechDropFile = { name: string };
 export const prerender = false;
 
 function attachmentName(name: string) {
-	const safeName = name.replace(/[\r\n"\\]/g, '_').replace(/[\/\\]/g, '_').slice(0, 255) || 'download';
+	const safeName =
+		name
+			.replace(/[\r\n"\\]/g, '_')
+			.replace(/[\/\\]/g, '_')
+			.slice(0, 255) || 'download';
 	const fallback = safeName.replace(/[^\x20-\x7E]/g, '_');
 	return `attachment; filename="${fallback}"; filename*=UTF-8''${encodeURIComponent(safeName)}`;
 }
@@ -19,7 +24,12 @@ function attachmentName(name: string) {
 export const GET: RequestHandler = async ({ params, fetch }) => {
 	const { roomId } = params;
 	const fileIndex = Number(params.fileIndex);
-	if (!ROOM_ID_PATTERN.test(roomId) || !Number.isSafeInteger(fileIndex) || fileIndex < 0 || fileIndex >= 100) {
+	if (
+		!ROOM_ID_PATTERN.test(roomId) ||
+		!Number.isSafeInteger(fileIndex) ||
+		fileIndex < 0 ||
+		fileIndex >= 100
+	) {
 		return json({ error: 'Invalid SpeechDrop file.' }, { status: 400 });
 	}
 
@@ -30,14 +40,22 @@ export const GET: RequestHandler = async ({ params, fetch }) => {
 			headers: { accept: 'application/json' }
 		});
 		if (!indexResponse.ok) {
-			return json({ error: 'SpeechDrop room not found.' }, { status: indexResponse.status === 404 ? 404 : 502 });
+			return json(
+				{ error: 'SpeechDrop room not found.' },
+				{ status: indexResponse.status === 404 ? 404 : 502 }
+			);
 		}
 		const files: unknown = await indexResponse.json();
 		if (!Array.isArray(files) || fileIndex >= files.length) {
 			return json({ error: 'SpeechDrop file not found.' }, { status: 404 });
 		}
 		const file = files[fileIndex] as SpeechDropFile;
-		if (!file || typeof file.name !== 'string' || file.name.length === 0 || file.name.length > 255) {
+		if (
+			!file ||
+			typeof file.name !== 'string' ||
+			file.name.length === 0 ||
+			file.name.length > 255
+		) {
 			return json({ error: 'SpeechDrop returned an invalid file.' }, { status: 502 });
 		}
 
@@ -68,5 +86,28 @@ export const GET: RequestHandler = async ({ params, fetch }) => {
 		});
 	} catch {
 		return json({ error: 'Could not connect to SpeechDrop. Please try again.' }, { status: 502 });
+	}
+};
+
+export const DELETE: RequestHandler = async ({ params, fetch }) => {
+	const index = Number(params.fileIndex);
+	if (
+		!ROOM_ID_PATTERN.test(params.roomId) ||
+		!Number.isSafeInteger(index) ||
+		index < 0 ||
+		index >= 100
+	)
+		return json({ error: 'Invalid file.' }, { status: 400 });
+	try {
+		const response = await writeSpeechDrop(
+			fetch,
+			params.roomId,
+			'delete',
+			new URLSearchParams({ fileIndex: String(index) })
+		);
+		if (!response.ok) return json({ error: 'SpeechDrop rejected the deletion.' }, { status: 502 });
+		return json({ ok: true }, { headers: { 'cache-control': 'no-store' } });
+	} catch {
+		return json({ error: 'Could not delete this file.' }, { status: 502 });
 	}
 };

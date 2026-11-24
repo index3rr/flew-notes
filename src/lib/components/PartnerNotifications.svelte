@@ -1,19 +1,20 @@
 <script lang="ts">
-	import { partnerNotices } from '$lib/models/collaboration';
-	import ArgumentLink from './ArgumentLink.svelte';
+	import { partnerNotices, systemNoticeIds } from '$lib/models/collaboration';
+	import PartnerMessage from './PartnerMessage.svelte';
 	import Button from './Button.svelte';
 	let dismissed = new Set<string>();
 </script>
 
 <div class="notifications" aria-live="polite">
 	{#each $partnerNotices
-		.filter((item) => item.received && !dismissed.has(item.id))
+		.filter((item) => item.received && !$systemNoticeIds.has(item.id) && !dismissed.has(item.id))
 		.slice(-3) as notice}
 		<div class="notice">
 			<div>
-				<span>Partner: {notice.text}</span>{#if notice.argumentId}<ArgumentLink
-						id={notice.argumentId}
-					/>{/if}
+				<span class="sender">Partner</span><PartnerMessage
+					text={notice.text}
+					argumentId={notice.argumentId}
+				/>
 			</div>
 			<Button
 				icon="delete"
@@ -26,6 +27,12 @@
 </div>
 
 <style>
+	.sender {
+		display: block;
+		color: var(--text-weak);
+		font-size: 0.85em;
+		margin-bottom: var(--padding-small);
+	}
 	.notifications {
 		position: fixed;
 		bottom: var(--padding-big);

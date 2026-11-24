@@ -50,6 +50,7 @@ export type SegmenterOptions = {
 	shortPauseMs?: number;
 	softMaxMs?: number;
 	hardMaxMs?: number;
+	overlapMs?: number;
 	minVoicedMs?: number;
 };
 
@@ -73,6 +74,7 @@ export class Segmenter {
 			shortPauseMs: 200,
 			softMaxMs: 7000,
 			hardMaxMs: 18000,
+			overlapMs: 500,
 			minVoicedMs: 300,
 			...options
 		};
@@ -145,8 +147,12 @@ export class Segmenter {
 	}
 
 	private cut(at: number): Float32Array | null {
-		const keep = this.segment.slice(at);
-		const keepEnergies = this.energies.slice(at);
+		const resumeAt =
+			this.silentWindows < this.windows(this.options.shortPauseMs)
+				? Math.max(0, at - this.windows(this.options.overlapMs))
+				: at;
+		const keep = this.segment.slice(resumeAt);
+		const keepEnergies = this.energies.slice(resumeAt);
 		// Drop most of the trailing silence; Whisper only needs a little.
 		const trailing = Math.max(0, this.silentWindows - this.windows(200));
 		const end = at === this.segment.length ? at - trailing : at;
@@ -190,4 +196,116 @@ export class Segmenter {
 export function formatClock(ms: number) {
 	const seconds = Math.max(0, Math.round(ms / 1000));
 	return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
+// Score short spans independently so a spoken analytic doesn't hide in a long passage of cards.
+export function transcriptSpans(
+	text: string,
+	document: string
+): { text: string; outside: boolean }[] {
+	if (!document.trim() || words(text).length < 3) return [{ text, outside: false }];
+	const common = new Set([
+		'the',
+		'a',
+		'an',
+		'and',
+		'or',
+		'of',
+		'to',
+		'in',
+		'on',
+		'is',
+		'it',
+		'that',
+		'this',
+		'as',
+		'for',
+		'by',
+		'with',
+		'be',
+		'are',
+		'we',
+		'you'
+	]);
+	const doc = words(document),
+		pairs = new Set<string>();
+	for (let i = 0; i < doc.length - 1; i++)
+		if (!common.has(doc[i]) || !common.has(doc[i + 1])) pairs.add(doc[i] + ' ' + doc[i + 1]);
+	return (text.match(/[^.!?;]+[.!?;]*/g) ?? [text]).flatMap((part) => {
+		const tokens = part.trim().split(/\s+/),
+			supported = tokens.map(() => false);
+		const normalized = tokens.flatMap((token, index) =>
+			words(token).map((word) => ({ word, index }))
+		);
+		for (let i = 0; i < normalized.length - 1; i++)
+			if (pairs.has(normalized[i].word + ' ' + normalized[i + 1].word)) {
+				supported[normalized[i].index] = true;
+				supported[normalized[i + 1].index] = true;
+			}
+		// Tolerate a misheard name inside a card; don't bridge a substantive new phrase.
+		const smooth = (value: boolean) => {
+			for (let i = 0; i < supported.length; ) {
+				const start = i;
+				while (i < supported.length && supported[i] === value) i++;
+				if (i === start) {
+					i++;
+					continue;
+				}
+				if (
+					i - start <= 2 &&
+					start > 0 &&
+					i < supported.length &&
+					supported[start - 1] !== value &&
+					supported[i] !== value
+				)
+					for (let j = start; j < i; j++) supported[j] = !value;
+			}
+		};
+		smooth(false);
+		smooth(true);
+		const spans: { text: string; outside: boolean }[] = [];
+		tokens.forEach((token, index) => {
+			const outside = !supported[index],
+				last = spans.at(-1);
+			if (last?.outside === outside) last.text += ' ' + token;
+			else spans.push({ text: token, outside });
+		});
+		return spans.map((span) => ({
+			...span,
+			outside: span.outside && words(span.text).length >= 3
+		}));
+	});
+}
+
+export function matchesStartPhrase(text: string, phrases: string): boolean {
+	const heard = ' ' + words(text).join(' ') + ' ';
+	return phrases.split(',').some((phrase) => {
+		const normalized = words(phrase).join(' ');
+		return !!normalized && heard.includes(' ' + normalized + ' ');
+	});
+}
+export function pacingAllocation(
+	remainingMs: number,
+	texts: string[],
+	fixed: number[],
+	weighted: boolean
+): number[] {
+	const available = Math.max(0, remainingMs - fixed.reduce((a, b) => a + b, 0));
+	const weights = texts.map((text, i) =>
+		fixed[i] > 0 ? 0 : weighted ? Math.max(1, words(text).length) : 1
+	);
+	const total = weights.reduce((a, b) => a + b, 0);
+	return texts.map(
+		(_, i) => fixed[i] || (total ? Math.floor((available * weights[i]) / total) : 0)
+	);
+}
+
+export function deduplicateTranscript(previous: string, next: string): string {
+	const before = words(previous).slice(-20),
+		tokens = next.trim().split(/\s+/);
+	for (let length = Math.min(before.length, tokens.length, 20); length >= 2; length--) {
+		if (before.slice(-length).join(' ') === words(tokens.slice(0, length).join(' ')).join(' '))
+			return tokens.slice(length).join(' ');
+	}
+	return next;
 }

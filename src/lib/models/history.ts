@@ -1,5 +1,5 @@
 import type { BoxId, FlowId, Nodes, RootId } from '$lib/models/node';
-import { focusId } from './focus';
+import { focusId, selectedFlowId } from './focus';
 import { applyActionBundleAndSend, type ActionBundle } from './nodeAction';
 import { resolvePendingAction, type PendingAction } from './nodePendingAction';
 import { nodes } from './store';
@@ -42,23 +42,35 @@ export class HistoryHolder {
 		this.histories[owner].add(actionBundle);
 		this.lastAddedOwner = owner;
 	}
+	resolveOwner(owner: FlowId | RootId, redo = false): FlowId | RootId {
+		if (
+			this.lastAddedOwner === 'root' &&
+			(redo ? this.histories.root.canRedo() : this.histories.root.canUndo())
+		)
+			return 'root';
+		return owner;
+	}
 	undo(owner: FlowId | RootId, pendingAction: PendingAction | null) {
+		owner = pendingAction?.ownerId ?? this.resolveOwner(owner, false);
 		if (!this.canUndo(owner, pendingAction)) return;
 		resolvePendingAction($nodes);
 		this.histories[owner].undo();
 	}
 	redo(owner: FlowId | RootId, pendingAction: PendingAction | null) {
+		owner = pendingAction?.ownerId ?? this.resolveOwner(owner, true);
 		if (!this.canRedo(owner, pendingAction)) return;
 		resolvePendingAction($nodes);
 		this.histories[owner].redo();
 	}
 	canUndo(owner: FlowId | RootId, pendingAction: PendingAction | null) {
+		owner = pendingAction?.ownerId ?? this.resolveOwner(owner, false);
 		// if has pendingAction, then calling undo will resolve the pendingAction, creating a new undoable action
 		if (pendingAction?.ownerId == owner) return true;
 		if (!Object.prototype.hasOwnProperty.call(this.histories, owner)) return false;
 		return this.histories[owner].canUndo();
 	}
 	canRedo(owner: FlowId | RootId, pendingAction: PendingAction | null) {
+		owner = pendingAction?.ownerId ?? this.resolveOwner(owner, true);
 		// if has pendingAction, then calling redo will resolve the pendingAction, deleting any redos
 		if (pendingAction?.ownerId == owner) return false;
 		if (!Object.prototype.hasOwnProperty.call(this.histories, owner)) return false;
@@ -119,6 +131,13 @@ export class History {
 		const actionBundle = applyActionBundleAndSend(structuredClone(action.actionBundle));
 		if (actionBundle == null) return;
 		action.actionBundle = actionBundle;
+		if (action.beforeFocus && $nodes[action.beforeFocus]) {
+			selectedFlowId.set(
+				$nodes[action.beforeFocus]!.value.tag === 'flow'
+					? (action.beforeFocus as FlowId)
+					: ($nodes[action.beforeFocus]!.value as import('./node').Box).flowId
+			);
+		}
 		focusId.set(action.beforeFocus);
 		this.index -= 1;
 	}

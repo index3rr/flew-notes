@@ -1,6 +1,13 @@
+import { exportItems } from '../integrations/cardmirror/evidence';
 import { get, writable } from 'svelte/store';
 import { Connection, type ConnectionState } from '../integrations/cardmirror/connection';
-import { layout, parsePayload, record, string } from '../integrations/cardmirror/protocol';
+import {
+	layout,
+	parsePayload,
+	record,
+	string,
+	validProvenance
+} from '../integrations/cardmirror/protocol';
 import { focusId, selectedFlowId } from './focus';
 import { nodes, frozen } from './store';
 import { newBoxId, type BoxId, type FlowId, type Nodes } from './node';
@@ -336,4 +343,66 @@ async function handleRequest(method: string, params: unknown): Promise<unknown> 
 		}.`
 	}));
 	return { cells: result.actions.length, page: tree[id]!.value.content || 'Untitled page' };
+}
+
+export async function readCardMirrorHeadings(
+	speech = false
+): Promise<{ name: string; blocks: import('./speechDoc').DocBlock[] }> {
+	const result = await connection.request('outline.read', { speech });
+	if (
+		!record(result) ||
+		!string(result.name, 1000) ||
+		!Array.isArray(result.blocks) ||
+		result.blocks.length > 500 ||
+		!result.blocks.every(
+			(block) =>
+				record(block) &&
+				string(block.title) &&
+				string(block.group) &&
+				Array.isArray(block.tags) &&
+				block.tags.length <= 500 &&
+				block.tags.every((tag) => string(tag)) &&
+				(block.provenance === undefined ||
+					(Array.isArray(block.provenance) &&
+						block.provenance.length === block.tags.length &&
+						block.provenance.every((source) => source === null || validProvenance(source))))
+		)
+	)
+		throw new Error('Update the CardMirror companion plugin to read headings.');
+	return result as { name: string; blocks: import('./speechDoc').DocBlock[] };
+}
+export async function sendToCardMirror(boxes: import('./node').SerializedBox[], speech = false) {
+	const items = exportItems(boxes);
+	if (!items.length) throw new Error('Select cells containing text first.');
+	if (items.some((item) => item.evidence?.length)) {
+		const capabilities = await connection.request('integration.capabilities', {});
+		if (!record(capabilities) || capabilities.evidence !== true)
+			throw new Error('Reload the updated CardMirror companion plugin to send attached evidence.');
+	}
+	await connection.request('outline.insert', {
+		speech,
+		texts: items.map((item) => item.text),
+		items
+	});
+}
+
+// A confirmation tab forwards the return key to the originating app tab without storing it.
+const confirmationChannel =
+	typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('flew-cardmirror-confirm') : null;
+confirmationChannel?.addEventListener('message', (event) => {
+	if (typeof event.data === 'string' && get(cardMirror).state === 'pairing')
+		void confirmCardMirror(event.data).catch((error) =>
+			cardMirror.update((value) => ({ ...value, error: error.message }))
+		);
+});
+export function acceptCardMirrorLink() {
+	const params = new URLSearchParams(location.hash.slice(1));
+	const key = params.get('cardMirrorReply');
+	if (!key) return;
+	historyReplaceHash();
+	if (get(cardMirror).state === 'pairing') void confirmCardMirror(key);
+	else confirmationChannel?.postMessage(key);
+}
+function historyReplaceHash() {
+	window.history.replaceState(null, '', location.pathname + location.search);
 }

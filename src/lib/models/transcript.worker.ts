@@ -34,9 +34,9 @@ function progress(event: { status?: string; file?: string; loaded?: number; tota
 async function load(setting: number) {
 	const webgpu = await gpu();
 	const choices: Choice[] = ['fast', 'balanced', 'accurate', 'best'];
-	let choice: Choice = choices[setting - 1] ?? (webgpu ? 'accurate' : 'balanced');
+	let choice: Choice = choices[setting - 1] ?? (webgpu?.f16 ? 'best' : 'accurate');
 	// Large-v3-turbo is only practical with half-precision WebGPU.
-	if (choice === 'best' && !webgpu?.f16) choice = webgpu ? 'accurate' : 'balanced';
+	if (choice === 'best' && !webgpu?.f16) choice = 'accurate';
 	if (loaded?.choice === choice && transcriber) return loaded;
 	await transcriber?.dispose();
 	transcriber = undefined;
@@ -77,10 +77,15 @@ self.onmessage = async (event: MessageEvent<{ audio?: Float32Array; model?: numb
 		}
 		if (!transcriber || !loaded) await load(0);
 		const seconds = event.data.audio.length / 16000;
+		const audio = event.data.audio;
+		let peak = 0;
+		for (const sample of audio) peak = Math.max(peak, Math.abs(sample));
+		const gain = peak > 0.005 ? Math.min(8, 0.9 / peak) : 1;
+		if (gain > 1) for (let i = 0; i < audio.length; i++) audio[i] *= gain;
 		const result = await transcriber!(event.data.audio, {
 			return_timestamps: false,
-			// Even spreading stays under ~8 tokens a second; the cap stops runaway decoding loops.
-			max_new_tokens: Math.min(440, Math.ceil(seconds * 10) + 12),
+			// Allow headroom for fast speech and technical vocabulary; cap runaway decoding.
+			max_new_tokens: Math.min(440, Math.ceil(seconds * 16) + 24),
 			...(models[loaded!.choice].multilingual ? { language: 'english', task: 'transcribe' } : {})
 		});
 		self.postMessage({

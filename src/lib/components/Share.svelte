@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { settings } from '$lib/models/settings';
 	import Button from './Button.svelte';
 	import {
 		initGuestConnection,
@@ -25,7 +26,7 @@
 	import { connections } from '$lib/models/store';
 	import { hasTurnServerConfigured } from '$lib/models/iceServers';
 
-	export let closePopup = () => {};
+	export let closePopup = () => undefined;
 
 	let connectionMode: 'manual' | 'link' | 'qr' = 'link';
 
@@ -50,7 +51,11 @@
 	});
 </script>
 
-<div class="top palette-plain" class:qrMode={connectionMode == 'qr'}>
+<div
+	class="top palette-plain"
+	class:customScrollbar={settings.data.customScrollbar.value}
+	class:qrMode={connectionMode == 'qr'}
+>
 	{#if $connections.tag == 'empty'}
 		<div class="start">
 			<div class="explain">
@@ -60,6 +65,11 @@
 					<span class="usePalette palette-accent">host</span>
 					a room to share your current flow, or edit someone else's flow as a
 					<span class="usePalette palette-accent-secondary">guest</span>.
+				</p>
+				<p>
+					Everyone in the room shares the current document, including its title. Opening, creating,
+					or closing a document changes it for everyone. You can browse its pages independently.
+					Sidebar notes stay on your device. Files and recovery copies are saved on each device.
 				</p>
 				<p>
 					If you encounter any issues with sharing, first update your browser, then <Button
@@ -86,15 +96,15 @@
 				{#if !hasTurnServerConfigured()}
 					<p class="turnWarning">
 						Cross-network sharing may be broken at the moment, please <Button
-						icon="delta"
-						text="Contact me!"
-						on:click={() => {
-							closePopup();
-							openPopup(Help, 'Contact');
-						}}
-						target="_blank"
-						inline
-					/>
+							icon="delta"
+							text="Contact me!"
+							on:click={() => {
+								closePopup();
+								openPopup(Help, 'Contact');
+							}}
+							target="_blank"
+							inline
+						/>
 					</p>
 				{/if}
 			</div>
@@ -250,7 +260,8 @@
 <style>
 	.top {
 		width: min(calc(100vw - var(--padding) * 2), 600px);
-		height: min(calc(100vh - var(--padding) * 2), min-content);
+		max-height: calc(100vh - var(--padding) * 2);
+		overflow-y: auto;
 		padding: calc(var(--button-size) + var(--padding) * 2) 0 0 0;
 		box-sizing: border-box;
 		display: flex;
@@ -266,6 +277,7 @@
 	}
 
 	.hostGuestButtons {
+		flex-wrap: wrap;
 		display: flex;
 		flex-direction: row;
 		gap: var(--padding);

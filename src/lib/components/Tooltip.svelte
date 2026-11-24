@@ -48,31 +48,34 @@
 	function mouseMove() {
 		if (tooltip) {
 			let rect = element.getBoundingClientRect();
+			const margin = parseFloat(getComputedStyle(element).getPropertyValue('--padding')) || 0;
 			if (layout == 'bottom' || layout == 'top') {
 				x = rect.left - tooltip.offsetWidth / 2 + rect.width / 2;
-				if (x < 4) {
-					x = 4;
-				} else if (x + tooltip.offsetWidth > window.innerWidth - 4) {
-					x = window.innerWidth - tooltip.offsetWidth - 4;
+				if (x < margin) {
+					x = margin;
+				} else if (x + tooltip.offsetWidth > window.innerWidth - margin) {
+					x = window.innerWidth - tooltip.offsetWidth - margin;
 				}
 				if (layout == 'bottom') {
-					y = rect.bottom + 4;
+					y = rect.bottom + margin;
 				} else if (layout == 'top') {
-					y = rect.top - tooltip.offsetHeight - 4;
+					y = rect.top - tooltip.offsetHeight - margin;
 				}
 			} else if (layout == 'left' || layout == 'right') {
 				y = rect.top - tooltip.offsetHeight / 2 + rect.height / 2;
-				if (y < 4) {
-					y = 4;
-				} else if (y + tooltip.offsetHeight > window.innerHeight - 4) {
-					y = window.innerHeight - tooltip.offsetHeight - 4;
+				if (y < margin) {
+					y = margin;
+				} else if (y + tooltip.offsetHeight > window.innerHeight - margin) {
+					y = window.innerHeight - tooltip.offsetHeight - margin;
 				}
 				if (layout == 'left') {
-					x = rect.left - tooltip.offsetWidth - 4;
+					x = rect.left - tooltip.offsetWidth - margin;
 				} else if (layout == 'right') {
-					x = rect.right + 4;
+					x = rect.right + margin;
 				}
 			}
+			x = Math.max(margin, Math.min(x, window.innerWidth - tooltip.offsetWidth - margin));
+			y = Math.max(margin, Math.min(y, window.innerHeight - tooltip.offsetHeight - margin));
 		}
 	}
 	async function onContentChanged() {
@@ -150,7 +153,10 @@
 		background-color: var(--background-back);
 		border-radius: var(--border-radius);
 		position: fixed;
-		white-space: nowrap;
+		white-space: normal;
+		max-width: calc(100vw - var(--padding) * 2);
+		box-sizing: border-box;
+		overflow-wrap: anywhere;
 		z-index: 10000;
 		font-size: var(--font-size);
 		display: flex;
