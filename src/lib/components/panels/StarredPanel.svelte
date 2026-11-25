@@ -32,9 +32,11 @@
 		showArgument(id);
 	}
 
-	function flowPalette(id: FlowId) {
+	function flowPalette(id: FlowId, level: number) {
 		const flow = $nodes[id];
-		return flow?.value.tag === 'flow' && flow.value.invert ? 'accent-secondary' : 'accent';
+		return ((level - 1) % 2 === 0) !== (flow?.value.tag === 'flow' && flow.value.invert)
+			? 'accent'
+			: 'accent-secondary';
 	}
 
 	function grow(element: HTMLTextAreaElement) {
@@ -73,9 +75,9 @@
 	{:else}
 		<div class="list">
 			{#each starred as { id, node } (id)}
-				<article class={`palette-${flowPalette(node.value.flowId)}`}>
+				<article class={`palette-${flowPalette(node.value.flowId, node.level)}`}>
 					<PanelRow
-						palette={flowPalette(node.value.flowId)}
+						palette={flowPalette(node.value.flowId, node.level)}
 						weak={!node.value.content}
 						on:click={() => goToBox(id, node.value.flowId)}
 					>
@@ -83,7 +85,7 @@
 						<svelte:fragment slot="actions">
 							<Button
 								icon="star"
-								palette={flowPalette(node.value.flowId)}
+								palette={flowPalette(node.value.flowId, node.level)}
 								toggled={true}
 								disabled={$frozen}
 								disabledReason="Wait for synchronization"

@@ -1,5 +1,9 @@
 <script lang="ts">
-	import { droppedDocument, documentText } from '$lib/models/panelDrag';
+	const errorMessage = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause));
+	import { panelDrop } from '$lib/models/panelDrop';
+	import PanelMenu from './PanelMenu.svelte';
+	import { openPopup } from '$lib/models/popup';
+	import { fileMime, droppedDocument, documentText } from '$lib/models/panelDrag';
 	import { afterUpdate, onDestroy, tick } from 'svelte';
 	import Button from '../Button.svelte';
 	import PanelHeader from './PanelHeader.svelte';
@@ -7,6 +11,7 @@
 	import PanelStatus from './PanelStatus.svelte';
 	import {
 		speechDocument,
+		speechDropCode,
 		speechDetected,
 		speechDocumentSource,
 		transcribedPhrase
@@ -31,7 +36,41 @@
 	type Entry = { id: number; text: string; outside: boolean; speech: string; at: number };
 	type Source = 'microphone' | 'tab';
 
+	let segments: { text: string; speech: string; at: number }[] = [];
 	let entries: Entry[] = [];
+	$: entries = segments.flatMap((segment, segmentIndex) =>
+		transcriptSpans(segment.text, $speechDocument).map((span, spanIndex) => ({
+			...span,
+			speech: segment.speech,
+			at: segment.at,
+			id: segmentIndex * 1000000 + spanIndex
+		}))
+	);
+	let referenceInput: HTMLInputElement;
+	function menu() {
+		openPopup(PanelMenu, 'Transcript', {
+			actions: [
+				{
+					label: 'Load speech document',
+					disabled: active || loading || finishing,
+					run: () => referenceInput.click()
+				},
+				{
+					label: 'Paste speech text',
+					disabled: active || loading || finishing,
+					run: async () => {
+						try {
+							cancelDocument();
+							speechDocument.set(await navigator.clipboard.readText());
+							speechDocumentSource.set(null);
+						} catch {
+							error = 'Could not read clipboard.';
+						}
+					}
+				}
+			]
+		});
+	}
 	let status = '';
 	let error = '';
 	let active = false;
@@ -49,7 +88,7 @@
 	let resampling = 0;
 	let generation = 0;
 	let detected = false;
-	let hasRecorded = false;
+
 	onDestroy(
 		speechDocument.subscribe(() => {
 			detected = false;
@@ -66,7 +105,6 @@
 		})
 	);
 	let started = 0;
-	let nextId = 0;
 	let downloads = new Map<string, { loaded: number; total: number }>();
 	const maxQueue = 12;
 
@@ -159,14 +197,7 @@
 		if (text && label) {
 			const comparison = compareSpeech(text, $speechDocument);
 			transcribedPhrase.update((value) => ({ id: value.id + 1, text }));
-			entries = [
-				...entries,
-				...transcriptSpans(text, $speechDocument).map((span) => ({
-					id: nextId++,
-					...span,
-					...label
-				}))
-			];
+			segments = [...segments, { text, ...label }];
 			if (comparison.matched && !detected) {
 				detected = true;
 				speechDetected.update((value) => value + 1);
@@ -200,6 +231,7 @@
 	}
 
 	async function start(kind: Source) {
+		cancelDocument();
 		stop();
 		const token = generation;
 		source = kind;
@@ -269,14 +301,13 @@
 			await context.resume();
 			if (token !== generation) return;
 			active = true;
-			hasRecorded = true;
 			loading = false;
 			status = '';
 			next();
 		} catch (cause) {
 			if (token !== generation) return;
 			stop();
-			const message = (cause as Error).message;
+			const message = errorMessage(cause);
 			error =
 				(cause as Error).name === 'NotAllowedError'
 					? kind === 'tab'
@@ -308,7 +339,9 @@
 	function exportTranscript() {
 		let speech: string | null = null;
 		const lines: string[] = [];
-		for (const entry of entries) {
+		for (const entry of entries.filter(
+			(entry) => !settings.data.transcriptExport.value || entry.outside
+		)) {
 			if (entry.speech !== speech) {
 				speech = entry.speech;
 				lines.push('', `# ${speech || 'Transcript'}`);
@@ -345,17 +378,38 @@
 			analyticsOnly = Boolean(settings.data.transcriptAnalyticsOnly.value);
 		})
 	);
+	let documentController: AbortController | null = null;
+	let documentRequest = 0;
+	const cancelDocument = () => {
+		documentRequest++;
+		documentController?.abort();
+		documentController = null;
+	};
+	onDestroy(speechDropCode.subscribe(cancelDocument));
+	onDestroy(cancelDocument);
 	async function drop(event: DragEvent) {
 		event.preventDefault();
 		event.stopPropagation();
-		if (active || finishing) return;
+		if (active || loading || finishing) return;
+		cancelDocument();
+		const request = documentRequest;
+		const controller = new AbortController();
+		documentController = controller;
+		error = '';
 		try {
-			const file = await droppedDocument(event);
-			if (file) speechDocument.set(await documentText(file.name, file.blob));
+			const file = await droppedDocument(event, controller.signal);
+			if (!file) return;
+			const text = await documentText(file.name, file.blob);
+			if (request !== documentRequest || controller.signal.aborted) return;
+			speechDocument.set(text);
+			speechDocumentSource.set(
+				file.source ? { name: file.name, room: file.source.room, index: file.source.index } : null
+			);
 		} catch (cause) {
-			error = (cause as Error).message;
+			if (request === documentRequest && !controller.signal.aborted) error = errorMessage(cause);
 		}
 	}
+
 	$: running = active || loading;
 	$: visibleEntries = entries
 		.filter(
@@ -390,6 +444,7 @@
 
 <section
 	class="transcript"
+	use:panelDrop={{ types: [fileMime, 'Files'], disabled: active || loading || finishing }}
 	aria-label="Transcript"
 	on:dragover={(e) => {
 		e.preventDefault();
@@ -397,7 +452,31 @@
 	}}
 	on:drop={drop}
 >
+	<input
+		bind:this={referenceInput}
+		type="file"
+		accept=".txt,.docx"
+		hidden
+		on:change={async () => {
+			const file = referenceInput.files?.[0];
+			if (file) {
+				cancelDocument();
+				const token = documentRequest;
+				try {
+					const text = await documentText(file.name, file);
+					if (token === documentRequest) {
+						speechDocument.set(text);
+						speechDocumentSource.set(null);
+					}
+				} catch (cause) {
+					error = errorMessage(cause);
+				}
+			}
+			referenceInput.value = '';
+		}}
+	/>
 	<PanelHeader name="Transcript" {detail}>
+		<Button icon="dots" ariaLabel="Transcript menu" tooltip="transcript menu" on:click={menu} />
 		{#if running || finishing}
 			<Button
 				icon="pause"
@@ -426,7 +505,7 @@
 			multiline
 			rows={2}
 			ariaLabel="Opponent speech document"
-			placeholder="paste the opponent's speech document to mark analytics"
+			placeholder="drop a speech document here, or paste its text"
 			bind:value={$speechDocument}
 		/>{/if}
 	{#if $speechDocumentSource}<PanelStatus>Comparing with {$speechDocumentSource.name}</PanelStatus
@@ -445,11 +524,13 @@
 			{#if entry.speech !== visibleEntries[index - 1]?.speech || index === 0}
 				<p class="speech">{entry.speech || 'Transcript'}</p>
 			{/if}
-			<div class="entry" class:outside={entry.outside}>
+			<div
+				class="entry"
+				class:outside={entry.outside}
+				title={entry.outside ? 'Outside document' : undefined}
+				aria-label={entry.outside ? 'Analytic' : undefined}
+			>
 				<p class="text">
-					<span class="meta"
-						>{#if entry.outside}<span class="flag"> · Outside document</span>{/if}</span
-					>
 					{entry.text}
 				</p>
 				<Button
@@ -461,13 +542,6 @@
 					on:click={() => addToFlow(entry)}
 				/>
 			</div>
-		{:else}
-			{#if !running && !finishing}
-				<PanelStatus
-					>Transcribes on this device. Lines that aren't in the opponent's document are marked,
-					since those are the analytics you have to catch by ear.</PanelStatus
-				>
-			{/if}
 		{/each}
 	</div>
 	{#if entries.length}
@@ -485,7 +559,9 @@
 				ariaLabel="Clear transcript"
 				tooltip="clear transcript"
 				disabled={!entries.length || running || finishing}
-				on:click={() => (entries = [])}
+				on:click={() => {
+					if (confirm('Clear transcript?')) segments = [];
+				}}
 			/>
 		</div>
 	{/if}
@@ -519,6 +595,10 @@
 		border-radius: var(--border-radius);
 		transition: background var(--transition-speed);
 	}
+	.entry.outside {
+		background: var(--background-active);
+		margin-block: var(--padding-small);
+	}
 	.entry:hover {
 		background: var(--background-indent);
 	}
@@ -538,17 +618,9 @@
 		line-height: 1.5em;
 		overflow-wrap: anywhere;
 	}
-	.meta {
-		color: var(--text-weak);
-		font-size: 0.85em;
-		padding-right: var(--padding-small);
-	}
 	.footer {
 		display: flex;
 		justify-content: flex-end;
 		flex-shrink: 0;
-	}
-	.outside .flag {
-		color: var(--text);
 	}
 </style>

@@ -17,10 +17,25 @@
 	} from '$lib/models/coverage';
 	import { settings } from '$lib/models/settings';
 	import type { BoxId, FlowId } from '$lib/models/node';
-	import { tick } from 'svelte';
+	import { tick, onDestroy } from 'svelte';
+	import Settings from '../Settings.svelte';
+	import { openPopup } from '$lib/models/popup';
 
 	export let selectedFlowId: FlowId | null = null;
 	export let clickTab: (id: FlowId) => void = () => undefined;
+
+	let showDropped = true,
+		showExtended = true;
+	onDestroy(
+		settings.subscribe(['coverageShowDropped', 'coverageShowExtended'], () => {
+			showDropped = Boolean(settings.data.coverageShowDropped.value);
+			showExtended = Boolean(settings.data.coverageShowExtended.value);
+		})
+	);
+	$: visiblePages = coverage.pages.map((page) => ({
+		...page,
+		dropped: page.dropped.filter((item) => (item.extended ? showExtended : showDropped))
+	}));
 
 	// Follows the speech timer (CX and prep resolve to the next speech) until a speech is picked here.
 	let pinned: string | null = null;
@@ -36,8 +51,8 @@
 		timerSpeech ??
 		nextSpeech($nodes, speeches);
 	$: coverage = speech ? computeCoverage($nodes, speech) : { speech: '', pages: [] };
-	$: toAnswer = coverage.pages.reduce((sum, page) => sum + page.toAnswer.length, 0);
-	$: dropped = coverage.pages.flatMap((page) => page.dropped.filter((item) => !item.extended));
+	$: toAnswer = visiblePages.reduce((sum, page) => sum + page.toAnswer.length, 0);
+	$: dropped = visiblePages.flatMap((page) => page.dropped.filter((item) => !item.extended));
 	$: speechIndex = speech ? speeches.indexOf(speech) : -1;
 
 	function palette(page: CoveragePage, offset: number) {
@@ -84,7 +99,7 @@
 	function context(item: CoverageItem) {
 		return item.root && item.content.length < 40 ? item.root : '';
 	}
-	$: allDropped = coverage.pages.flatMap((page) =>
+	$: allDropped = visiblePages.flatMap((page) =>
 		page.dropped.filter((item) => !item.extended).map((item) => ({ page, item }))
 	);
 </script>
@@ -97,6 +112,12 @@
 			: null}
 		tooltip="what the selected speech still has to answer, and what the other side dropped"
 	>
+		<Button
+			icon="settings"
+			ariaLabel="Coverage options"
+			tooltip="coverage options"
+			on:click={() => openPopup(Settings, 'Settings', { initialGroup: 'Coverage' })}
+		/>
 		<Button
 			icon="arrowRightThroughCircle"
 			ariaLabel="Extend all dropped arguments"
@@ -126,7 +147,7 @@
 		{:else if coverage.pages.length === 0}
 			<PanelStatus>Nothing to answer before {speech} yet.</PanelStatus>
 		{/if}
-		{#each coverage.pages as page (page.flowId)}
+		{#each visiblePages as page (page.flowId)}
 			<div class="page">
 				<PanelRow
 					palette={palette(page, 0)}

@@ -1,22 +1,53 @@
 <script lang="ts">
+	import { panelDrop } from '$lib/models/panelDrop';
+	import PanelMenu from './PanelMenu.svelte';
+	import { openPopup } from '$lib/models/popup';
+	import { serializeBoxSubtree } from '$lib/models/node';
 	import { selectedBoxIds } from '$lib/models/selection';
 	import { currentArgument } from '$lib/models/argumentNavigation';
 	import { nodes } from '$lib/models/store';
-	import { serializeBoxSubtree } from '$lib/models/node';
 	import { selectionRoots } from '$lib/models/panelDrag';
 	import { get } from 'svelte/store';
+	import { onDestroy } from 'svelte';
 	import PanelHeader from './PanelHeader.svelte';
 	import PanelStatus from './PanelStatus.svelte';
 	import PanelRow from './PanelRow.svelte';
 	import Button from '../Button.svelte';
 	import { readSpeechDoc, shortenTag, type DocBlock } from '$lib/models/speechDoc';
-	import { droppedDocument, pagesMime, boxesMime } from '$lib/models/panelDrag';
+	import {
+		droppedDocument,
+		fileMime,
+		pagesMime,
+		boxesMime,
+		readPageDrag
+	} from '$lib/models/panelDrag';
 	import { newFlowId, newBoxId, type Nodes } from '$lib/models/node';
 	import { getDebateStyleFlow } from '$lib/models/debateStyle';
 	import { importFlowPage } from '$lib/models/nodeDecorateAction';
 	import { documentOpen } from '$lib/models/document';
 	import { cardMirror, readCardMirrorHeadings, sendToCardMirror } from '$lib/models/cardMirror';
 	import { settings } from '$lib/models/settings';
+	function menu() {
+		openPopup(PanelMenu, 'Autoflow', {
+			actions: [
+				{ label: 'Load DOCX', run: () => input.click() },
+				{
+					label: 'Paste copied cells',
+					disabled: $cardMirror.state !== 'connected',
+					run: async () => {
+						try {
+							const data = JSON.parse(await navigator.clipboard.readText());
+							if (data.tag !== 'flew-notes-boxes' || !Array.isArray(data.boxes))
+								throw new Error('Copy flow cells first.');
+							await sendToCardMirror(data.boxes, speechTarget);
+						} catch (cause) {
+							error = (cause as Error).message;
+						}
+					}
+				}
+			]
+		});
+	}
 	let blocks: DocBlock[] = [];
 	let name = '';
 	let error = '';
@@ -25,19 +56,32 @@
 	let anchor = 0;
 	let expanded = new Set<number>();
 	let input: HTMLInputElement;
-	async function load(nameValue: string, blob: Blob) {
+	let request = 0;
+	let controller: AbortController | null = null;
+	const begin = () => {
+		controller?.abort();
+		controller = new AbortController();
+		return ++request;
+	};
+	onDestroy(() => {
+		request++;
+		controller?.abort();
+	});
+	async function load(nameValue: string, blob: Blob, token = begin()) {
 		busy = true;
 		error = '';
 		try {
-			blocks = await readSpeechDoc(blob);
+			const loaded = await readSpeechDoc(blob);
+			if (token !== request) return;
+			blocks = loaded;
 			name = nameValue;
 			selected = new Set();
 			expanded = new Set();
 			if (!blocks.length) error = 'No headings found in this document.';
 		} catch (cause) {
-			error = (cause as Error).message;
+			if (token === request) error = (cause as Error).message;
 		} finally {
-			busy = false;
+			if (token === request) busy = false;
 		}
 	}
 	function source(indices: number[]) {
@@ -109,18 +153,20 @@
 		);
 	}
 	async function headings(speech = false) {
+		const token = begin();
 		busy = true;
 		error = '';
 		try {
 			const result = await readCardMirrorHeadings(speech);
+			if (token !== request) return;
 			blocks = result.blocks;
 			name = result.name;
 			selected = new Set();
 			expanded = new Set();
 		} catch (cause) {
-			error = (cause as Error).message;
+			if (token === request) error = (cause as Error).message;
 		} finally {
-			busy = false;
+			if (token === request) busy = false;
 		}
 	}
 	async function sendSelected(speech: boolean) {
@@ -129,16 +175,13 @@
 		speechTarget = speech;
 		try {
 			const tree = get(nodes);
-			const ids = selectionRoots(
-				tree,
-				get(selectedBoxIds).size
-					? get(selectedBoxIds)
-					: currentArgument()
-					? [currentArgument()!.id]
-					: []
-			);
+			const ids = get(selectedBoxIds).size
+				? get(selectedBoxIds)
+				: currentArgument()
+				? [currentArgument()!.id]
+				: [];
 			await sendToCardMirror(
-				ids.map((id) => serializeBoxSubtree(tree, id)),
+				selectionRoots(tree, ids).map((id) => serializeBoxSubtree(tree, id)),
 				speech
 			);
 		} catch (cause) {
@@ -151,26 +194,39 @@
 	async function drop(event: DragEvent) {
 		event.preventDefault();
 		event.stopPropagation();
+		const token = begin();
+		busy = true;
 		error = '';
 		try {
-			const raw = event.dataTransfer?.getData(boxesMime);
-			if (raw) {
-				busy = true;
-				await sendToCardMirror(JSON.parse(raw).boxes, speechTarget);
-				busy = false;
+			const pages = event.dataTransfer?.getData(pagesMime);
+			if (pages) {
+				const { source, ids } = readPageDrag(pages);
+				await sendToCardMirror(
+					ids.flatMap((id) =>
+						source[id]!.children.map((child) => serializeBoxSubtree(source, child))
+					),
+					speechTarget
+				);
 				return;
 			}
-			const file = await droppedDocument(event);
-			if (file) await load(file.name, file.blob);
+			const raw = event.dataTransfer?.getData(boxesMime);
+			if (raw) {
+				await sendToCardMirror(JSON.parse(raw).boxes, speechTarget);
+				return;
+			}
+			const file = await droppedDocument(event, controller!.signal);
+			if (token === request && file) await load(file.name, file.blob, token);
 		} catch (cause) {
-			busy = false;
-			error = (cause as Error).message;
+			if (token === request) error = (cause as Error).message;
+		} finally {
+			if (token === request) busy = false;
 		}
 	}
 </script>
 
 <section
 	class="autoflow-panel"
+	use:panelDrop={{ types: [fileMime, boxesMime, pagesMime, 'Files'] }}
 	aria-label="Autoflow"
 	on:dragover={(e) => {
 		e.preventDefault();
@@ -183,13 +239,7 @@
 		detail={name || null}
 		tooltip="drop a DOCX here; select blocks with Ctrl/Cmd or Shift, then drag them onto tabs or cells. Drop selected flow cells here to send them to CardMirror."
 	>
-		<Button
-			icon="upload"
-			ariaLabel="Load speech document"
-			tooltip="load a DOCX"
-			disabled={busy}
-			on:click={() => input.click()}
-		/>
+		<Button icon="dots" ariaLabel="Autoflow menu" tooltip="autoflow menu" on:click={menu} />
 		<Button
 			icon="link"
 			ariaLabel="Read CardMirror headings"
@@ -247,7 +297,7 @@
 				/>
 			</div>
 		</div>{/if}
-	{#if busy}<PanelStatus>Reading document…</PanelStatus>{/if}
+
 	{#if error}<PanelStatus error>{error}</PanelStatus>{/if}
 	<div class="blocks" class:customScrollbar={settings.data.customScrollbar.value}>
 		{#each blocks as block, index}
@@ -268,8 +318,10 @@
 							tooltip="copy block to a new page"
 							disabled={!$documentOpen}
 							on:click={() => {
-								const tree = source([index]);
-								importFlowPage(tree, tree.root.children[0]);
+								const tree = source(
+									selected.has(index) ? [...selected].sort((a, b) => a - b) : [index]
+								);
+								for (const id of tree.root.children) importFlowPage(tree, id);
 							}}
 						/></svelte:fragment
 					>

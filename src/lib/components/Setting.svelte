@@ -10,6 +10,7 @@
 	import ColorSelector from './ColorSelector.svelte';
 	export let setting: Setting;
 	export let key: string;
+	export let displayName: string | null = null;
 
 	let value: any = setting.value;
 
@@ -52,7 +53,7 @@
 	<div class="spotlight" style={`--spotlight:${$spotlight}`} />
 	<span class="above">
 		<div class="titleReset">
-			<h2>{setting.name}</h2>
+			<h2>{displayName ?? setting.name}</h2>
 			<div class="reset" class:hidden={value == setting.auto}>
 				<Button
 					icon="arrowRoundLeft"
@@ -64,7 +65,7 @@
 		</div>
 
 		{#if setting.type == 'toggle'}
-			<Toggle bind:value auto={setting.auto} />
+			<Toggle bind:value auto={setting.auto} name={displayName ?? setting.name} />
 		{/if}
 		{#if setting.type == 'color'}
 			<ColorSelector bind:value />

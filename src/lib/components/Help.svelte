@@ -30,7 +30,6 @@
 	<section class="palette-plain">
 		<div class="above">
 			<h2>Links</h2>
-			<p>useful resources</p>
 		</div>
 		<ul>
 			<Button icon="undo" text="restart tutorial" on:click={restartTutorial} />
@@ -67,7 +66,6 @@
 	<section class="palette-plain-secondary secondary">
 		<div class="above">
 			<h2>Contact</h2>
-			<p>send feedback</p>
 		</div>
 		<ul>
 			<Button
@@ -125,10 +123,5 @@
 		gap: var(--padding);
 		align-items: center;
 		justify-content: space-between;
-	}
-	.above > p {
-		margin: 0;
-		color: var(--this-text-weak);
-		transition: opacity var(--transition-speed);
 	}
 </style>

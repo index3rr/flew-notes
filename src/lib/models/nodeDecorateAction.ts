@@ -437,7 +437,7 @@ export const addResponse = decorate(function (nodes: Nodes, parent: BoxId) {
 // Carry dropped arguments into the next speech as one undo step: an extension cell where the
 // other side said nothing, then a cell in this speech. Existing blank cells are reused.
 export const extendArguments = decorate(function (nodes: Nodes, ids: BoxId[]) {
-	const content = 'extend: dropped';
+	const content = 'dropped';
 	const actions: ActionBundle = [];
 	let owner: FlowId | null = null;
 	let first: BoxId | null = null;

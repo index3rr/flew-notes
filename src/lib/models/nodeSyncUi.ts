@@ -1,6 +1,6 @@
 import { get } from 'svelte/store';
 import type { Nodes } from './node';
-import { _nodesMut } from './store';
+import { _nodesMut, editingBoxText } from './store';
 import { focusId, selectedFlowId, lastFocusIds } from './focus';
 import { selectedBoxIds, selectionAnchorId } from './selection';
 
@@ -17,5 +17,6 @@ export function syncUi(nodes: Nodes) {
 	selectedBoxIds.update((ids) => new Set([...ids].filter((id) => nodes[id])));
 	const anchor = get(selectionAnchorId);
 	if (anchor && !nodes[anchor]) selectionAnchorId.set(null);
+	editingBoxText.set(null);
 	_nodesMut.set(nodes);
 }

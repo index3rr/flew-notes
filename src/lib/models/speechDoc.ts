@@ -244,9 +244,15 @@ export function speechDocActions(
 
 export async function readSpeechDoc(blob: Blob): Promise<DocBlock[]> {
 	const { convertToHtml } = await import('mammoth/mammoth.browser');
+	const bytes = await blob.arrayBuffer();
 	const { value } = await convertToHtml(
-		{ arrayBuffer: await blob.arrayBuffer() },
+		{ arrayBuffer: bytes },
 		{ styleMap: speechDocStyleMap, includeDefaultStyleMap: true }
 	);
-	return blocksFromHtml(value);
+	const blocks = blocksFromHtml(value);
+	const { docxEvidence } = await import('../integrations/cardmirror/docx');
+	const evidence = await docxEvidence(bytes);
+	for (const block of blocks)
+		block.provenance = block.tags.map((tag) => evidence.get(tag)?.shift() ?? null);
+	return blocks;
 }

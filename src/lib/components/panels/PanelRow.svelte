@@ -5,6 +5,7 @@
 	export let selected = false;
 	export let disabled = false;
 	export let draggable = false;
+	export let menuItem = false;
 	export let ariaLabel: string | null = null;
 	export let title: string | null = null;
 </script>
@@ -12,6 +13,7 @@
 <div class={`panel-row ${palette ? `palette-${palette}` : ''}`}>
 	<button
 		class="content"
+		role={menuItem ? 'menuitem' : undefined}
 		class:weak
 		class:selected
 		{disabled}

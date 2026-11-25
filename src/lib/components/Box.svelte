@@ -1,10 +1,16 @@
 <script lang="ts">
-	import { startBoxDrag, canDropBoxes, dropOnBox, selectionRoots } from '$lib/models/panelDrag';
+	import {
+		startBoxDrag,
+		canDropBoxes,
+		dropOnBox,
+		selectionRoots,
+		boxDropPosition
+	} from '$lib/models/panelDrag';
 	import Text from './Text.svelte';
 	import Icon from './Icon.svelte';
 	import { getContext, onDestroy, onMount, tick } from 'svelte';
 	import type { Writable } from 'svelte/store';
-	import { activeMouse, nodes, pendingAction } from '$lib/models/store';
+	import { activeMouse, nodes, pendingAction, editingBoxText } from '$lib/models/store';
 	import {
 		type BoxId,
 		type FlowId,
@@ -159,6 +165,7 @@
 	}
 
 	$: boxIdForDrag = id as BoxId;
+	let dropPosition: ReturnType<typeof boxDropPosition> | undefined;
 	let mounted = false;
 	let lastFocus = $focusId;
 	// keeps the focused box a comfortable distance from the edges of the scroll container:
@@ -823,6 +830,10 @@
 	}
 
 	let editAlreadyPending: boolean = false;
+	function editPreview(event: Event) {
+		if (event.target instanceof HTMLTextAreaElement)
+			editingBoxText.set({ id: boxIdForDrag, content: event.target.value });
+	}
 	function handleBeforeInput() {
 		if (editAlreadyPending) return;
 		editAlreadyPending = true;
@@ -860,7 +871,7 @@
 
 	function copySelfToClipboard(boxId?: BoxId) {
 		const selected = $selectedBoxIds;
-		if (selected.size > 1) {
+		if (selected.size > 0) {
 			const root = selectionRoots($nodes, selected);
 			if (root.length === 0) return false;
 			const data: CopiedBoxData = {
@@ -948,15 +959,21 @@
 		<div
 			class="content"
 			data-box-id={box ? id : undefined}
+			data-drop-position={dropPosition}
 			draggable={box != null && $selectedBoxIds.has(boxIdForDrag)}
 			on:dragstart={(event) => startBoxDrag(event, boxIdForDrag)}
 			on:dragover={(event) => {
 				if (canDropBoxes(event)) {
+					dropPosition = boxDropPosition(event);
 					event.preventDefault();
 					event.stopPropagation();
 				}
 			}}
+			on:dragleave={(event) => {
+				dropPosition = undefined;
+			}}
 			on:drop={(event) => {
+				dropPosition = undefined;
 				try {
 					dropOnBox(event, boxIdForDrag);
 				} catch {
@@ -1028,10 +1045,12 @@
 							multiline={box.cardMirror != null}
 							bind:this={textarea}
 							on:beforeinput={handleBeforeInput}
+							on:input={editPreview}
 							bind:autoHeight={updateTextHeight}
 							bind:textHeight={extensionIconSize}
 							placeholder={box.placeholder ?? (node.level == 1 && index() == 0 ? 'type here' : '')}
 							readonly={box?.isExtension ?? false}
+							draggable={$selectedBoxIds.size > 1 && $selectedBoxIds.has(boxIdForDrag)}
 						/>
 					{/if}
 				</div>
@@ -1131,6 +1150,27 @@
 		color: var(--this-text);
 	}
 
+	.content[data-drop-position='inside'] {
+		background: var(--this-background-active);
+	}
+	.content[data-drop-position='before']::after,
+	.content[data-drop-position='after']::after {
+		content: '';
+		position: absolute;
+		left: 0;
+		right: 0;
+		height: var(--line-width);
+		background: var(--this-color);
+		border-radius: var(--border-radius-small);
+		z-index: 3;
+		pointer-events: none;
+	}
+	.content[data-drop-position='before']::after {
+		top: 0;
+	}
+	.content[data-drop-position='after']::after {
+		bottom: 0;
+	}
 	.empty > .content {
 		pointer-events: none;
 		height: 10px;

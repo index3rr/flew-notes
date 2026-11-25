@@ -26,7 +26,14 @@
 	<ul>
 		{#each detail.options as option, index}
 			<label>
-				<input type="radio" bind:group={value} {name} checked={index == value} value={index} />
+				<input
+					type="radio"
+					bind:group={value}
+					aria-label={option}
+					{name}
+					checked={index == value}
+					value={index}
+				/>
 				<li>
 					<p>
 						{option}
@@ -41,6 +48,7 @@
 			<label>
 				<input
 					type="radio"
+					aria-label="Custom"
 					bind:group={value}
 					{name}
 					checked={value == detail.options.length}
@@ -130,6 +138,7 @@
 		padding: var(--padding);
 		border-radius: var(--border-radius);
 	}
+	label:focus-within > li,
 	label:hover > li {
 		background-color: var(--this-background-indent);
 	}
@@ -138,7 +147,10 @@
 		color: var(--this-text);
 	}
 	input {
-		display: none;
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		opacity: 0;
 	}
 	input:checked + li {
 		color: var(--this-text);

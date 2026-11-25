@@ -1,9 +1,15 @@
 <script lang="ts">
 	import PartnerMessage from '../PartnerMessage.svelte';
 	import PanelHeader from './PanelHeader.svelte';
-	import PanelField from './PanelField.svelte';
+	import PartnerComposer from '../PartnerComposer.svelte';
 	import PanelStatus from './PanelStatus.svelte';
-	import { partnerNotices, enablePartnerNotifications } from '$lib/models/collaboration';
+	import { onMount } from 'svelte';
+	import {
+		partnerNotices,
+		enablePartnerNotifications,
+		partnerNotificationPermission,
+		watchPartnerNotifications
+	} from '$lib/models/collaboration';
 	import { sendPartnerMessage } from '$lib/models/sharingChannel';
 	import Button from '../Button.svelte';
 	import Share from '../Share.svelte';
@@ -13,10 +19,11 @@
 	import { focusId, lastFocusIds, selectedFlowId } from '$lib/models/focus';
 	import { currentArgument } from '$lib/models/argumentNavigation';
 	import { resolvePendingAction } from '$lib/models/nodePendingAction';
+	onMount(watchPartnerNotifications);
 	$: argument = currentArgument($nodes, $selectedFlowId, $focusId, $lastFocusIds);
 	let text = '';
 	function keydown(event: KeyboardEvent) {
-		if (event.key === 'Enter' && !event.shiftKey && text.trim()) {
+		if (event.key === 'Enter' && !event.shiftKey && !event.isComposing && text.trim()) {
 			event.preventDefault();
 			send();
 		}
@@ -39,12 +46,22 @@
 
 <section class="collaboration-panel" aria-label="Collaboration">
 	<PanelHeader name="Collaboration">
-		<Button
-			icon="screen"
-			ariaLabel="Enable partner notifications"
-			tooltip="enable system notifications"
-			on:click={enablePartnerNotifications}
-		/>
+		{#if $partnerNotificationPermission !== 'granted' && $partnerNotificationPermission !== 'unsupported'}
+			<Button
+				icon="screen"
+				ariaLabel="Enable partner notifications"
+				tooltip="enable system notifications"
+				disabled={$partnerNotificationPermission === 'denied'}
+				disabledReason="Allow notifications in your browser settings"
+				on:click={async () => {
+					try {
+						await enablePartnerNotifications();
+					} catch {
+						error = 'Could not enable system notifications.';
+					}
+				}}
+			/>
+		{/if}
 		{#if $connections.tag === 'empty'}
 			<Button
 				icon="people"
@@ -67,8 +84,6 @@
 						/>
 					</p>
 				</div>
-			{:else}
-				<PanelStatus>Messages to and from your partner show up here.</PanelStatus>
 			{/each}
 		</div>
 		<form class="compose" on:submit|preventDefault>
@@ -79,15 +94,7 @@
 				disabled={!argument}
 				on:click={sendArgument}
 			/>
-			<PanelField
-				multiline
-				rows={2}
-				ariaLabel="Message your partner"
-				placeholder="message your partner"
-				maxlength={2000}
-				bind:value={text}
-				on:keydown={keydown}
-			/>
+			<PartnerComposer bind:value={text} on:keydown={keydown} />
 			<Button
 				icon="arrowUp"
 				ariaLabel="Send"
@@ -96,8 +103,8 @@
 				on:click={send}
 			/>
 		</form>
-		{#if error}<PanelStatus error>{error}</PanelStatus>{/if}
 	{/if}
+	{#if error}<PanelStatus error>{error}</PanelStatus>{/if}
 </section>
 
 <style>

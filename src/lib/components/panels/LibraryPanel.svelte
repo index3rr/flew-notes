@@ -1,4 +1,9 @@
 <script lang="ts">
+	const errorMessage = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause));
+	import PanelMenu from './PanelMenu.svelte';
+	import { openPopup } from '$lib/models/popup';
+	import Button from '../Button.svelte';
+	import { importLocalFlows } from '$lib/models/autoSave';
 	import PanelHeader from './PanelHeader.svelte';
 	import PanelRow from './PanelRow.svelte';
 	import PanelStatus from './PanelStatus.svelte';
@@ -11,13 +16,14 @@
 		readLibraryFile,
 		directFolderAccess
 	} from '$lib/models/flowLibrary';
+	let filesInput: HTMLInputElement;
 	let error = '';
 	async function navigate(path: string[]) {
 		try {
 			await refreshLibrary(path);
 			error = '';
 		} catch (cause) {
-			error = (cause as Error).message;
+			error = errorMessage(cause);
 		}
 	}
 	$: saved = Object.entries($savedNodesDatas).sort(
@@ -31,7 +37,39 @@
 		detail={directFolderAccess && $library.name
 			? [$library.name, ...$library.path].join('/')
 			: null}
-		tooltip="click a page to copy it into this flow, or drag it between tabs"
+		tooltip="drag into flow tabs or into the flow"
+	>
+		<Button
+			icon="dots"
+			ariaLabel="Flow library menu"
+			tooltip="library menu"
+			on:click={() =>
+				openPopup(PanelMenu, 'Flow library', {
+					actions: [{ label: 'Import flow files', run: () => filesInput.click() }]
+				})}
+		/>
+	</PanelHeader>
+	<input
+		bind:this={filesInput}
+		type="file"
+		accept=".json"
+		multiple
+		hidden
+		on:change={async () => {
+			try {
+				await importLocalFlows(
+					await Promise.all(
+						Array.from(filesInput.files ?? []).map(async (file) => ({
+							name: file.name,
+							raw: await file.text()
+						}))
+					)
+				);
+			} catch (cause) {
+				error = errorMessage(cause);
+			}
+			filesInput.value = '';
+		}}
 	/>
 	{#if error}<PanelStatus error>{error}</PanelStatus>{/if}
 	<div class="list" class:customScrollbar={settings.data.customScrollbar.value}>

@@ -172,7 +172,7 @@ test('desktop plugin loads through the real host, sends an extracted tag and jum
 			.getByLabel('CardMirror reply key', { exact: true })
 			.fill(await native.getByLabel('CardMirror reply key', { exact: true }).inputValue());
 		await flew.getByRole('button', { name: 'Connect CardMirror', exact: true }).click();
-		await expect(flew.getByText('Connected to CardMirror', { exact: true })).toBeVisible({
+		await expect(flew.getByText('connected', { exact: true })).toBeVisible({
 			timeout: 20_000
 		});
 		await native.getByRole('button', { name: 'Done', exact: true }).click();
@@ -204,7 +204,7 @@ test('desktop plugin loads through the real host, sends an extracted tag and jum
 		const librarySource = flew
 			.locator('.library-panel .flow.compact')
 			.filter({ hasText: 'Saved evidence block' })
-			.getByRole('button', { name: /^Import / })
+			.getByRole('button', { name: /^Select / })
 			.first();
 		await expect(librarySource).toBeVisible();
 		await librarySource.dragTo(flew.locator('.flow [data-box-id]').first());

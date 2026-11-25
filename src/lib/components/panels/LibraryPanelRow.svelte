@@ -14,6 +14,12 @@
 	let source: Nodes | undefined;
 	let selectedPages: number[] = [];
 	let anchor = 0;
+	let expandedPages: number[] = [];
+	$: pagePreviews = source
+		? source.root.children.map((id) =>
+				source![id]!.children.map((child) => source![child]!.value.content)
+		  )
+		: [];
 	function selectPage({ detail }: CustomEvent<{ index: number; event: MouseEvent }>) {
 		const { index, event } = detail;
 		if (event.shiftKey)
@@ -21,11 +27,17 @@
 				{ length: Math.abs(index - anchor) + 1 },
 				(_, i) => Math.min(index, anchor) + i
 			);
-		else {
+		else if (event.ctrlKey || event.metaKey) {
 			selectedPages = selectedPages.includes(index)
 				? selectedPages.filter((i) => i !== index)
 				: [...selectedPages, index];
 			anchor = index;
+		} else {
+			selectedPages = [index];
+			anchor = index;
+			expandedPages = expandedPages.includes(index)
+				? expandedPages.filter((i) => i !== index)
+				: [...expandedPages, index];
 		}
 	}
 	let error = '';
@@ -51,8 +63,12 @@
 		try {
 			const loaded = loadNodes(JSON.parse(await read()), false);
 			if ($frozen || !$documentOpen) return;
-			const id = loaded.root.children[index];
-			if (id) importFlowPage(loaded, id);
+			for (const i of selectedPages.includes(index)
+				? [...selectedPages].sort((a, b) => a - b)
+				: [index]) {
+				const id = loaded.root.children[i];
+				if (id) importFlowPage(loaded, id);
+			}
 		} catch (cause) {
 			error = (cause as Error).message;
 		} finally {
@@ -81,6 +97,8 @@
 	{alternate}
 	compact
 	{selectedPages}
+	{expandedPages}
+	{pagePreviews}
 	on:selectPage={selectPage}
 	disabled={busy || $frozen || !$documentOpen}
 	draggable={!!source}

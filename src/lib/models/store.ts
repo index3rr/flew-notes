@@ -1,5 +1,5 @@
 import { derived, writable, type Writable } from 'svelte/store';
-import type { Nodes } from './node';
+import type { Nodes, BoxId } from './node';
 import type { Connections } from './sharingConnection';
 import type { PendingAction } from './nodePendingAction';
 
@@ -14,6 +14,8 @@ export const nodes = derived(_nodesMut, (value) => value);
 export const connections: Writable<Connections> = writable({
 	tag: 'empty'
 });
+export const editingBoxText = writable<{ id: BoxId; content: string } | null>(null);
+
 export const pendingAction: Writable<PendingAction | null> = writable(null);
 
 export const tutorialStep = writable(0);

@@ -24,19 +24,22 @@
 The following is retained from main for reference.
 
 # 1.4.0 changes
+
 - click and drag across cells to select them, with scrolling at the edges (dragging inside one cell still selects text)
 - qr codes fit short windows now, and the camera preview scrolls into view
 - Extemp Debate preset (aff/neg flows, speech timers, no prep)
 - select cards and press Shift+Enter / add response to answer them together
-    - keeps the cards separate, with a curved line from the bottom card to the reply
-    - Shift+Enter on a grouped card adds another response to the group; the separate right-side plus is hidden
-    - saved in JSON, shared with peers, and undoable
+
+  - keeps the cards separate, with a curved line from the bottom card to the reply
+  - Shift+Enter on a grouped card adds another response to the group; the separate right-side plus is hidden
+  - saved in JSON, shared with peers, and undoable
 
 - fixed missing theme colors, custom accent text colors, and popup title font weights
 
-
 # 1.3.0 changes
+
 ## persistancy update
+
 - chrome lets you set a folder for autosaving flows
 - firefox import folder list
 - flow titles
@@ -44,6 +47,7 @@ The following is retained from main for reference.
 - more tests....
 
 # 1.2.2 changes
+
 - fixed collaboration
 - qr code based connecting to rooms (side note: insane absurdly small qr codes for what they are)
 - sharing icon now shows when you are offline
@@ -52,6 +56,7 @@ The following is retained from main for reference.
 - fix cross network sharing
 
 # 1.2.1 changes
+
 - manual save button now shows a checkmark and "saved!" tooltip when you save
 - fixed description of shift + arrow setting to say "Shift + arrow selects cells"
 - added a dedicated save icon for the manual save button
@@ -66,13 +71,14 @@ The following is retained from main for reference.
 - focused box now stays a comfortable distance from the edges of the scroll area
 
 # 1.2 changes
+
 - telemetry
 - Move to netlify
 - Changed the lines a little
 - Cell focus manipulation now wraps between flows
 - Speech timer includes a Pacing timer, will tell you how much time you need to spend on each argument
-    - Pacing will skip blank boxes and extensions
-    - and if you mark how long an arg will take to say (for cards and such) the pacing will be adjusted around that
+  - Pacing will skip blank boxes and extensions
+  - and if you mark how long an arg will take to say (for cards and such) the pacing will be adjusted around that
 - Fun mode (EPILEPSY WARNING)
 - Copy paste cut
 - Selection that is real buggy
@@ -82,7 +88,9 @@ The following is retained from main for reference.
 - MAKE IT WORK OFFLINE, uses a service worker
 
 # Planned
+
 ## long term goals (X..)
+
 - flew share that can interop with tabroom share, email, maybe even usb
 - flow disclosure is the new theory argument god bless
 -
@@ -90,52 +98,56 @@ The following is retained from main for reference.
 ## Big features (.X. releases probably)
 
 - Panels:
-    - work being done on panels branch
+  - work being done on panels branch
 - Theming engine:
-    - Transparency
-    - Image background
-    - More default themes that are actually good
-    - custom css
+  - Transparency
+  - Image background
+  - More default themes that are actually good
+  - custom css
 - CONNECTIONS: Control K, connect parts of flow together
-    - xapp can be easily explained by clicking on it and going to that bit of the flow on a different page
-    - i think you should be able to edit a link visually
-    - make those links availible in notesdoc
+  - xapp can be easily explained by clicking on it and going to that bit of the flow on a different page
+  - i think you should be able to edit a link visually
+  - make those links availible in notesdoc
 - Tutorial that is good
-    - explains timers
-    - explains uuuh more stuff
+  - explains timers
+  - explains uuuh more stuff
 - an editor to customize debate formats
 - Transcript panel
-    - local transcription
-    - uses opposing speechdoc and catches things they say but not from doc, and tags n stuff (small story, at state i went against the winning team, only round in prelims i lost, they went for 5 minutes of santa in 2ar and it wasnt in their speechdoc ever. ugh.)
-    - automatically start timer when opponent begins speaking from their doc
+  - local transcription
+  - uses opposing speechdoc and catches things they say but not from doc, and tags n stuff (small story, at state i went against the winning team, only round in prelims i lost, they went for 5 minutes of santa in 2ar and it wasnt in their speechdoc ever. ugh.)
+  - automatically start timer when opponent begins speaking from their doc
 - Cardmirror integration
-    - if we can make a communication system (web server running on cardmirror desktop? ugh i really wish it would work with just tabs though... and i dont want to fork cardmirror):
-        - click on cards to go to them in the speech
-        - when you want to read a card from your speechdoc and have pacing enabled it will automatically determine length based on cm settings about wpm n stuff
-        - When writing a speech in flows if you @ (connect) a quick card it will add it to ur cardmirror speechdoc?
-        - automatically put your latest speechdoc in the notes doc, invisified mode !
-        - very big question though: neither program is keeping track of what speech the round is on really, sooo how do we coordinate stuff between them?
-        - sync timers
-    - cmir imports turn tags into preflows
-    - there is a public api! wow!
-    - they use a polyform license that is NOT compatible with gpl!!!!
-    - i kind of want it so you can write analytics (or your partner or opponent does) in cmir and then some *local* ai classification model that runs on your computer can figure out where those things need to go on the flow, the memory benifits of writing shit down only really matters once
+  - if we can make a communication system (web server running on cardmirror desktop? ugh i really wish it would work with just tabs though... and i dont want to fork cardmirror):
+    - click on cards to go to them in the speech
+    - when you want to read a card from your speechdoc and have pacing enabled it will automatically determine length based on cm settings about wpm n stuff
+    - When writing a speech in flows if you @ (connect) a quick card it will add it to ur cardmirror speechdoc?
+    - automatically put your latest speechdoc in the notes doc, invisified mode !
+    - very big question though: neither program is keeping track of what speech the round is on really, sooo how do we coordinate stuff between them?
+    - sync timers
+  - cmir imports turn tags into preflows
+  - there is a public api! wow!
+  - they use a polyform license that is NOT compatible with gpl!!!!
+  - i kind of want it so you can write analytics (or your partner or opponent does) in cmir and then some _local_ ai classification model that runs on your computer can figure out where those things need to go on the flow, the memory benifits of writing shit down only really matters once
 - new collab features
-    - mark box as OH GOD PLEASE COME UP WITH A RESPONSE IM GETTING THERE SOON AND IF I DONT HAVE ANYTHING TO SAY WE LOSE THIS ROUND
-    - Give notification to other person
-    - shared doc?
-    - no more whispering ever is kind of the goal of this feature
-    - names for guests in collab
-    - view only guests (for opponents?) locked to only speeches that have already been given
-    - im unsure how small of a feature this is, webrtc code based sharing? instead of copy paste? could be part of flew share
-    - an easier way to do quick webrtc handshake is you scan a qr code on your phone, it brings up that same qr code on your phone which you can scan into another computer since it would be awkward doing it with just 2 computers pointing webcam at screen
-    - is there a way to make the collab persistant if i disconnect and reconnect to wifi?
+
+  - mark box as OH GOD PLEASE COME UP WITH A RESPONSE IM GETTING THERE SOON AND IF I DONT HAVE ANYTHING TO SAY WE LOSE THIS ROUND
+  - Give notification to other person
+  - shared doc?
+  - no more whispering ever is kind of the goal of this feature
+  - names for guests in collab
+  - view only guests (for opponents?) locked to only speeches that have already been given
+  - im unsure how small of a feature this is, webrtc code based sharing? instead of copy paste? could be part of flew share
+  - an easier way to do quick webrtc handshake is you scan a qr code on your phone, it brings up that same qr code on your phone which you can scan into another computer since it would be awkward doing it with just 2 computers pointing webcam at screen
+  - is there a way to make the collab persistant if i disconnect and reconnect to wifi?
 
 - history changes
-    - make it so you can undo deleting a flow page
-    - complete google docs style version history
-
+  - make it so you can undo deleting a flow page
+  - complete google docs style version history
 
 ## Small features/fixes (..X releases)
 
-- evaluate if switching to the AGPL is possible, if so do it,  do it  (gpl kind of does not work for this project to ensure free-ness since its served over web)
+- evaluate if switching to the AGPL is possible, if so do it, do it (gpl kind of does not work for this project to ensure free-ness since its served over web)
+
+TODO: replace the long Settings page with one selected category at a time.
+
+TODO: investigate rendering a single half-megabyte argument; the large collaboration stress test currently stalls before pairing.

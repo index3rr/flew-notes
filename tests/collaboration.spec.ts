@@ -40,8 +40,9 @@ test('partner argument links reveal a folded response and disable when the respo
 	await cells.nth(1).click();
 	await host.getByLabel('Message your partner').fill('Cover this during CX');
 	await host.getByRole('button', { name: 'Insert selected argument link', exact: true }).click();
-	await expect(host.getByLabel('Message your partner')).toHaveValue(
-		/Cover this during CX.*argument:/
+	await expect(host.getByLabel('Message your partner')).toContainText('Cover this during CX');
+	await expect(host.locator('.partner-composer .argument-chip')).toHaveText(
+		'Please answer the warming impact'
 	);
 	await expect(guest.locator('.notifications')).not.toContainText('Cover this during CX');
 	await host.getByRole('button', { name: 'Send', exact: true }).click();
@@ -148,15 +149,22 @@ test('partner messages notify both ways and SpeechDrop codes sync on join and ed
 			close() {}
 		}
 		Object.defineProperty(window, 'Notification', { value: TestNotification, configurable: true });
+		window.dispatchEvent(new Event('focus'));
 	});
 	await host.getByRole('button', { name: 'Enable partner notifications', exact: true }).click();
+	await expect(
+		host.getByRole('button', { name: 'Enable partner notifications', exact: true })
+	).toHaveCount(0);
 	await guest.getByLabel('Message your partner').fill('System delivery');
 	await guest.getByRole('button', { name: 'Send', exact: true }).click();
 	await expect
 		.poll(() =>
 			host.evaluate(() => (window as unknown as { __nativeNotices: string[] }).__nativeNotices)
 		)
-		.toEqual(['Your debate partner: System delivery']);
+		.toEqual([
+			'Flew Notes: Partner notifications enabled.',
+			'Your debate partner: System delivery'
+		]);
 	await expect(host.locator('.notifications')).not.toContainText('System delivery');
 });
 
@@ -198,7 +206,7 @@ test('inactive collaboration offers a compact enable button and restores it afte
 	await enable.click();
 	await page.getByRole('button', { name: 'host new room', exact: true }).click();
 	await page.locator('.upper > .element > .top').click();
-	await expect(panel.getByRole('textbox', { name: 'Message your partner' })).toHaveValue(
+	await expect(panel.getByRole('textbox', { name: 'Message your partner' })).toHaveText(
 		'Keep this draft'
 	);
 });

@@ -13,7 +13,7 @@ async function settings(
 			if (localStorage.getItem('settings')) return;
 			localStorage.setItem(
 				'settings',
-				JSON.stringify({ isSettings: true, version, settings: { telemetryTier: 0, ...values } })
+				JSON.stringify({ isSettings: true, version, settings: { telemetry: 0, ...values } })
 			);
 		},
 		{ values, version }
@@ -103,8 +103,13 @@ test('copy and drag saved pages preserve the source', async ({ page }) => {
 	await page.getByRole('button', { name: 'New flow', exact: true }).click();
 	const sourceButton = page
 		.locator('.library-panel')
-		.getByRole('button', { name: 'Import Source page', exact: true });
+		.getByRole('button', { name: 'Select Source page', exact: true });
 	await sourceButton.click();
+	await page
+		.locator('.library-panel')
+		.getByRole('button', { name: 'Add selected pages', exact: true })
+		.first()
+		.click();
 	await expect(page.locator('.tabs li')).toHaveCount(2);
 	await expect
 		.poll(() => page.evaluate(() => localStorage.getItem('flow:source')))
@@ -218,7 +223,7 @@ test('microphone capture sends PCM to local worker, flags new claims and starts 
 	});
 	const timer = page.locator('.timer-panel .over + .timer');
 	await expect(timer.locator('input').nth(1)).not.toHaveValue('00');
-	await expect(page.locator('.entries')).toContainText('Outside document', { timeout: 15000 });
+	await expect(page.locator('.entries .outside')).toContainText('Santa', { timeout: 15000 });
 	await page.getByRole('button', { name: 'Stop', exact: true }).click();
 	await expect(
 		page.getByRole('button', { name: 'Start transcription', exact: true })
@@ -259,7 +264,7 @@ test('library page drops insert before, between, and after existing tabs', async
 	await page.getByPlaceholder('type name here').fill('Second');
 	const chip = page
 		.locator('.library-panel')
-		.getByRole('button', { name: 'Import Imported page', exact: true });
+		.getByRole('button', { name: 'Select Imported page', exact: true });
 	await expect(chip).toHaveAttribute('draggable', 'true');
 	async function dropAt(index: number, after: boolean) {
 		const tab = page.locator('.tabs li').nth(index);
@@ -362,7 +367,7 @@ for (const side of ['left', 'right'] as const) {
 				};
 			});
 			expect(Math.abs(size.panel - size.text)).toBeLessThan(1);
-			await expect(panel.getByRole('button', { name: /Open a flow for/ })).toBeVisible();
+			await expect(panel.getByRole('button', { name: /Open a flow for/ })).toHaveCount(0);
 		}
 		await page.getByRole('button', { name: 'New flow', exact: true }).click();
 		await expect(container.getByPlaceholder('type notes here')).toBeEditable();
@@ -481,9 +486,7 @@ for (const side of [1, 2, 3, 4])
 		await page.goto('/app');
 		if (side >= 3) await page.getByRole('button', { name: 'Autoflow', exact: true }).click();
 		await expect(page.locator('[data-panel="autoflowPanel"]')).toBeVisible();
-		await expect(
-			page.getByRole('button', { name: 'Load speech document', exact: true })
-		).toBeEnabled();
+		await expect(page.getByRole('button', { name: 'Autoflow menu', exact: true })).toBeEnabled();
 	});
 
 test('SpeechDrop uploads and deletes files and drags a reference document into Transcript', async ({
@@ -511,6 +514,9 @@ test('SpeechDrop uploads and deletes files and drags a reference document into T
 	await expect(
 		page.locator('.speechdrop-panel').getByRole('button', { name: 'speech.txt', exact: true })
 	).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Use for transcript', exact: true })).toHaveCount(
+		0
+	);
 	await page.locator('.speechdrop-panel li').dragTo(page.locator('.transcript'));
 	await expect(page.getByRole('textbox', { name: 'Opponent speech document' })).toHaveValue(
 		'Economic growth solves poverty.'
@@ -592,8 +598,8 @@ test('multiple library pages drop as responses in a populated cell and replace a
 	});
 	await page.goto('/app');
 	await page.getByRole('button', { name: 'New flow', exact: true }).click();
-	const first = page.getByRole('button', { name: 'Import First source', exact: true }),
-		second = page.getByRole('button', { name: 'Import Second source', exact: true });
+	const first = page.getByRole('button', { name: 'Select First source', exact: true }),
+		second = page.getByRole('button', { name: 'Select Second source', exact: true });
 	await first.click({ modifiers: ['Control'] });
 	await second.click({ modifiers: ['Control'] });
 	await expect(first).toHaveAttribute('aria-pressed', 'true');
@@ -668,3 +674,325 @@ test('SpeechDrop optionally appends the promo to the uploaded DOCX copy', async 
 	const original = await JSZip.loadAsync(await readFile('test-files/autoflow/headings.docx'));
 	expect(await original.file('word/document.xml')!.async('string')).not.toContain(promoFooter);
 });
+
+test('Transcript defaults to microphone controls without the explanatory paragraph', async ({
+	page
+}) => {
+	await settings(page, { transcriptPanel: 2, notesPanel: 0, timersPanel: 0 });
+	await page.goto('/app');
+	await expect(
+		page.getByRole('button', { name: 'Start transcription', exact: true })
+	).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Transcribe tab audio', exact: true })).toHaveCount(
+		0
+	);
+	await expect(page.locator('.transcript')).not.toContainText('Transcribes on this device.');
+});
+
+test('each panel has its own settings section and saved audio controls still override the new default', async ({
+	page
+}) => {
+	await settings(page, { transcriptPanel: 2, transcriptSource: 2, notesPanel: 0, timersPanel: 0 });
+	await page.goto('/app');
+	await expect(
+		page.getByRole('button', { name: 'Transcribe tab audio', exact: true })
+	).toBeVisible();
+	await page.locator('.header button').nth(1).click();
+	const groups = page.locator('.settings > ul > li.title h1');
+	for (const name of [
+		'Tabs',
+		'Notes',
+		'Coverage',
+		'Starred arguments',
+		'SpeechDrop',
+		'Autoflow',
+		'Timers',
+		'Flow library',
+		'Transcript',
+		'Collaboration',
+		'CardMirror'
+	])
+		await expect(groups.filter({ hasText: new RegExp('^' + name + '$') })).toHaveCount(1);
+	const transcript = page.locator('.settings > ul > div').filter({
+		has: page.getByRole('heading', { name: 'Transcription audio controls', exact: true })
+	});
+	await expect(transcript).toBeVisible();
+});
+
+test('Coverage filters dropped and extended arguments independently and extends with the short label', async ({
+	page
+}) => {
+	await settings(page, { coveragePanel: 2, timersPanel: 0, notesPanel: 0, transitionSpeed: 0 });
+	await page.goto('/app');
+	const data = {
+		version: 1,
+		nodes: {
+			root: { value: { tag: 'root' }, level: -1, parent: null, children: ['flow-a'] },
+			'flow-a': {
+				value: { tag: 'flow', content: 'Advantage', invert: false, columns: ['1AC', '1NC', '2AC'] },
+				level: 0,
+				parent: 'root',
+				children: ['a', 'b']
+			},
+			a: {
+				value: { tag: 'box', content: 'Costs are low', flowId: 'flow-a' },
+				level: 1,
+				parent: 'flow-a',
+				children: []
+			},
+			b: {
+				value: { tag: 'box', content: 'Plan solves', flowId: 'flow-a' },
+				level: 1,
+				parent: 'flow-a',
+				children: []
+			}
+		}
+	};
+	await page.locator('#uploadId').setInputFiles({
+		name: 'Coverage.json',
+		mimeType: 'application/json',
+		buffer: Buffer.from(JSON.stringify(data))
+	});
+	const panel = page.locator('.coverage-panel');
+	await panel.getByRole('button', { name: '2AC', exact: true }).click();
+	await expect(panel.locator('.tag')).toHaveText(['dropped', 'dropped']);
+	await panel.getByRole('button', { name: 'Extend', exact: true }).first().click();
+	await expect(panel.locator('.tag')).toHaveText(['extended', 'dropped']);
+	await expect(page.locator('.flow textarea').nth(2)).toHaveValue('dropped');
+	await page.getByRole('button', { name: 'Coverage options', exact: true }).click();
+	const option = (name: string) =>
+		page
+			.locator('.settings > ul > div')
+			.filter({ has: page.getByRole('heading', { name, exact: true }) })
+			.locator('label');
+	await option('Show extended arguments').click();
+	await page.keyboard.press('Escape');
+	await expect(panel.locator('.tag')).toHaveText(['dropped']);
+	await page.getByRole('button', { name: 'Coverage options', exact: true }).click();
+	await option('Show extended arguments').click();
+	await option('Show dropped arguments').click();
+	await page.keyboard.press('Escape');
+	await expect(panel.locator('.tag')).toHaveText(['extended']);
+	const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('settings')!));
+	expect(saved.settings.coverageShowDropped).toBe(false);
+});
+
+async function dragThroughIcon(
+	page: import('@playwright/test').Page,
+	source: import('@playwright/test').Locator,
+	icon: import('@playwright/test').Locator,
+	target: import('@playwright/test').Locator
+) {
+	await source.scrollIntoViewIfNeeded();
+	const start = await source.boundingBox(),
+		hover = await icon.boundingBox();
+	if (!start || !hover) throw new Error('Missing drag source or tray icon');
+	// Start cell drags in their padding; textarea interiors retain native text selection.
+	const startX = (await source.getAttribute('data-box-id'))
+		? start.x + 2
+		: start.x + start.width / 2;
+	await page.mouse.move(startX, start.y + start.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(hover.x + hover.width / 2, hover.y + hover.height / 2, { steps: 20 });
+	await expect(target).toBeVisible();
+	const end = await target.boundingBox();
+	if (!end) throw new Error('Panel did not expand');
+	await page.mouse.move(end.x + end.width / 2, end.y + Math.min(end.height / 2, 60), { steps: 10 });
+	await page.mouse.up();
+}
+
+for (const position of [3, 4])
+	test(`SpeechDrop drag opens the collapsed Transcript on side ${position} and loads its reference`, async ({
+		page
+	}) => {
+		await page.setViewportSize({ width: 1600, height: 1000 });
+		await settings(page, {
+			speechDropPanel: position === 3 ? 2 : 1,
+			transcriptPanel: position,
+			timersPanel: 0,
+			notesPanel: 0,
+			coveragePanel: 0,
+			transitionSpeed: 0
+		});
+		await page.route('**/api/speechdrop/dragroom', (route) =>
+			route.fulfill({ json: { files: [{ index: 0, name: 'speech.txt' }] } })
+		);
+		await page.route('**/api/speechdrop/dragroom/0', (route) =>
+			route.fulfill({ body: 'Economic growth solves poverty.' })
+		);
+		await page.goto('/app');
+		await page.getByLabel('SpeechDrop room code').fill('dragroom');
+		const file = page.locator('.speechdrop-panel li');
+		await expect(file).toBeVisible();
+		await dragThroughIcon(
+			page,
+			file,
+			page.getByRole('button', { name: 'Transcript', exact: true }),
+			page.locator('.transcript')
+		);
+		await expect(page.getByLabel('Opponent speech document')).toHaveValue(
+			'Economic growth solves poverty.'
+		);
+		await expect(page.locator('.transcript')).toContainText('Comparing with speech.txt');
+	});
+
+test('selected flow boxes open a collapsed Autoflow panel and reach its drop handler', async ({
+	page
+}) => {
+	await page.setViewportSize({ width: 1600, height: 1000 });
+	await settings(page, {
+		autoflowPanel: 4,
+		timersPanel: 0,
+		notesPanel: 0,
+		coveragePanel: 0,
+		transitionSpeed: 0
+	});
+	await page.goto('/app');
+	await page.getByRole('button', { name: 'New flow', exact: true }).click();
+	const cells = page.locator('.flow textarea');
+	await cells.first().fill('First argument');
+	await cells.first().press('Enter');
+	await cells.nth(1).fill('Second argument');
+	await cells.first().click({ modifiers: ['ControlOrMeta'] });
+	await cells.nth(1).click({ modifiers: ['ControlOrMeta'] });
+	await expect(page.locator('.flow .box.selected')).toHaveCount(2);
+	await dragThroughIcon(
+		page,
+		page.locator('.flow [data-box-id]').first(),
+		page.getByRole('button', { name: 'Autoflow', exact: true }),
+		page.locator('.autoflow-panel')
+	);
+	await expect(page.locator('.autoflow-panel [role=alert]')).toContainText(
+		'Connect CardMirror to Flew first.'
+	);
+});
+
+test('library pages open collapsed Tabs and can be dropped to import a new page', async ({
+	page
+}) => {
+	const { readFile } = await import('node:fs/promises');
+	const data = JSON.parse(await readFile('test-files/persistancy/Round.json', 'utf8'));
+	data.nodes[data.nodes.root.children[0]].value.content = 'Library source';
+	await page.setViewportSize({ width: 1600, height: 1000 });
+	await settings(page, {
+		libraryPanel: 2,
+		tabsPanel: 3,
+		timersPanel: 0,
+		notesPanel: 0,
+		coveragePanel: 0,
+		transitionSpeed: 0
+	});
+	await page.addInitScript((data) => {
+		localStorage.setItem('flow:drag-source', JSON.stringify(data));
+		localStorage.setItem(
+			'savedFlows',
+			JSON.stringify({
+				'flow:drag-source': {
+					title: 'Saved source',
+					created: new Date().toISOString(),
+					modified: new Date().toISOString(),
+					flowInfos: [{ content: 'Library source', invert: false }]
+				}
+			})
+		);
+	}, data);
+	await page.goto('/app');
+	await page.getByRole('button', { name: 'New flow', exact: true }).click();
+	await dragThroughIcon(
+		page,
+		page.getByRole('button', { name: 'Select Library source', exact: true }),
+		page.getByRole('button', { name: 'Tabs', exact: true }),
+		page.locator('.tabs')
+	);
+	await expect(page.locator('.tabs li')).toHaveCount(2);
+	await expect(page.locator('.tabs')).toContainText('Library source');
+});
+
+for (const initial of ['default', 'granted'] as const)
+	test(`partner notification permission ${initial} hides the enable button once granted and tests new permission once`, async ({
+		page
+	}) => {
+		await settings(page, {
+			collaborationPanel: 3,
+			timersPanel: 0,
+			notesPanel: 0,
+			coveragePanel: 0
+		});
+		await page.addInitScript((initial) => {
+			const notices: string[] = [];
+			Object.assign(window, { testNotices: notices });
+			class TestNotification {
+				static permission = initial as NotificationPermission;
+				static async requestPermission() {
+					this.permission = 'granted';
+					return 'granted';
+				}
+				constructor(title: string, options: { body: string }) {
+					notices.push(title + ': ' + options.body);
+				}
+				close() {}
+			}
+			Object.defineProperty(window, 'Notification', {
+				value: TestNotification,
+				configurable: true
+			});
+		}, initial);
+		await page.goto('/app');
+		await page.getByRole('button', { name: 'Collaboration', exact: true }).click();
+		const enable = page.getByRole('button', { name: 'Enable partner notifications', exact: true });
+		if (initial === 'default') await enable.click();
+		await expect(enable).toHaveCount(0);
+		expect(
+			await page.evaluate(() => (window as unknown as { testNotices: string[] }).testNotices)
+		).toEqual(initial === 'default' ? ['Flew Notes: Partner notifications enabled.'] : []);
+		await page.getByRole('button', { name: 'Collaboration', exact: true }).click();
+		await page.getByRole('button', { name: 'Collaboration', exact: true }).click();
+		await expect(enable).toHaveCount(0);
+		expect(
+			await page.evaluate(() => (window as unknown as { testNotices: string[] }).testNotices.length)
+		).toBe(initial === 'default' ? 1 : 0);
+	});
+
+for (const colorTheme of [1, 2, 3])
+	test(`panel settings and collapsed trays fit theme ${colorTheme} with larger controls`, async ({
+		page
+	}) => {
+		await page.setViewportSize({ width: 1600, height: 1100 });
+		await settings(page, {
+			colorTheme,
+			accentHue: 55,
+			accentSecondaryHue: 265,
+			fontSize: 1.4,
+			padding: 12,
+			buttonSize: 28,
+			borderRadius: 24,
+			transitionSpeed: 0,
+			sidebarWidth: 360,
+			panelWidth: 360,
+			coveragePanel: 2,
+			transcriptPanel: 2,
+			speechDropPanel: 1,
+			autoflowPanel: 3,
+			collaborationPanel: 4,
+			cardMirrorPanel: 4,
+			libraryPanel: 4,
+			timersPanel: 0,
+			notesPanel: 0
+		});
+		await page.goto('/app');
+		await page.getByRole('button', { name: 'New flow', exact: true }).click();
+		for (const side of ['.sidebar', '.right-sidebar']) {
+			const column = page.locator(side + ' .panel-container');
+			expect(await column.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+		}
+		await page.getByRole('button', { name: 'Coverage options', exact: true }).click();
+		await expect(
+			page
+				.locator('.settings > ul > li.title')
+				.filter({ has: page.getByRole('heading', { name: 'Coverage', exact: true }) })
+		).toBeVisible();
+		await expect(
+			page.getByRole('heading', { name: 'Show extended arguments', exact: true })
+		).toBeVisible();
+		await page.keyboard.press('Escape');
+	});

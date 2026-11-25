@@ -9,6 +9,7 @@
 	export let nowrap = false;
 	export let strikethrough = false;
 	export let readonly = false;
+	export let draggable = false;
 	export let bold: boolean | undefined = undefined;
 
 	export let textHeight = 0; // Should be readonly at higher levels
@@ -52,12 +53,14 @@
 	bind:value
 	bind:this={textarea}
 	on:load
+	on:input
 	on:input={() => requestAnimationFrame(() => autoHeight())}
 	on:beforeinput
 	on:keydown
 	on:paste
 	on:focus
 	on:blur
+	{draggable}
 	spellcheck="false"
 	{placeholder}
 	style={`--white-space:${whiteSpaceCss};`}

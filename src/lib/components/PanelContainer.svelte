@@ -1,6 +1,7 @@
 <script lang="ts">
+	import { fileMime, boxesMime, pagesMime } from '$lib/models/panelDrag';
 	import { settings } from '$lib/models/settings';
-	import { afterUpdate, beforeUpdate, onDestroy } from 'svelte';
+	import { afterUpdate, beforeUpdate, onDestroy, onMount } from 'svelte';
 	import AutoflowPanel from './panels/AutoflowPanel.svelte';
 	import TabsPanel from './panels/TabsPanel.svelte';
 	import TimersPanel from './panels/TimersPanel.svelte';
@@ -29,10 +30,10 @@
 
 	export let side: 'left' | 'right';
 	export let selectedFlowId: FlowId | null = null;
-	export let clickTab: (id: FlowId) => void = () => {};
-	export let addFlow: (style: any) => void = () => {};
-	export let handleSort: (e: { detail: { from: number; to: number } }) => void = () => {};
-	export let switchSpeakers: boolean = false;
+	export let clickTab: (id: FlowId) => void = () => undefined;
+	export let addFlow: (style: any) => void = () => undefined;
+	export let handleSort: (e: { detail: { from: number; to: number } }) => void = () => undefined;
+	export let switchSpeakers = false;
 
 	let expanded: PanelId | null = null;
 	let panelValues = Object.fromEntries(
@@ -50,6 +51,44 @@
 	$: collapsedPanels = activePanels.filter((id) => panelValues[id] >= 3);
 	$: if (expanded && !collapsedPanels.includes(expanded)) expanded = null;
 	$: visiblePanelIds = activePanels.filter((id) => panelValues[id] < 3 || expanded === id);
+
+	let dragPrevious: PanelId | null = null;
+	let dragOpened = false;
+	let droppedInPanel = false;
+	onMount(() => {
+		const drop = (event: DragEvent) => {
+			droppedInPanel =
+				event.target instanceof Element &&
+				!!event.target.closest('.panel-body [data-drop-state="ready"], .panel-body .tabs');
+		};
+		const end = () => {
+			if (dragOpened && !droppedInPanel) expanded = dragPrevious;
+			dragOpened = false;
+			droppedInPanel = false;
+		};
+		window.addEventListener('drop', drop, true);
+		window.addEventListener('dragend', end);
+		return () => {
+			window.removeEventListener('drop', drop, true);
+			window.removeEventListener('dragend', end);
+		};
+	});
+	function expandForDrop(event: DragEvent, id: PanelId) {
+		const transfer = event.dataTransfer;
+		if (
+			!transfer ||
+			![fileMime, boxesMime, pagesMime, 'Files'].some((type) => transfer.types.includes(type))
+		)
+			return;
+		event.preventDefault();
+		event.stopPropagation();
+		if (!dragOpened) {
+			dragPrevious = expanded;
+			dragOpened = true;
+			droppedInPanel = false;
+		}
+		expanded = id;
+	}
 
 	function unavailable(id: PanelId, available: boolean) {
 		return !available && documentPanelIds.includes(id);
@@ -139,13 +178,20 @@
 		{#if collapsedPanels.length > 0}
 			<div class="panel auto-size collapsed-buttons">
 				{#each collapsedPanels as id (id)}
-					<Button
-						icon={panelIcons[id]}
-						toggled={expanded === id}
-						tooltip={panelNames[id]}
-						ariaLabel={panelNames[id]}
-						on:click={() => (expanded = expanded === id ? null : id)}
-					/>
+					<div
+						class="collapsed-target"
+						role="presentation"
+						on:dragenter={(event) => expandForDrop(event, id)}
+						on:dragover={(event) => expandForDrop(event, id)}
+					>
+						<Button
+							icon={panelIcons[id]}
+							toggled={expanded === id}
+							tooltip={panelNames[id]}
+							ariaLabel={panelNames[id]}
+							on:click={() => (expanded = expanded === id ? null : id)}
+						/>
+					</div>
 				{/each}
 			</div>
 		{/if}
@@ -186,6 +232,9 @@
 		flex-direction: column;
 		flex: 1;
 		min-height: 0;
+	}
+	.collapsed-target {
+		display: flex;
 	}
 	.collapsed-buttons {
 		flex-direction: row;

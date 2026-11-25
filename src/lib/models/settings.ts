@@ -1,3 +1,4 @@
+import { panelIds, panelNames } from './panels';
 import { trackSettingChanged, setFunMode } from './telemetry';
 
 export const SETTINGS_VERSION = 2;
@@ -796,11 +797,19 @@ export const settings: Settings = new Settings({
 	},
 	transcriptSource: {
 		name: 'Transcription audio controls',
-		value: 2,
-		auto: 2,
+		value: 0,
+		auto: 0,
 		type: 'radio',
 		detail: { options: ['Microphone', 'Tab audio', 'Both'] }
 	},
+	transcriptExport: {
+		name: 'Transcript export',
+		type: 'radio',
+		value: 0,
+		auto: 0,
+		detail: { options: ['Full transcript', 'Analytics only'] }
+	},
+
 	transcriptAnalyticsOnly: {
 		name: 'Only show analytics while recording',
 		value: false,
@@ -915,12 +924,25 @@ export const settings: Settings = new Settings({
 		info: 'Lists arguments the next speech still has to answer and arguments the other side dropped',
 		detail: { options: ['Off', 'Left', 'Right', 'Left collapsed', 'Right collapsed'] }
 	},
+	coverageShowDropped: {
+		name: 'Show dropped arguments',
+		value: true,
+		auto: true,
+		type: 'toggle'
+	},
+	coverageShowExtended: {
+		name: 'Show extended arguments',
+		value: true,
+		auto: true,
+		type: 'toggle',
+		info: 'Include dropped arguments already extended in this speech.'
+	},
+
 	transcriptModel: {
 		name: 'Transcription model',
 		value: 0,
 		auto: 0,
 		type: 'radio',
-		info: 'Automatic favors Best on half-precision WebGPU and Accurate otherwise. Larger models download more the first time (Fast ~40 MB, Balanced ~80 MB, Accurate ~250–600 MB, Best ~560 MB and needs WebGPU).',
 		detail: { options: ['Automatic', 'Fast', 'Balanced', 'Accurate', 'Best'] }
 	},
 	speechDropPanel: {
@@ -1043,6 +1065,27 @@ type SettingsGroup = {
 	name: string;
 	settings: string[];
 };
+const panelSettings: Partial<Record<(typeof panelIds)[number], string[]>> = {
+	coveragePanel: ['coverageShowDropped', 'coverageShowExtended'],
+	transcriptPanel: [
+		'transcriptModel',
+		'transcriptSource',
+		'transcriptAnalyticsOnly',
+		'transcriptExport'
+	],
+	speechDropPanel: ['cardMirrorOpenSpeechDrop', 'speechDropPromo'],
+	libraryPanel: ['showFlowLibraryBar', 'maxLocalSaves'],
+	timersPanel: [
+		'timerAutoAdvance',
+		'timerStartOnSpeech',
+		'timerStartOnPhrase',
+		'timerStartPhrases',
+		'timerExcludeCx',
+		'pacingEnabled',
+		'pacingWordWeight',
+		'pacingGracePeriod'
+	]
+};
 export const settingsGroups: SettingsGroup[] = [
 	{
 		name: 'General',
@@ -1056,29 +1099,9 @@ export const settingsGroups: SettingsGroup[] = [
 			'telemetry'
 		]
 	},
-	{
-		name: 'Panels',
-		settings: [
-			'tabsPanel',
-			'coveragePanel',
-			'libraryPanel',
-			'transcriptPanel',
-			'transcriptModel',
-			'transcriptSource',
-			'transcriptAnalyticsOnly',
-			'autoflowPanel',
-			'cardMirrorOpenSpeechDrop',
-			'speechDropPromo',
-			'collaborationPanel',
-			'cardMirrorPanel',
-			'notesPanel',
-			'starredPanel',
-			'timersPanel',
-			'speechDropPanel',
-			'sidebarWidth',
-			'panelWidth'
-		]
-	},
+	{ name: 'Panels', settings: ['sidebarWidth', 'panelWidth'] },
+	...panelIds.map((id) => ({ name: panelNames[id], settings: [id, ...(panelSettings[id] ?? [])] })),
+
 	{
 		name: 'Colors',
 		settings: ['colorTheme', 'accentHue', 'accentSecondaryHue']
@@ -1159,7 +1182,6 @@ export const settingsGroups: SettingsGroup[] = [
 			'showSaveButton'
 		]
 	},
-	{ name: 'Flow library', settings: ['showFlowLibraryBar', 'maxLocalSaves'] },
 	{
 		name: 'Scrollbars',
 		settings: ['customScrollbar', 'customScrollbarWidth']
@@ -1167,19 +1189,6 @@ export const settingsGroups: SettingsGroup[] = [
 	{
 		name: 'Controls',
 		settings: ['consistentEnterBehaviour', 'tabReturnsToParent', 'shiftArrowThroughCells']
-	},
-	{
-		name: 'Timers',
-		settings: [
-			'timerAutoAdvance',
-			'timerStartOnSpeech',
-			'timerStartOnPhrase',
-			'timerStartPhrases',
-			'timerExcludeCx',
-			'pacingEnabled',
-			'pacingWordWeight',
-			'pacingGracePeriod'
-		]
 	},
 	{ name: 'Fun', settings: ['funMode'] }
 ];

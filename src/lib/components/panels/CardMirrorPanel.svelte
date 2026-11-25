@@ -1,4 +1,6 @@
 <script lang="ts">
+	import PanelMenu from './PanelMenu.svelte';
+	import { openPopup } from '$lib/models/popup';
 	import Button from '../Button.svelte';
 	import PanelHeader from './PanelHeader.svelte';
 	import PanelField from './PanelField.svelte';
@@ -73,7 +75,37 @@
 </script>
 
 <section class="cardmirror-panel" aria-label="CardMirror integration">
-	<PanelHeader name="CardMirror">
+	<PanelHeader
+		name="CardMirror"
+		detail={$cardMirror.state === 'connected'
+			? 'connected'
+			: $cardMirror.state === 'connecting'
+			? 'Connecting…'
+			: null}
+	>
+		<Button
+			icon="dots"
+			ariaLabel="CardMirror menu"
+			tooltip="cardmirror menu"
+			on:click={() =>
+				openPopup(PanelMenu, 'CardMirror', {
+					actions: [
+						{
+							label: 'Paste reply key',
+							disabled: $cardMirror.state === 'connected',
+							run: async () => {
+								try {
+									reply = await navigator.clipboard.readText();
+								} catch {
+									error = 'Could not read clipboard.';
+								}
+							}
+						},
+						{ label: 'Copy selected text', disabled: !argument, run: copyArgument }
+					]
+				})}
+		/>
+
 		{#if $cardMirror.state !== 'connected'}<Button
 				icon="download"
 				ariaLabel="Download CardMirror plugin"
@@ -90,15 +122,6 @@
 				}}
 			/>{/if}
 	</PanelHeader>
-	<PanelStatus>
-		{$cardMirror.state === 'connected'
-			? 'Connected to CardMirror'
-			: $cardMirror.state === 'connecting'
-			? 'Connecting…'
-			: $cardMirror.state === 'pairing'
-			? 'Waiting for CardMirror reply'
-			: 'Not connected'}
-	</PanelStatus>
 	{#if $cardMirror.state !== 'connected'}
 		<div class="steps">
 			<Button
@@ -141,7 +164,6 @@
 			{/if}
 		</div>
 	{:else}
-		{#if $cardMirror.notice}<PanelStatus>{$cardMirror.notice}</PanelStatus>{/if}
 		{#if $cardMirrorDocuments.sending}<PanelStatus>
 				Sending {$cardMirrorDocuments.sending}: {$cardMirrorDocuments.progress}%
 			</PanelStatus>
@@ -154,7 +176,7 @@
 				Opening SpeechDrop documents requires the updated plugin in the desktop app.
 			</PanelStatus>{/if}
 	{/if}
-	{#if argument}
+	{#if sources.length}
 		<PanelHeader name="Selected argument" detail={sources.length ? String(sources.length) : null}>
 			<Button
 				icon="copy"

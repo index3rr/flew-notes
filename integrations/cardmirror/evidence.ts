@@ -48,6 +48,7 @@ export function safeCardHtml(html: string): string {
 		'rowspan',
 		'data-colwidth',
 		'data-num-role',
+		'data-highlight',
 		'data-num-restart'
 	]);
 	const styles = new Set([

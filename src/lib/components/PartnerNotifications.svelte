@@ -1,8 +1,9 @@
 <script lang="ts">
+	import { get } from 'svelte/store';
 	import { partnerNotices, systemNoticeIds } from '$lib/models/collaboration';
 	import PartnerMessage from './PartnerMessage.svelte';
 	import Button from './Button.svelte';
-	let dismissed = new Set<string>();
+	let dismissed = new Set<string>(get(partnerNotices).map((item) => item.id));
 </script>
 
 <div class="notifications" aria-live="polite">

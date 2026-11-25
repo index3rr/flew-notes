@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from './Button.svelte';
 	import type { SavedNodesData } from '$lib/models/autoSave';
 	import { savedFlow } from '$lib/models/transition';
 	import { createEventDispatcher } from 'svelte';
@@ -9,6 +10,8 @@
 	export let disabled = false;
 	export let draggable = false;
 	export let selectedPages: number[] = [];
+	export let expandedPages: number[] = [];
+	export let pagePreviews: string[][] = [];
 	const dispatch = createEventDispatcher<{
 		importPage: number;
 		selectPage: { index: number; event: MouseEvent };
@@ -65,20 +68,28 @@
 						class="info page"
 						class:selected={selectedPages.includes(index)}
 						aria-pressed={selectedPages.includes(index)}
-						aria-label={`Import ${info.content || 'Untitled page'}`}
+						aria-label={`Select ${info.content || 'Untitled page'}`}
 						class:palette-accent={!info.invert}
 						class:palette-accent-secondary={info.invert}
 						{disabled}
 						{draggable}
-						title="Click to import page, or drag it into your flow"
+						title="select or preview this page"
 						on:click={(event) => {
-							if (event.shiftKey || event.ctrlKey || event.metaKey)
-								dispatch('selectPage', { index, event });
-							else dispatch('importPage', index);
+							dispatch('selectPage', { index, event });
 						}}
 						on:dragstart={(event) => dispatch('dragPage', { index, event })}
 						>{info.content || 'Untitled page'}</button
 					>
+					<Button
+						icon="add"
+						ariaLabel="Add selected pages"
+						tooltip="copy selected pages"
+						{disabled}
+						on:click={() => dispatch('importPage', index)}
+					/>
+					{#if expandedPages.includes(index)}<div class="preview">
+							{#each pagePreviews[index] ?? [] as text}<p>{text}</p>{/each}
+						</div>{/if}
 				{:else}
 					<div
 						class="info"
@@ -126,6 +137,15 @@
 		min-height: var(--button-size);
 		height: auto;
 		padding: var(--padding);
+	}
+	.preview {
+		width: 100%;
+		color: var(--text-weak);
+		padding-inline: var(--padding);
+		font-size: 0.85em;
+	}
+	.preview p {
+		margin: 0 0 var(--padding-small);
 	}
 	.page {
 		border: none;

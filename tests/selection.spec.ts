@@ -407,3 +407,34 @@ test('selection surfaces follow themes and resized typography, padding and corne
 		);
 	}
 });
+
+test('dragging a multiselection from its textarea inserts between siblings and keeps its children', async ({
+	page
+}) => {
+	await setup(page);
+	await cells(page).first().press('Shift+Enter');
+	await page.keyboard.type('Child response');
+	const first = page.locator('[data-box-id="box-0"] textarea');
+	const second = page.locator('[data-box-id="box-1"] textarea');
+	await first.click();
+	await first.click({ modifiers: ['ControlOrMeta'] });
+	await second.click({ modifiers: ['ControlOrMeta'] });
+	await expect(selected(page)).toHaveCount(2);
+	const target = page.locator('[data-box-id="box-3"]');
+	await first.dragTo(target, { targetPosition: { x: 30, y: 1 } });
+	const roots = page.locator('.flow .boxes > .box > .children > .box > .content');
+	await expect
+		.poll(() =>
+			roots.evaluateAll((elements) => elements.map((el) => (el as HTMLElement).dataset.boxId))
+		)
+		.toEqual(['box-2', 'box-0', 'box-1', 'box-3']);
+	await expect(page.locator('.box:has(> [data-box-id="box-0"]) > .children textarea')).toHaveValue(
+		'Child response'
+	);
+	await page.keyboard.press('Control+z');
+	await expect
+		.poll(() =>
+			roots.evaluateAll((elements) => elements.map((el) => (el as HTMLElement).dataset.boxId))
+		)
+		.toEqual(['box-0', 'box-1', 'box-2', 'box-3']);
+});

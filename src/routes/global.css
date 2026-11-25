@@ -292,3 +292,6 @@ a:active {
 		scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-background);
 	}
 }
+
+.panel:has([data-drop-state="ready"]) { background:var(--background-active); }
+.panel:has([data-drop-state="blocked"]) { background:var(--background-secondary); }

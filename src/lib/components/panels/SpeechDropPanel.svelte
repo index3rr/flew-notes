@@ -1,5 +1,9 @@
 <script lang="ts">
+	import { panelDrop } from '$lib/models/panelDrop';
+	import PanelMenu from './PanelMenu.svelte';
+	import { openPopup } from '$lib/models/popup';
 	import { fileMime } from '$lib/models/panelDrag';
+	import { cacheSpeechDropFile, clearSpeechDropFile } from '$lib/models/speechDropFile';
 	import { onDestroy, onMount } from 'svelte';
 	import { speechDropCode, speechDocument, speechDocumentSource } from '$lib/models/collaboration';
 	import { shareSpeechDropCode } from '$lib/models/sharingChannel';
@@ -68,8 +72,10 @@
 					(file) =>
 						file.index === cached?.index && file.name === cached.name && file.ctime === cached.ctime
 				)
-			)
+			) {
 				cached = null;
+				clearSpeechDropFile();
+			}
 			files = result.files;
 			error = '';
 		} catch (cause) {
@@ -202,6 +208,7 @@
 		fileController?.abort();
 		fileController = null;
 		cached = null;
+		clearSpeechDropFile();
 		fileBusy = null;
 		status = '';
 		if ($speechDocumentSource) speechDocument.set('');
@@ -221,7 +228,7 @@
 		}
 	}
 
-	async function documentAction(file: SpeechDropFile, action: 'download' | 'compare' | 'open') {
+	async function documentAction(file: SpeechDropFile, action: 'download' | 'open') {
 		if (fileBusy !== null) return;
 		const request = requestNumber,
 			room = loadedRoomCode;
@@ -253,23 +260,10 @@
 				if (blob.size > 50 * 1024 * 1024) throw new Error('This document exceeds the 50 MB limit.');
 				if (!current()) return;
 				cached = { room, index: file.index, name: file.name, ctime: file.ctime, blob };
+				cacheSpeechDropFile({ room, ...file }, blob);
 			}
 			if (!current()) return;
 
-			if (action === 'compare') {
-				let text: string;
-				if (/\.docx$/i.test(file.name)) {
-					const { extractRawText } = await import('mammoth/mammoth.browser');
-					text = (await extractRawText({ arrayBuffer: await blob.arrayBuffer() })).value;
-				} else if (/\.txt$/i.test(file.name)) text = await blob.text();
-				else throw new Error('Use a DOCX or TXT speech document for comparison.');
-				if (current()) {
-					speechDocument.set(text);
-					speechDocumentSource.set({ name: file.name, room, index: file.index });
-					status = `Comparing transcript with ${file.name}.`;
-				}
-				return;
-			}
 			if (action === 'download') {
 				const url = URL.createObjectURL(blob),
 					link = document.createElement('a');
@@ -316,6 +310,8 @@
 	let writing = false;
 	async function uploadFiles(files: FileList | null) {
 		if (!loadedRoomCode || !files || writing) return;
+		const room = loadedRoomCode,
+			request = requestNumber;
 		writing = true;
 		error = '';
 		try {
@@ -327,15 +323,15 @@
 						? await (await import('$lib/models/speechDropPromo')).addPromoToDocx(file)
 						: file;
 				body.append('file', upload);
-				const response = await fetch(`/api/speechdrop/${encodeURIComponent(loadedRoomCode)}`, {
+				const response = await fetch(`/api/speechdrop/${encodeURIComponent(room)}`, {
 					method: 'POST',
 					body
 				});
 				if (!response.ok) throw new Error((await response.json()).error);
 			}
-			await refreshRoom(loadedRoomCode, requestNumber);
+			if (room === loadedRoomCode && request === requestNumber) await refreshRoom(room, request);
 		} catch (cause) {
-			error = (cause as Error).message;
+			if (room === loadedRoomCode && request === requestNumber) error = (cause as Error).message;
 		} finally {
 			writing = false;
 		}
@@ -351,6 +347,7 @@
 			);
 			if (!response.ok) throw new Error((await response.json()).error);
 			cached = null;
+			clearSpeechDropFile();
 			await refreshRoom(loadedRoomCode, requestNumber);
 		} catch (cause) {
 			error = (cause as Error).message;
@@ -364,6 +361,7 @@
 
 <section
 	class="speechdrop-panel"
+	use:panelDrop={{ types: ['Files'], disabled: !loadedRoomCode || writing }}
 	aria-label="SpeechDrop"
 	on:dragover={(e) => {
 		if (e.dataTransfer?.types.includes('Files')) {
@@ -381,11 +379,38 @@
 >
 	<PanelHeader name="SpeechDrop" detail={files.length ? String(files.length) : null}>
 		<Button
+			icon="dots"
+			ariaLabel="SpeechDrop menu"
+			tooltip="speechdrop menu"
+			on:click={() =>
+				openPopup(PanelMenu, 'SpeechDrop', {
+					actions: [
+						{
+							label: 'Upload files',
+							disabled: !loadedRoomCode || writing,
+							run: () => localFile.click()
+						},
+						{
+							label: 'Paste room code',
+							run: async () => {
+								try {
+									roomCode = (await navigator.clipboard.readText()).trim();
+									shareSpeechDropCode(roomCode);
+									editRoomCode();
+								} catch {
+									error = 'Could not read clipboard.';
+								}
+							}
+						}
+					]
+				})}
+		/>
+		<Button
 			icon="upload"
 			ariaLabel="Upload to SpeechDrop"
 			tooltip="upload files to this room"
 			disabled={!loadedRoomCode || writing}
-			disabledReason="Open a flow first"
+			disabledReason=""
 			on:click={() => localFile.click()}
 		/>
 	</PanelHeader>
@@ -416,9 +441,6 @@
 	{/if}
 
 	{#if status}<PanelStatus>{status}</PanelStatus>{/if}
-	{#if $cardMirrorDocuments.sending}<PanelStatus>
-			Sending {$cardMirrorDocuments.sending}: {$cardMirrorDocuments.progress}%
-		</PanelStatus>{/if}
 	{#if files.length > 0}
 		<ul class="file-list">
 			{#each files as file (file.index)}
@@ -428,7 +450,12 @@
 					on:dragstart={(e) => {
 						e.dataTransfer?.setData(
 							fileMime,
-							JSON.stringify({ room: loadedRoomCode, index: file.index, name: file.name })
+							JSON.stringify({
+								room: loadedRoomCode,
+								index: file.index,
+								name: file.name,
+								ctime: file.ctime
+							})
 						);
 					}}
 				>
@@ -450,15 +477,6 @@
 								on:click={() => removeFile(file)}
 							/>
 
-							<Button
-								icon="mic"
-								ariaLabel="Use for transcript"
-								tooltip="compare the transcript with this document"
-								toggled={$speechDocumentSource?.room === loadedRoomCode &&
-									$speechDocumentSource.index === file.index}
-								disabled={fileBusy !== null}
-								on:click={() => documentAction(file, 'compare')}
-							/>
 							{#if docx && canOpenInCardMirror}<Button
 									icon="arrowRight"
 									ariaLabel="Open in CardMirror"

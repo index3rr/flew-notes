@@ -1,17 +1,8 @@
 <script lang="ts">
-	import Button from '../Button.svelte';
-	import { createDocument } from '$lib/models/autoSave';
 	export let name: string;
 </script>
 
-<div class="panel-placeholder">
-	<span>{name}</span><Button
-		icon="add"
-		ariaLabel={'Open a flow for ' + name}
-		tooltip="create a flow to use this panel"
-		on:click={() => createDocument()}
-	/>
-</div>
+<div class="panel-placeholder"><span>{name}</span></div>
 
 <style>
 	/* Matches PanelHeader so the name stays put when the panel's body arrives. */

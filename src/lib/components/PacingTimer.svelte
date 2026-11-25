@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { pacingAllocation } from '$lib/models/transcript';
 	import { onDestroy } from 'svelte';
+	import { editingBoxText } from '$lib/models/store';
 	import { focusId } from '$lib/models/focus';
 	import Button from './Button.svelte';
 	import Tooltip from './Tooltip.svelte';
@@ -14,6 +15,19 @@
 	export let palette: string;
 
 	let prevFocusId: BoxId | null = null;
+	let settingsRevision = 0;
+	onDestroy(
+		settings.subscribe(['pacingGracePeriod', 'pacingWordWeight'], () => settingsRevision++)
+	);
+	$: effectiveNodes = (() => {
+		const text = $editingBoxText;
+		const node = text && text.id === $focusId ? nodes[text.id] : null;
+		return text && node
+			? { ...nodes, [text.id]: { ...node, value: { ...node.value, content: text.content } } }
+			: nodes;
+	})();
+
+	let lastInput = '';
 	let boxes: BoxId[] = [];
 	let currentIndex = -1;
 	let pacingCountdown = 0;
@@ -41,7 +55,7 @@
 
 		const allocations = pacingAllocation(
 			mainTimerTime - graceMs,
-			remaining.map((id) => nodes[id]?.value.content ?? ''),
+			remaining.map((id) => effectiveNodes[id]?.value.content ?? ''),
 			remaining.map((id) => timeOverride.get(id) ?? 0),
 			Boolean(settings.data.pacingWordWeight.value)
 		);
@@ -55,26 +69,26 @@
 	}
 
 	$: {
-		const boxId = $focusId ? checkIdBox(nodes, $focusId) : null;
-		if (boxId && boxId !== prevFocusId) {
+		const boxId = $focusId ? checkIdBox(effectiveNodes, $focusId) : null;
+		const candidates = boxId ? getColumnBoxes(effectiveNodes, boxId) : [];
+		const input = JSON.stringify([
+			boxId,
+			settingsRevision,
+			candidates.map((id) => [id, effectiveNodes[id]?.value])
+		]);
+		if (input !== lastInput) {
+			lastInput = input;
 			prevFocusId = boxId;
-			const allBoxes = getColumnBoxes(nodes, boxId);
-			boxes = allBoxes.filter((id) => {
-				const n = nodes[id];
-				return !n || n.value.tag !== 'box' || !shouldSkipBox(n.value);
+			boxes = candidates.filter((id) => {
+				const node = effectiveNodes[id];
+				return node?.value.tag === 'box' && !shouldSkipBox(node.value);
 			});
-			timeOverride = new Map();
-			for (const id of boxes) {
-				const box = nodes[id];
-				if (box && box.value.tag === 'box') {
-					const ms = parseTimecode(box.value.content);
-					if (ms > 0) timeOverride.set(id, ms);
-				}
-			}
-			currentIndex = boxes.indexOf(boxId);
-			if (currentIndex >= 0) {
-				resetPacing();
-			} else {
+			timeOverride = new Map(
+				boxes.map((id) => [id, parseTimecode(effectiveNodes[id]!.value.content)])
+			);
+			currentIndex = boxId ? boxes.indexOf(boxId) : -1;
+			if (currentIndex >= 0) resetPacing();
+			else {
 				pacingCountdown = 0;
 				ogTime = 0;
 				stopInterval();

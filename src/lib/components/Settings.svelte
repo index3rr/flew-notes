@@ -1,14 +1,22 @@
 <script lang="ts">
 	import Setting from './Setting.svelte';
+	import { panelIds } from '$lib/models/panels';
 	import Button from './Button.svelte';
-	import ButtonBar from './ButtonBar.svelte';
 	import { settingsGroups, settings } from '$lib/models/settings';
-	import { onDestroy } from 'svelte';
+	import { onDestroy, onMount, tick } from 'svelte';
 	import { settingScrollerIn, settingScrollerOut, settingTitleInOut } from '$lib/models/transition';
 	import { downloadSettingsJson } from '$lib/models/file';
 	import { flushSettingChanges } from '$lib/models/telemetry';
 
-	export const closePopup: () => void = () => {};
+	const isPanelSetting = (key: string) => (panelIds as readonly string[]).includes(key);
+	export let initialGroup: string | null = null;
+	onMount(async () => {
+		await tick();
+		const index = settingsGroups.findIndex((group) => group.name === initialGroup);
+		if (index >= 0) scrollToGroupHeader(index);
+	});
+
+	export const closePopup: () => void = () => undefined;
 	onDestroy(() => {
 		flushSettingChanges();
 		settings.saveToLocalStorage();
@@ -28,26 +36,31 @@
 	let groupVisibilities: boolean[];
 	let settingVisibilities: boolean[][];
 	function updateVisibilities() {
-		settingVisibilities = settingsGroups.map((group, _groupIndex) => {
-			return group.settings.map((key, _index) => {
+		settingVisibilities = settingsGroups.map((group) => {
+			return group.settings.map((key) => {
 				if (!settings.data[key]) {
-					console.log(`Key: ${key} does not exist in settings.`)
+					console.log(`Key: ${key} does not exist in settings.`);
 					return false;
 				}
-				if (!settings.data[key].visibilityCondition || settings.data[key].visibilityCondition && settings.data[key].visibilityCondition()) {
+				if (
+					!settings.data[key].visibilityCondition ||
+					(settings.data[key].visibilityCondition && settings.data[key].visibilityCondition())
+				) {
 					return true;
 				}
 				return false;
 			});
 		});
-		groupVisibilities = settingVisibilities.map((group, _groupIndex) => {
-			return group.some(vis => vis);
+		groupVisibilities = settingVisibilities.map((group) => {
+			return group.some((vis) => vis);
 		});
 	}
 	updateVisibilities();
-	onDestroy(settings.subscribe(["any"], () => {
-		updateVisibilities();
-	}));
+	onDestroy(
+		settings.subscribe(['any'], () => {
+			updateVisibilities();
+		})
+	);
 
 	function openUploadDialog() {
 		(document.getElementById('uploadId') as HTMLElement).click();
@@ -61,9 +74,13 @@
 			<ul>
 				{#each settingsGroups as group, groupIndex}
 					{#if groupVisibilities[groupIndex]}
-						<li class="title" in:settingTitleInOut={{skip:false}} out:settingTitleInOut={{skip:false}}>
+						<li
+							class="title"
+							in:settingTitleInOut={{ skip: false }}
+							out:settingTitleInOut={{ skip: false }}
+						>
 							<button
-								on:click={(e) => {
+								on:click={() => {
 									scrollToGroupHeader(groupIndex);
 								}}
 							>
@@ -73,14 +90,14 @@
 					{/if}
 					{#each group.settings as key, index}
 						{#if settingVisibilities[groupIndex][index]}
-							<li in:settingScrollerIn={{skip:false}} out:settingScrollerOut={{skip:false}}>
+							<li in:settingScrollerIn={{ skip: false }} out:settingScrollerOut={{ skip: false }}>
 								<button on:click={() => scrollToSettingElement(groupIndex, index)}>
-									{settings.data[key].name}
+									{isPanelSetting(key) ? 'Position' : settings.data[key].name}
 								</button>
 							</li>
 						{/if}
 					{/each}
-			{/each}
+				{/each}
 			</ul>
 		</div>
 	</div>
@@ -115,11 +132,17 @@
 		<section class="settings">
 			<ul>
 				<!-- {#each Object.keys(settings.data) as key, index}
-					<Setting {key} setting={settings.data[key]} bind:this={settingComponents[index]} />
+					<Setting {key} setting={settings.data[key]}
+         displayName={isPanelSetting(key) ? 'Position' : null} bind:this={settingComponents[index]} />
 				{/each} -->
 				{#each settingsGroups as group, groupIndex}
 					{#if groupVisibilities[groupIndex]}
-						<li class="title" bind:this={groupHeaderElements[groupIndex]} in:settingTitleInOut={{skip:false}} out:settingTitleInOut={{skip:false}}>
+						<li
+							class="title"
+							bind:this={groupHeaderElements[groupIndex]}
+							in:settingTitleInOut={{ skip: false }}
+							out:settingTitleInOut={{ skip: false }}
+						>
 							<h1>
 								{group.name}
 							</h1>
@@ -130,6 +153,7 @@
 							<Setting
 								{key}
 								setting={settings.data[key]}
+								displayName={isPanelSetting(key) ? 'Position' : null}
 								bind:this={settingComponents[groupIndex][index]}
 							/>
 						{/if}

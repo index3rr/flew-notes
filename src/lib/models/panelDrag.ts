@@ -1,10 +1,11 @@
+import { readSpeechDropFile, type SpeechDropFile } from './speechDropFile';
 import { get } from 'svelte/store';
 import { nodes, frozen } from './store';
 import { selectedBoxIds, collectAllBoxesInFlow } from './selection';
 import { serializeBoxSubtree, type BoxId, type Nodes, type SerializedBox } from './node';
 import { buildPasteActions, newDeleteAction } from './nodeDecorateAction';
 import { resolvePendingAction } from './nodePendingAction';
-import { doActionBundle } from './nodeAction';
+import { doActionBundle, applyAction } from './nodeAction';
 import { showArgument } from './argumentNavigation';
 import { loadNodes } from './file';
 
@@ -13,18 +14,30 @@ export const pagesMime = 'application/x-flew-page';
 export const fileMime = 'application/x-flew-speechdrop';
 export function selectionRoots(tree: Nodes, ids: Iterable<BoxId>): BoxId[] {
 	const selected = new Set(ids);
-	const ordered = tree.root.children.flatMap((flow) => collectAllBoxesInFlow(tree, flow));
-	return ordered
-		.filter((id) => selected.has(id))
+	return tree.root.children
+		.flatMap((flow) => collectAllBoxesInFlow(tree, flow))
 		.filter((id) => {
-			let parent: string | undefined = tree[id]?.parent;
+			if (!selected.has(id)) return false;
+			let parent: BoxId | import('./node').FlowId | 'root' | null | undefined = tree[id]?.parent;
 			while (parent && parent !== 'root') {
 				if (selected.has(parent as BoxId)) return false;
-				parent = tree[parent as BoxId]?.parent;
+				parent = tree[parent]?.parent;
 			}
-			return !!tree[id];
+			return true;
 		});
 }
+export function boxDropPosition(event: DragEvent): 'before' | 'after' | 'inside' {
+	const element = event.currentTarget;
+	if (!(element instanceof HTMLElement) || (!event.clientX && !event.clientY)) return 'inside';
+	const bounds = element.getBoundingClientRect();
+	const edge = bounds.height / 4;
+	return event.clientY < bounds.top + edge
+		? 'before'
+		: event.clientY > bounds.bottom - edge
+		? 'after'
+		: 'inside';
+}
+
 export function startBoxDrag(event: DragEvent, id: BoxId) {
 	const tree = get(nodes),
 		selected = get(selectedBoxIds);
@@ -120,7 +133,7 @@ export function dropOnBox(event: DragEvent, target: BoxId) {
 	event.preventDefault();
 	event.stopPropagation();
 	resolvePendingAction(get(nodes));
-	const tree = get(nodes),
+	const tree = structuredClone(get(nodes)),
 		node = tree[target];
 	if (!node) return;
 	let boxes: SerializedBox[];
@@ -168,31 +181,70 @@ export function dropOnBox(event: DragEvent, target: BoxId) {
 		if (moving.includes(ancestor as BoxId)) return;
 		ancestor = tree[ancestor as BoxId]?.parent;
 	}
-	const replace = !node.value.content.trim() && !node.value.isExtension;
+	const position = boxDropPosition(event);
+	const replace = position === 'inside' && !node.value.content.trim() && !node.value.isExtension;
 	const flow = tree[node.value.flowId]!;
 	const depth = (box: SerializedBox): number => 1 + Math.max(0, ...box.children.map(depth));
 	if (
-		(replace ? node.level - 1 : node.level) + Math.max(0, ...boxes.map(depth)) >
+		(replace || position !== 'inside' ? node.level - 1 : node.level) +
+			Math.max(0, ...boxes.map(depth)) >
 		flow.value.columns.length
 	)
 		return;
-	const parent = replace ? node.parent : target;
-	const index = replace
-		? tree[node.parent]!.children.indexOf(target)
-		: node.children[0] && tree[node.children[0]]?.value.isExtension
-		? 1
-		: 0;
+	const parent = replace || position !== 'inside' ? node.parent : target;
+	const index =
+		position !== 'inside'
+			? tree[node.parent]!.children.indexOf(target) + (position === 'after' ? 1 : 0)
+			: replace
+			? tree[node.parent]!.children.indexOf(target)
+			: node.children[0] && tree[node.children[0]]?.value.isExtension
+			? 1
+			: 0;
+	const moveActions: import('./nodeAction').ActionBundle = [];
+	if (moving.length) {
+		const projection = structuredClone(tree);
+		let anchor: BoxId | null = position === 'after' ? target : null;
+		const before =
+			position === 'before'
+				? target
+				: position === 'inside' && !replace
+				? projection[parent]!.children.find(
+						(child) => !moving.includes(child) && !projection[child]?.value.isExtension
+				  )
+				: null;
+		if (
+			position === 'inside' &&
+			!replace &&
+			projection[parent]!.children[0] &&
+			projection[projection[parent]!.children[0]]?.value.isExtension
+		)
+			anchor = projection[parent]!.children[0];
+		for (const id of moving) {
+			const siblings = projection[parent]!.children;
+			let next = anchor
+				? siblings.indexOf(anchor) + 1
+				: before
+				? siblings.indexOf(before)
+				: replace
+				? siblings.indexOf(target)
+				: siblings.length;
+			const old = projection[id]!;
+			if (old.parent === parent && siblings.indexOf(id) < next) next--;
+			const action: import('./nodeAction').ActionBundle[number] = {
+				tag: 'move',
+				id,
+				newParent: parent,
+				newIndex: Math.max(0, next)
+			};
+			moveActions.push(action);
+			applyAction(projection, action);
+			anchor = id;
+		}
+	}
 	const result = moving.length
-		? {
-				firstId: moving[0],
-				actions: moving.map((id, offset) => ({
-					tag: 'move' as const,
-					id,
-					newParent: parent,
-					newIndex: index + offset
-				}))
-		  }
+		? { firstId: moving[0], actions: moveActions }
 		: buildPasteActions(parent, node.value.flowId, boxes, index);
+
 	const actions: import('./nodeAction').ActionBundle = [
 		...(replace ? newDeleteAction(tree, target) : []),
 		...result.actions
@@ -254,18 +306,28 @@ export function dropOnBox(event: DragEvent, target: BoxId) {
 	if (result.firstId) showArgument(result.firstId);
 }
 export async function droppedDocument(
-	event: DragEvent
-): Promise<{ name: string; blob: Blob } | null> {
+	event: DragEvent,
+	signal?: AbortSignal
+): Promise<{ name: string; blob: Blob; source?: SpeechDropFile } | null> {
 	const file = event.dataTransfer?.files[0];
-	if (file) return { name: file.name, blob: file };
+	if (file) {
+		if (file.size > 50 * 1024 * 1024) throw new Error('This document exceeds the 50 MB limit.');
+		return { name: file.name, blob: file };
+	}
 	const raw = event.dataTransfer?.getData(fileMime);
 	if (!raw) return null;
 	const data = JSON.parse(raw);
-	if (!/^[A-Za-z0-9_-]{1,64}$/.test(data.room) || !Number.isSafeInteger(data.index))
+	if (
+		!data ||
+		typeof data.room !== 'string' ||
+		!/^[A-Za-z0-9_-]{1,64}$/.test(data.room) ||
+		!Number.isSafeInteger(data.index) ||
+		data.index < 0 ||
+		typeof data.name !== 'string' ||
+		(data.ctime !== undefined && typeof data.ctime !== 'number')
+	)
 		throw new Error('Invalid SpeechDrop file');
-	const response = await fetch(`/api/speechdrop/${encodeURIComponent(data.room)}/${data.index}`);
-	if (!response.ok) throw new Error('Could not load speech document.');
-	return { name: data.name, blob: await response.blob() };
+	return { name: data.name, blob: await readSpeechDropFile(data, signal), source: data };
 }
 export async function documentText(name: string, blob: Blob) {
 	if (/\.txt$/i.test(name)) return blob.text();

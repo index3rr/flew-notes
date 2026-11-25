@@ -106,7 +106,7 @@ async function pair(flew: Page, host: Page) {
 		.getByRole('textbox', { name: 'CardMirror reply key', exact: true })
 		.fill(await answer.inputValue());
 	await flew.getByRole('button', { name: 'Connect CardMirror', exact: true }).click();
-	await expect(flew.getByText('Connected to CardMirror', { exact: true })).toBeVisible({
+	await expect(flew.getByText('connected', { exact: true })).toBeVisible({
 		timeout: 20_000
 	});
 	await host.getByRole('button', { name: 'Done', exact: true }).click();
@@ -216,7 +216,9 @@ test('companion plugin exchanges real WebRTC messages with Flew, persists source
 			'Climate policy\nGrowth solves poverty 🌱\nAuthor 2026\nPrefer comparative evidence'
 		);
 		await page.getByRole('button', { name: 'Disconnect CardMirror', exact: true }).click();
-		await expect(page.getByText('Not connected', { exact: true })).toBeVisible();
+		await expect(
+			page.getByRole('button', { name: 'Create connection key', exact: true })
+		).toBeEnabled();
 		await pair(page, host);
 		await run(host, 'sendCell');
 		await expect(cells).toHaveCount(5);
@@ -245,7 +247,9 @@ test('companion plugin exchanges real WebRTC messages with Flew, persists source
 			.toBe('Flew destination: Aff destination.');
 		await expect(cells).toHaveCount(11);
 		await host.addScriptTag({ url: '/integrations/cardmirror/plugin.js' });
-		await expect(page.getByText('Not connected', { exact: true })).toBeVisible();
+		await expect(
+			page.getByRole('button', { name: 'Create connection key', exact: true })
+		).toBeEnabled();
 		await pair(page, host);
 		expect(errors).toEqual([]);
 	} finally {
@@ -283,7 +287,7 @@ test('collapsed panel stays connected; large selections are framed; no flow reje
 			.toContain('Sent to Flew');
 		await expect(page.locator('.box textarea').first()).toHaveValue('界🌱'.repeat(5000));
 		await page.getByRole('button', { name: 'CardMirror', exact: true }).click();
-		await expect(page.getByText('Connected to CardMirror', { exact: true })).toBeVisible();
+		await expect(page.getByText('connected', { exact: true })).toBeVisible();
 		await page.getByRole('button', { name: 'Close flow', exact: true }).click();
 		await run(host, 'send');
 		await expect
@@ -508,8 +512,8 @@ test('a SpeechDrop download streams to CardMirror once and remains usable for tr
 					hash: createHash('sha256').update(docx).digest('hex')
 				}
 			]);
-		await page.getByRole('button', { name: 'Use for transcript', exact: true }).click();
 		await page.getByRole('button', { name: 'Transcript', exact: true }).click();
+		await page.locator('.speechdrop-panel li').dragTo(page.locator('.transcript'));
 		await expect(page.getByLabel('Opponent speech document')).toHaveValue(
 			/SpeechDrop 1NC evidence/
 		);
@@ -565,7 +569,7 @@ test('switching SpeechDrop rooms cancels a late comparison and does not mark the
 	});
 	await page.goto('/app');
 	await page.getByLabel('SpeechDrop room code').fill('old');
-	await page.getByRole('button', { name: 'Use for transcript', exact: true }).click();
+	await page.locator('.speechdrop-panel li').dragTo(page.locator('.transcript'));
 	await page.getByLabel('SpeechDrop room code').fill('new');
 	release?.();
 	await expect(page.getByText('This room has no files.', { exact: true })).toBeVisible();
@@ -606,7 +610,8 @@ test('incoming arguments preserve an annotated empty cell and plain-text copy fl
 		await expect(cells.first()).toHaveValue('');
 		await expect(note).toHaveValue('Keep this CX question');
 		await cells.first().fill('Latest unanswered question');
-		await page.getByRole('button', { name: 'Copy argument text', exact: true }).click();
+		await page.getByRole('button', { name: 'CardMirror menu', exact: true }).click();
+		await page.getByRole('menuitem', { name: 'Copy selected text', exact: true }).click();
 		await expect
 			.poll(() => page.evaluate(() => (window as unknown as { copied: string }).copied))
 			.toBe('Latest unanswered question');
