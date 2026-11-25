@@ -11,7 +11,7 @@
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"lint": "prettier --plugin-search-dir . --check . && eslint .",
 		"format": "prettier --plugin-search-dir . --write .",
-		"build:cardmirror": "node scripts/build-cardmirror-plugin.mjs"
+		"build:cardmirror": "svelte-kit sync && node scripts/build-cardmirror-plugin.mjs"
 	},
 	"devDependencies": {
 		"@playwright/test": "^1.63.0",
