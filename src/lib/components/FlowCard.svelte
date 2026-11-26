@@ -63,30 +63,32 @@
 			</div>
 			{#each flowData.flowInfos as info, index}
 				{#if compact}
-					<button
-						type="button"
-						class="info page"
-						class:selected={selectedPages.includes(index)}
-						aria-pressed={selectedPages.includes(index)}
-						aria-label={`Select ${info.content || 'Untitled page'}`}
-						class:palette-accent={!info.invert}
-						class:palette-accent-secondary={info.invert}
-						{disabled}
-						{draggable}
-						title="select or preview this page"
-						on:click={(event) => {
-							dispatch('selectPage', { index, event });
-						}}
-						on:dragstart={(event) => dispatch('dragPage', { index, event })}
-						>{info.content || 'Untitled page'}</button
-					>
-					<Button
-						icon="add"
-						ariaLabel="Add selected pages"
-						tooltip="copy selected pages"
-						{disabled}
-						on:click={() => dispatch('importPage', index)}
-					/>
+					<div class="page-row">
+						<button
+							type="button"
+							class="info page"
+							class:selected={selectedPages.includes(index)}
+							aria-pressed={selectedPages.includes(index)}
+							aria-label={`Select ${info.content || 'Untitled page'}`}
+							class:palette-accent={!info.invert}
+							class:palette-accent-secondary={info.invert}
+							{disabled}
+							{draggable}
+							title="select or preview this page"
+							on:click={(event) => {
+								dispatch('selectPage', { index, event });
+							}}
+							on:dragstart={(event) => dispatch('dragPage', { index, event })}
+							>{info.content || 'Untitled page'}</button
+						>
+						<Button
+							icon="add"
+							ariaLabel="Add selected pages"
+							tooltip="copy selected pages"
+							{disabled}
+							on:click={() => dispatch('importPage', index)}
+						/>
+					</div>
 					{#if expandedPages.includes(index)}<div class="preview">
 							{#each pagePreviews[index] ?? [] as text}<p>{text}</p>{/each}
 						</div>{/if}
@@ -131,6 +133,22 @@
 		padding: 0;
 		height: auto;
 		font-weight: var(--font-weight);
+	}
+	.page-row {
+		display: flex;
+		align-items: center;
+		width: 100%;
+		min-width: 0;
+		gap: var(--padding-small);
+	}
+	.page-row > .page {
+		flex: 1;
+		min-width: 0;
+		text-align: left;
+		overflow-wrap: anywhere;
+	}
+	.page-row > :global(.element) {
+		flex-shrink: 0;
 	}
 	.compact .page {
 		box-sizing: content-box;

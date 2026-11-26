@@ -1,15 +1,18 @@
 <script lang="ts">
+	import { trackFeatureUsed } from '$lib/models/telemetry';
+	import { loadSpeechModel, releaseSpeechModel, speechModelState } from '$lib/models/speechModel';
 	const errorMessage = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause));
 	import { panelDrop } from '$lib/models/panelDrop';
-	import PanelMenu from './PanelMenu.svelte';
-	import { openPopup } from '$lib/models/popup';
-	import { fileMime, droppedDocument, documentText } from '$lib/models/panelDrag';
+
+	import { fileMime, boxesMime, droppedDocument, documentText } from '$lib/models/panelDrag';
+	import type { SerializedBox } from '$lib/models/node';
 	import { afterUpdate, onDestroy, tick } from 'svelte';
 	import Button from '../Button.svelte';
 	import PanelHeader from './PanelHeader.svelte';
 	import PanelField from './PanelField.svelte';
 	import PanelStatus from './PanelStatus.svelte';
 	import {
+		roundToolsVersion,
 		speechDocument,
 		speechDropCode,
 		speechDetected,
@@ -33,43 +36,43 @@
 	import { insertTextNear } from '$lib/models/nodeDecorateAction';
 	import { resolvePendingAction } from '$lib/models/nodePendingAction';
 
-	type Entry = { id: number; text: string; outside: boolean; speech: string; at: number };
+	type Entry = {
+		id: number;
+		text: string;
+		outside: boolean;
+		hasReference: boolean;
+		speech: string;
+		at: number;
+	};
 	type Source = 'microphone' | 'tab';
 
-	let segments: { text: string; speech: string; at: number }[] = [];
 	let entries: Entry[] = [];
-	$: entries = segments.flatMap((segment, segmentIndex) =>
-		transcriptSpans(segment.text, $speechDocument).map((span, spanIndex) => ({
-			...span,
-			speech: segment.speech,
-			at: segment.at,
-			id: segmentIndex * 1000000 + spanIndex
-		}))
-	);
 	let referenceInput: HTMLInputElement;
-	function menu() {
-		openPopup(PanelMenu, 'Transcript', {
-			actions: [
-				{
-					label: 'Load speech document',
-					disabled: active || loading || finishing,
-					run: () => referenceInput.click()
-				},
-				{
-					label: 'Paste speech text',
-					disabled: active || loading || finishing,
-					run: async () => {
-						try {
-							cancelDocument();
-							speechDocument.set(await navigator.clipboard.readText());
-							speechDocumentSource.set(null);
-						} catch {
-							error = 'Could not read clipboard.';
-						}
+	function panelActions() {
+		return [
+			{
+				label: 'Load speech document',
+				disabled: active || loading || finishing,
+				run: () => referenceInput.click()
+			},
+			{
+				label: 'Paste speech text',
+				disabled: active || loading || finishing,
+				run: async () => {
+					cancelDocument();
+					const request = documentRequest;
+					error = '';
+					try {
+						const text = await navigator.clipboard.readText();
+						if (request !== documentRequest) return;
+						speechDocument.set(text);
+						speechDocumentSource.set(null);
+					} catch {
+						if (request === documentRequest) error = 'Could not read clipboard.';
 					}
 				}
-			]
-		});
+			}
+		];
 	}
 	let status = '';
 	let error = '';
@@ -77,14 +80,14 @@
 	let loading = false;
 	let finishing = false;
 	let source: Source = 'microphone';
-	let modelLabel = '';
+	$: modelLabel = $speechModelState.label;
 	let worker: Worker | undefined;
 	let context: AudioContext | undefined;
 	let stream: MediaStream | undefined;
 	let capture: AudioWorkletNode | undefined;
 	let segmenter: Segmenter | undefined;
 	let queue: { audio: Float32Array; speech: string; at: number }[] = [];
-	let busy: { speech: string; at: number } | null = null;
+	let busy: { speech: string; at: number; requestId: string } | null = null;
 	let resampling = 0;
 	let generation = 0;
 	let detected = false;
@@ -105,7 +108,6 @@
 		})
 	);
 	let started = 0;
-	let downloads = new Map<string, { loaded: number; total: number }>();
 	const maxQueue = 12;
 
 	function stop() {
@@ -120,13 +122,12 @@
 		capture = undefined;
 		context = undefined;
 		stream = undefined;
-		worker?.terminate();
+		releaseSpeechModel(worker);
 		worker = undefined;
 		segmenter = undefined;
 		queue = [];
 		busy = null;
 		resampling = 0;
-		downloads = new Map();
 	}
 
 	// Label a piece of audio with the speech it belongs to and how far into that speech it began.
@@ -173,15 +174,15 @@
 		if (finishing && !busy && !queue.length && !resampling) {
 			finishing = false;
 			status = '';
-			worker?.terminate();
+			releaseSpeechModel(worker);
 			worker = undefined;
 			return;
 		}
 		if (busy || !queue.length || !worker || loading) return;
 		const [item, ...rest] = queue;
 		queue = rest;
-		busy = { speech: item.speech, at: item.at };
-		worker.postMessage({ audio: item.audio }, [item.audio.buffer]);
+		busy = { speech: item.speech, at: item.at, requestId: crypto.randomUUID() };
+		worker.postMessage({ audio: item.audio, requestId: busy.requestId }, [item.audio.buffer]);
 	}
 
 	function received(raw: string) {
@@ -196,8 +197,16 @@
 		busy = null;
 		if (text && label) {
 			const comparison = compareSpeech(text, $speechDocument);
+			const hasReference = Boolean($speechDocument.trim());
+			const spans = transcriptSpans(text, $speechDocument).map((span, index) => ({
+				...span,
+				hasReference,
+				speech: label.speech,
+				at: label.at,
+				id: entries.length + index
+			}));
 			transcribedPhrase.update((value) => ({ id: value.id + 1, text }));
-			segments = [...segments, { text, ...label }];
+			entries = [...entries, ...spans];
 			if (comparison.matched && !detected) {
 				detected = true;
 				speechDetected.update((value) => value + 1);
@@ -240,23 +249,10 @@
 		error = '';
 		status = 'Loading the speech model…';
 		try {
-			worker = new Worker(new URL('../../models/transcript.worker.ts', import.meta.url), {
-				type: 'module'
-			});
-			const ready = await new Promise<{ model?: string; device?: string }>((resolve, reject) => {
-				worker!.onerror = () => reject(new Error('Could not load the speech model.'));
-				worker!.onmessage = (event) => {
-					if (event.data.progress) {
-						const { file, loaded, total } = event.data.progress;
-						downloads = new Map(downloads).set(file, { loaded, total });
-					} else if (event.data.error) reject(new Error(event.data.error));
-					else resolve(event.data);
-				};
-				worker!.postMessage({ model: settings.data.transcriptModel.value });
-			});
+			const ready = await loadSpeechModel();
 			if (token !== generation) return;
-			modelLabel = ready.model ? `${ready.model}${ready.device === 'webgpu' ? ' · GPU' : ''}` : '';
-			downloads = new Map();
+			worker = ready.worker;
+
 			const acquired = await captureStream(kind);
 			if (token !== generation) {
 				acquired.getTracks().forEach((track) => track.stop());
@@ -283,6 +279,7 @@
 			capture.connect(mute).connect(context.destination);
 			started = Date.now();
 			worker!.onmessage = (event) => {
+				if (event.data.requestId !== busy?.requestId) return;
 				if (event.data.error) {
 					error = event.data.error;
 					stop();
@@ -301,6 +298,7 @@
 			await context.resume();
 			if (token !== generation) return;
 			active = true;
+			trackFeatureUsed('transcript', 'started');
 			loading = false;
 			status = '';
 			next();
@@ -318,6 +316,7 @@
 	}
 
 	async function finish() {
+		if (active) trackFeatureUsed('transcript', 'completed');
 		if (loading) {
 			stop();
 			return;
@@ -360,16 +359,16 @@
 		await tick();
 		if (id) showArgument(id);
 	}
+	function dragEntry(event: DragEvent, entry: Entry) {
+		if (!event.dataTransfer || $frozen) return;
+		const boxes: SerializedBox[] = [{ value: { content: entry.text }, children: [] }];
+		event.dataTransfer.setData(boxesMime, JSON.stringify({ boxes }));
+		event.dataTransfer.setData('text/plain', entry.text);
+		event.dataTransfer.effectAllowed = 'copy';
+		event.stopPropagation();
+	}
 
-	$: downloadProgress = (() => {
-		let loaded = 0;
-		let total = 0;
-		for (const file of downloads.values()) {
-			loaded += file.loaded;
-			total += file.total;
-		}
-		return total ? Math.round((loaded / total) * 100) : null;
-	})();
+	$: downloadProgress = $speechModelState.progress ?? null;
 	let controls = Number(settings.data.transcriptSource.value);
 	let analyticsOnly = Boolean(settings.data.transcriptAnalyticsOnly.value);
 	onDestroy(
@@ -385,6 +384,14 @@
 		documentController?.abort();
 		documentController = null;
 	};
+	function resetTranscript() {
+		stop();
+		cancelDocument();
+		entries = [];
+		status = '';
+		error = '';
+	}
+	$: $roundToolsVersion, resetTranscript();
 	onDestroy(speechDropCode.subscribe(cancelDocument));
 	onDestroy(cancelDocument);
 	async function drop(event: DragEvent) {
@@ -413,8 +420,7 @@
 	$: running = active || loading;
 	$: visibleEntries = entries
 		.filter(
-			(entry) =>
-				entry.outside || !$speechDocument.trim() || ((running || finishing) && !analyticsOnly)
+			(entry) => entry.outside || !entry.hasReference || ((running || finishing) && !analyticsOnly)
 		)
 		.reduce((all: Entry[], entry) => {
 			const last = all[all.length - 1];
@@ -439,6 +445,11 @@
 	afterUpdate(() => {
 		if (list && pinnedToBottom) list.scrollTop = list.scrollHeight;
 	});
+	onDestroy(
+		settings.subscribe(['transcriptModel'], () => {
+			if (active || loading || finishing) stop();
+		})
+	);
 	onDestroy(stop);
 </script>
 
@@ -469,14 +480,14 @@
 						speechDocumentSource.set(null);
 					}
 				} catch (cause) {
-					error = errorMessage(cause);
+					if (token === documentRequest) error = errorMessage(cause);
 				}
 			}
 			referenceInput.value = '';
 		}}
 	/>
-	<PanelHeader name="Transcript" {detail}>
-		<Button icon="dots" ariaLabel="Transcript menu" tooltip="transcript menu" on:click={menu} />
+	<PanelHeader name="Transcript" {detail} actions={panelActions} />
+	<div class="panel-controls panel-leading">
 		{#if running || finishing}
 			<Button
 				icon="pause"
@@ -500,13 +511,18 @@
 					on:click={() => start('tab')}
 				/>{/if}
 		{/if}
-	</PanelHeader>
+	</div>
 	{#if !running && !finishing}<PanelField
 			multiline
 			rows={2}
 			ariaLabel="Opponent speech document"
 			placeholder="drop a speech document here, or paste its text"
 			bind:value={$speechDocument}
+			on:input={() => {
+				cancelDocument();
+				speechDocumentSource.set(null);
+				error = '';
+			}}
 		/>{/if}
 	{#if $speechDocumentSource}<PanelStatus>Comparing with {$speechDocumentSource.name}</PanelStatus
 		>{/if}
@@ -526,6 +542,9 @@
 			{/if}
 			<div
 				class="entry"
+				role="group"
+				draggable={!$frozen}
+				on:dragstart={(event) => dragEntry(event, entry)}
 				class:outside={entry.outside}
 				title={entry.outside ? 'Outside document' : undefined}
 				aria-label={entry.outside ? 'Analytic' : undefined}
@@ -560,7 +579,7 @@
 				tooltip="clear transcript"
 				disabled={!entries.length || running || finishing}
 				on:click={() => {
-					if (confirm('Clear transcript?')) segments = [];
+					if (confirm('Clear transcript?')) entries = [];
 				}}
 			/>
 		</div>
@@ -568,6 +587,11 @@
 </section>
 
 <style>
+	.panel-controls {
+		display: flex;
+		gap: var(--padding-small);
+		padding-inline: var(--padding);
+	}
 	.transcript {
 		display: flex;
 		flex-direction: column;

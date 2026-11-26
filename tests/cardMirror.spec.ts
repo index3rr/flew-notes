@@ -215,7 +215,8 @@ test('companion plugin exchanges real WebRTC messages with Flew, persists source
 		await expect(cells.last()).toHaveValue(
 			'Climate policy\nGrowth solves poverty 🌱\nAuthor 2026\nPrefer comparative evidence'
 		);
-		await page.getByRole('button', { name: 'Disconnect CardMirror', exact: true }).click();
+		await page.getByRole('button', { name: 'CardMirror menu', exact: true }).click();
+		await page.getByRole('menuitem', { name: 'Disconnect', exact: true }).click();
 		await expect(
 			page.getByRole('button', { name: 'Create connection key', exact: true })
 		).toBeEnabled();
@@ -395,9 +396,9 @@ test('source references survive JSON import/export, cell copying and page import
 	}, copied);
 	await expect(cells.last()).toHaveValue('Argument\nCitation');
 	await expect(page.getByLabel('CardMirror card', { exact: true })).toHaveCount(2);
-	await page.getByRole('button', { name: 'Save flow', exact: true }).click();
+	await page.getByRole('button', { name: 'File menu', exact: true }).click();
 	const downloadPromise = page.waitForEvent('download');
-	await page.getByRole('button', { name: 'download as JSON', exact: true }).click();
+	await page.getByRole('button', { name: 'Download JSON copy', exact: true }).click();
 	const download = await downloadPromise;
 	const raw = await readFile((await download.path())!, 'utf8');
 	const saved = JSON.parse(raw);

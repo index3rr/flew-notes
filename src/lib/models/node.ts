@@ -155,6 +155,36 @@ export type SerializedBox = {
 	children: SerializedBox[];
 };
 
+// Clipboard and drag payloads must not introduce malformed branches into the live tree.
+export function validSerializedBoxes(boxes: unknown): boxes is SerializedBox[] {
+	let count = 0;
+	const valid = (box: SerializedBox, depth = 0): boolean => {
+		if (
+			++count > 10000 ||
+			depth > 64 ||
+			!box ||
+			typeof box !== 'object' ||
+			!box.value ||
+			typeof box.value.content !== 'string' ||
+			!Array.isArray(box.children)
+		)
+			return false;
+		for (const field of [
+			'empty',
+			'crossed',
+			'bold',
+			'isExtension',
+			'starred',
+			'cardMirrorSpacer'
+		] as const)
+			if (box.value[field] != null && typeof box.value[field] !== 'boolean') return false;
+		for (const field of ['placeholder', 'starNote'] as const)
+			if (box.value[field] != null && typeof box.value[field] !== 'string') return false;
+		return box.children.every((child) => valid(child, depth + 1));
+	};
+	return Array.isArray(boxes) && boxes.length > 0 && boxes.every((box) => valid(box));
+}
+
 export type CopiedBoxData = {
 	tag: 'flew-notes-boxes';
 	version: 1;
@@ -340,4 +370,22 @@ export function getAdjacentAcrossFlows(
 		if (cur === flowIdx) break;
 	}
 	return null;
+}
+
+// A named page can still be empty; evidence and private argument notes count as content.
+export function isEmptyFlow(tree: Nodes, id: FlowId): boolean {
+	const page = tree[id];
+	if (!page) return false;
+	const empty = (key: BoxId): boolean => {
+		const box = tree[key];
+		return (
+			!!box &&
+			!box.value.content.trim() &&
+			!box.value.cardMirror &&
+			!box.value.starred &&
+			!box.value.starNote?.trim() &&
+			box.children.every(empty)
+		);
+	};
+	return page.children.every(empty);
 }

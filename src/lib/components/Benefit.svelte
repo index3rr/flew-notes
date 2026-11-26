@@ -1,38 +1,51 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { fade } from 'svelte/transition';
+	import type { ComponentType } from 'svelte';
+	import type { AnimeTimelineInstance } from 'animejs';
 
 	export let title: string;
 	export let detail: string;
-	export let component: ConstructorOfATypedSvelteComponent;
-	let timeline: anime.AnimeTimelineInstance;
+	export let component: ComponentType;
+	// visual above the text, for the grid of smaller features
+	export let compact = false;
+	// milliseconds into the scene to hold on when the viewer prefers reduced motion
+	export let still: number | undefined = undefined;
+	let timeline: AnimeTimelineInstance | undefined;
 
 	let element: HTMLElement;
 	let show = false;
-	let observer: IntersectionObserver;
+	let started: ReturnType<typeof setTimeout> | undefined;
 
 	onMount(() => {
-		observer = new IntersectionObserver(
-			(entries) => {
-				entries.forEach((entry) => {
-					if (entry.isIntersecting) {
-						show = true;
-						setTimeout(() => {
-							timeline.play();
-						}, 1000);
-					}
-				});
+		const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+		const observer = new IntersectionObserver(
+			([entry]) => {
+				if (entry.isIntersecting) show = true;
+				clearTimeout(started);
+				if (!timeline) return;
+				if (reducedMotion.matches) {
+					timeline.pause();
+					timeline.seek(still ?? timeline.duration / 2);
+				} else if (entry.isIntersecting) {
+					// a short beat so the card has settled before the scene moves
+					started = setTimeout(() => timeline?.play(), 300);
+				} else {
+					timeline.pause();
+				}
 			},
-			{
-				rootMargin: '0px',
-				threshold: 0.5
-			}
+			// reveal as soon as the top of the card is comfortably on screen
+			{ rootMargin: '0px 0px -10% 0px', threshold: 0 }
 		);
 		observer.observe(element);
+		return () => {
+			clearTimeout(started);
+			observer.disconnect();
+			timeline?.pause();
+		};
 	});
 </script>
 
-<div class="top" bind:this={element} class:show>
+<div class="top" class:compact bind:this={element} class:show>
 	<div class="visualWrapper">
 		<div class="visual">
 			<svelte:component this={component} bind:timeline />
@@ -104,6 +117,35 @@
 		margin: 0;
 		font-size: 1.25rem;
 		line-height: 2;
+	}
+	/* compact cards stack the visual above the text, and keep doing so at every width */
+	.top.compact,
+	.top.compact:nth-child(odd) {
+		grid-template-columns: 100%;
+		grid-template-rows: var(--height) 1fr;
+	}
+	.compact > .visualWrapper,
+	.compact:nth-child(odd) > .visualWrapper {
+		width: 100%;
+		order: 0;
+	}
+	.compact .text {
+		padding: 2rem;
+		gap: 1rem;
+		justify-content: flex-start;
+	}
+	.compact h2 {
+		font-size: 1.75rem;
+	}
+	.compact p {
+		font-size: 1.1rem;
+		line-height: 1.8;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.top {
+			transform: none;
+			transition: opacity 0.5s ease-in-out;
+		}
 	}
 	@media (max-width: 800px) {
 		h2 {

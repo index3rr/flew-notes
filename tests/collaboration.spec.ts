@@ -146,14 +146,17 @@ test('partner messages notify both ways and SpeechDrop codes sync on join and ed
 					title + ': ' + options.body
 				);
 			}
-			close() {}
+			close() {
+				return undefined;
+			}
 		}
 		Object.defineProperty(window, 'Notification', { value: TestNotification, configurable: true });
 		window.dispatchEvent(new Event('focus'));
 	});
-	await host.getByRole('button', { name: 'Enable partner notifications', exact: true }).click();
+	await host.getByRole('button', { name: 'Collaboration menu', exact: true }).click();
+	await host.getByRole('menuitem', { name: 'Enable partner notifications', exact: true }).click();
 	await expect(
-		host.getByRole('button', { name: 'Enable partner notifications', exact: true })
+		host.getByRole('menuitem', { name: 'Enable partner notifications', exact: true })
 	).toHaveCount(0);
 	await guest.getByLabel('Message your partner').fill('System delivery');
 	await guest.getByRole('button', { name: 'Send', exact: true }).click();

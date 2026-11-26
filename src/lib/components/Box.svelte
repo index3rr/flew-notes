@@ -6,6 +6,8 @@
 		selectionRoots,
 		boxDropPosition
 	} from '$lib/models/panelDrag';
+	import { readEvidenceTransfer, copyBoxes } from '$lib/integrations/cardmirror/clipboard';
+	import { validSerializedBoxes } from '$lib/models/node';
 	import Text from './Text.svelte';
 	import Icon from './Icon.svelte';
 	import { getContext, onDestroy, onMount, tick } from 'svelte';
@@ -57,6 +59,7 @@
 	import Fold from './Fold.svelte';
 	import {
 		selectionAnchorId,
+		editingBoxId,
 		selectedBoxIds,
 		isShiftHeld,
 		consumeAnchorCapture,
@@ -104,7 +107,7 @@
 		lastValidIndex = newIndex;
 		return lastValidIndex;
 	}
-	let isLastChild: boolean = false;
+	let isLastChild = false;
 	$: {
 		let parentNode = $nodes[node.parent];
 		if (parentNode == null) {
@@ -115,15 +118,16 @@
 	}
 
 	export let addSibling: (childIndex: number, direction: number) => boolean = () => false;
-	export let deleteSelf: (childIndex: number) => void = () => {};
+	export let deleteSelf: (childIndex: number) => void = () => undefined;
 	export let focusSibling: (
 		childIndex: number,
 		direction: number,
 		defaultToParent?: boolean
-	) => void = () => {};
+	) => void = () => undefined;
 	export let focusSiblingStrict: (childIndex: number, direction: number) => boolean = () => false;
-	export let focusParent: () => void = () => {};
-	export let dispatchSelfFocus: (childId: BoxId | FlowId, isFocused: boolean) => void = () => {};
+	export let focusParent: () => void = () => undefined;
+	export let dispatchSelfFocus: (childId: BoxId | FlowId, isFocused: boolean) => void = () =>
+		undefined;
 
 	const boxElements = getContext<Writable<Map<BoxId, HTMLElement>>>('boxElements');
 	const groupReplyCurves = getContext<Writable<Map<BoxId, string[]>>>('groupReplyCurves');
@@ -153,7 +157,7 @@
 	let textarea: any = undefined;
 	let element: HTMLDivElement;
 
-	let childFocus: boolean = false;
+	let childFocus = false;
 	let childFocusIds: Set<BoxId | FlowId> = new Set();
 	function onChildFocus(childId: BoxId | FlowId, childIsFocused: boolean) {
 		if (childIsFocused) {
@@ -693,7 +697,7 @@
 		let boxId = checkIdBox($nodes, id);
 		if (boxId == null) return false;
 		const currentColName = getColumnName($nodes, boxId);
-		while (true) {
+		for (;;) {
 			let adjacentBox = getAdjacentBox($nodes, boxId, direction);
 			if (adjacentBox != null) {
 				const adjColName = getColumnName($nodes, adjacentBox);
@@ -775,14 +779,25 @@
 
 	function handlePaste(e: ClipboardEvent) {
 		const text = e.clipboardData?.getData('text/plain');
-		if (!text) return;
-		let data: CopiedBoxData;
-		try {
-			data = JSON.parse(text);
-		} catch {
-			return;
+		let data: CopiedBoxData | undefined;
+		if (text) {
+			try {
+				const candidate = JSON.parse(text);
+				if (
+					candidate?.tag === 'flew-notes-boxes' &&
+					candidate.version === 1 &&
+					validSerializedBoxes(candidate.boxes)
+				)
+					data = candidate;
+			} catch {
+				/* A CardMirror or ordinary text paste need not contain JSON. */
+			}
 		}
-		if (data.tag !== 'flew-notes-boxes' || data.version !== 1) return;
+		if (!data && e.clipboardData && !content?.trim()) {
+			const rich = readEvidenceTransfer(e.clipboardData);
+			if (validSerializedBoxes(rich)) data = { tag: 'flew-notes-boxes', version: 1, boxes: rich };
+		}
+		if (!data) return;
 
 		const el = document.activeElement;
 		if (el && el.tagName === 'TEXTAREA') {
@@ -829,7 +844,7 @@
 		}
 	}
 
-	let editAlreadyPending: boolean = false;
+	let editAlreadyPending = false;
 	function editPreview(event: Event) {
 		if (event.target instanceof HTMLTextAreaElement)
 			editingBoxText.set({ id: boxIdForDrag, content: event.target.value });
@@ -879,7 +894,7 @@
 				version: 1,
 				boxes: root.map((bid) => serializeBoxSubtree($nodes, bid))
 			};
-			navigator.clipboard.writeText(JSON.stringify(data));
+			void copyBoxes(data.boxes, JSON.stringify(data));
 			return true;
 		}
 		const id2 = boxId ?? checkIdBox($nodes, id);
@@ -889,7 +904,7 @@
 			version: 1,
 			boxes: [serializeBoxSubtree($nodes, id2)]
 		};
-		navigator.clipboard.writeText(JSON.stringify(data));
+		void copyBoxes(data.boxes, JSON.stringify(data));
 		return true;
 	}
 
@@ -905,7 +920,7 @@
 			version: 1,
 			boxes: root.map((bid) => serializeBoxSubtree($nodes, bid))
 		};
-		navigator.clipboard.writeText(JSON.stringify(data));
+		void copyBoxes(data.boxes, JSON.stringify(data));
 
 		const flowId = getParentFlowId($nodes, root[0]).unwrap();
 		const actions = [];
@@ -961,7 +976,13 @@
 			data-box-id={box ? id : undefined}
 			data-drop-position={dropPosition}
 			draggable={box != null && $selectedBoxIds.has(boxIdForDrag)}
-			on:dragstart={(event) => startBoxDrag(event, boxIdForDrag)}
+			on:dragstart={(event) => {
+				if (event.target instanceof HTMLTextAreaElement && !$selectedBoxIds.has(boxIdForDrag)) {
+					event.stopPropagation();
+					return;
+				}
+				startBoxDrag(event, boxIdForDrag);
+			}}
 			on:dragover={(event) => {
 				if (canDropBoxes(event)) {
 					dropPosition = boxDropPosition(event);
@@ -1016,19 +1037,27 @@
 				/>
 
 				<div class="text" use:registerBox class:crossed={box?.crossed} class:bold={box?.bold}>
-					{#if box?.cardMirror?.kind === 'tag'}
-						<span class="star-marker" aria-label="CardMirror card" title="CardMirror card"
-							><Icon name="file" size="0.85rem" /></span
-						>
-					{/if}
-					{#if box?.starred}
-						<span class="star-marker" aria-label="Starred argument"
-							><Icon name="star" size="0.85rem" /></span
-						>
-					{/if}
+					{#if box?.cardMirror?.kind === 'tag' || box?.starred}<div class="cell-markers">
+							{#if box.cardMirror?.kind === 'tag'}<span
+									aria-label="CardMirror card"
+									title="attached card">card</span
+								>{/if}
+							{#if box.starred}<span aria-label="Starred argument">starred</span>{/if}
+						</div>{/if}
 					{#if box != null}
 						<Text
 							on:keydown={(event) => {
+								if (
+									settings.data.clickToSelectBoxes.value &&
+									isSelected &&
+									event.key === 'Enter' &&
+									!event.shiftKey
+								) {
+									event.preventDefault();
+									$editingBoxId = boxIdForDrag;
+									clearSelection();
+									return;
+								}
 								if (
 									['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab', 'Escape'].includes(
 										event.key
@@ -1049,8 +1078,13 @@
 							bind:autoHeight={updateTextHeight}
 							bind:textHeight={extensionIconSize}
 							placeholder={box.placeholder ?? (node.level == 1 && index() == 0 ? 'type here' : '')}
-							readonly={box?.isExtension ?? false}
-							draggable={$selectedBoxIds.size > 1 && $selectedBoxIds.has(boxIdForDrag)}
+							readonly={(box?.isExtension ?? false) ||
+								(Boolean(settings.data.clickToSelectBoxes.value) &&
+									isSelected &&
+									$editingBoxId !== boxIdForDrag)}
+							draggable={($selectedBoxIds.size > 1 ||
+								Boolean(settings.data.clickToSelectBoxes.value)) &&
+								$selectedBoxIds.has(boxIdForDrag)}
 						/>
 					{/if}
 				</div>
@@ -1181,14 +1215,19 @@
 		position: relative;
 		z-index: 2;
 	}
-	.star-marker {
-		position: absolute;
-		top: calc(var(--padding-small) / 2);
-		right: calc(var(--padding-small) / 2);
-		color: var(--this-text);
-		z-index: 3;
-		pointer-events: none;
+	.cell-markers {
+		display: flex;
+		gap: var(--padding-small);
+		margin-bottom: var(--padding-small);
+		font-size: 0.7em;
+		color: var(--this-text-weak);
 	}
+	.cell-markers span {
+		border-radius: var(--border-radius-small);
+		background: var(--this-background-indent);
+		padding: 0 var(--padding-small);
+	}
+
 	.text.crossed {
 		text-decoration: line-through;
 		color: var(--this-text-weak);

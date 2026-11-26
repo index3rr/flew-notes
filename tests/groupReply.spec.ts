@@ -13,22 +13,20 @@ async function argument(page: Page, text: string) {
 
 async function expectResponseEndpoint(page: Page, text: string) {
 	const response = await argument(page, text);
-	const endpoint = await response.evaluate((element) => {
-		const text = element.closest('.text')!;
-		const rect = text.getBoundingClientRect();
-		const origin = document.querySelector('.groupReplies')!.getBoundingClientRect();
-		return {
-			x: rect.left + parseFloat(getComputedStyle(text).paddingLeft) - origin.left,
-			y: rect.bottom - origin.top
-		};
-	});
 	await expect
 		.poll(() =>
-			page.locator('.groupReplies path').evaluate((element, endpoint) => {
-				const path = element as SVGPathElement;
+			response.evaluate((element) => {
+				const text = element.closest('.text')!;
+				const rect = text.getBoundingClientRect();
+				const svg = document.querySelector('.groupReplies')!;
+				const origin = svg.getBoundingClientRect();
+				const path = svg.querySelector('path') as SVGPathElement;
 				const end = path.getPointAtLength(path.getTotalLength());
-				return Math.hypot(end.x - endpoint.x, end.y - endpoint.y);
-			}, endpoint)
+				return Math.hypot(
+					end.x - (rect.left + parseFloat(getComputedStyle(text).paddingLeft) - origin.left),
+					end.y - (rect.bottom - origin.top)
+				);
+			})
 		)
 		.toBeLessThan(1);
 }
@@ -106,7 +104,7 @@ async function setup(page: Page, invert = false) {
 async function selectCards(page: Page) {
 	await (await argument(page, 'First card')).click();
 	await (await argument(page, 'Third card')).click({ modifiers: ['Shift'] });
-	await expect(page.locator('.flow .box.selected')).toHaveCount(4);
+	await expect(page.locator('.flow .box.selected')).toHaveCount(3);
 }
 
 async function savedReply(page: Page) {

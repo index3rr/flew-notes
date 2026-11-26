@@ -2,7 +2,7 @@ import { writable, type Writable } from 'svelte/store';
 
 export type Version = `${number}.${number}.${number}`;
 
-export const CURRENT_VERSION: Version = '1.4.0' as const;
+export const CURRENT_VERSION: Version = '2.0.0' as const;
 // Keep package.json, package-lock.json, sw.js and Changelog.svelte in sync.
 
 export function getLastChangelogVersion(): Version {

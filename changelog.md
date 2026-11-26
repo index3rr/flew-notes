@@ -1,23 +1,67 @@
-# Panels update
+# Release blocker
 
-- [x] Merge main, including its tests, flow library, persistence fixes, and AGENTS.md instructions.
-- [x] Optional flow library panel (off by default), showing a placeholder while the full library is visible. Flow names and page labels use the main library styling; click a page to import it or drag it into the current flow.
-- [x] Local transcript panel using Whisper in a browser worker. Includes transcript export, editable tags, and phrase comparison against pasted or SpeechDrop DOCX/TXT documents. Outside-document flags are suggestions to review.
-- [x] Optional speech timer start when transcription first matches the opponent document; select and scroll to the next speech when time expires, leaving it paused. Controls live under Timers settings.
-- [x] Migrate older settings, preserving visible side notes on the right and hidden side notes as off.
-- [x] All panels support Off, Left, Right, Left collapsed, and Right collapsed. Notes, Flow Library, Starred arguments, and Collaboration keep their positions and shrink to just their names without an open flow; hover for the explanation. Collapsed panels share a bottom icon row; one opens per side, and closing it preserves its state. Regular timer panels stay expanded.
-- [x] Collaboration messages arrive as dismissible notifications, with conversation history in the panel. SpeechDrop codes synchronize on connection and edits. When sharing is off, the panel offers an Enable collaboration button.
+- CardMirror companion installation: replace manual .js file loading with a GitHub repository users can install by URL. The current loading workflow is not ready to ship.
 
-- [x] Panel dividers only separate visible panels; collapsed tabs no longer add a stray line above SpeechDrop.
+# 2.0.0 — Features added since main
 
-- [x] Star, delete, cross-out, and popup-close tooltips show the matching shortcuts. Help includes selection, paste, timer fields, and document titles, with matching key labels.
+- Round layouts in Settings starts with Flowing, Prep, and Review presets. Save, rename, update, and delete named layouts with their own panel positions, sidebar widths, panel names and toolbar groups.
+- Opening the next round resets the timers, Transcript, and SpeechDrop room. Closing and reopening the same browser save keeps its tools available for review.
+- Drops preserve existing responses on blank cells. Typing a Transcript reference supersedes pending imports, and loading the next reference preserves earlier transcript classifications.
+- Switching popups keeps one set of controls on screen. Delayed actions close only their own popup.
+- Shorten the path into a shared round for first-time guests, and show an error for incomplete collaboration links.
 
-- [x] Panels are their own cards, like the title bar and flow, and share one header, row, status, and field style. Explanations moved into tooltips.
-- [x] Panels animate: bodies settle in when a flow opens, and cards resize smoothly when panels open, collapse, or fill in.
-- [x] Coverage panel: for the next speech, what's still unanswered on every page and what the other side dropped, with one-click answer and extend. Follows the speech timer.
-- [x] Flow a speech document: SpeechDrop files (or a local DOCX) drop their tags into the right speech column, matched to pages by block name, with new pages for new positions.
-- [x] Merge 1.4.0 (grouped replies, drag selection, Extemp, 1.3.1 sharing and autosave). Partner messages and SpeechDrop codes ride the new sharing protocol. Star moved to Cmd/Ctrl+Shift+8 because Cmd/Ctrl+Shift+S now saves a copy.
-- [x] Transcription rebuilt: cuts at pauses instead of every 5 s, never sends silence, filters Whisper hallucinations and loops, bigger models (WebGPU when available), no echo cancellation eating online opponents, tab audio capture, lines labeled by speech and time, and add-to-flow.
+- Telemetry onboarding choice, off by default for fresh users; anonymous workflow events, minute-level editing/tool summaries, deduplicated errors, strict property filtering, and no flow uploads/replay. Existing preferences migrate without collecting extra data.
+- File menu is always available, with JSON, Excel, linked-folder save/copy, settings export, and flow/settings import. Removed the manual-save visibility setting.
+- Disabled toolbar groups disappear entirely; hiding all groups removes the toolbar surface. The star icon appears only when the Starred panel is enabled, including collapsed positions.
+- Dedicated Tabs icon, and tooltips anchored correctly inside transformed columns with viewport-edge flipping.
+
+- Tabs panel: page navigation, side colors, drag reordering, debate-format page templates, speaker-order switching, Ctrl/Cmd and Shift multiselection, and deleting selected pages with Undo.
+- Timers panel: speech and prep clocks available independently of a document; collapsed clocks keep running.
+- Notes panel: document-wide private notes, saved with the round; accepts full text dragged from Autoflow blocks and flow arguments.
+- Coverage panel: unanswered arguments and opponent drops across every flow page, speech selection, timer following, jump to argument, add response, extend one or all drops, and separate show/hide settings for dropped and extended arguments.
+- Starred arguments panel: star cells, browse them across pages, add attached notes, unstar, and reveal arguments inside folded branches. Rows match each cell’s speech-column color.
+- SpeechDrop panel: room file list, automatic refresh, upload, download, delete with confirmation, room-code synchronization with partners, and file drags into Autoflow, Transcript and CardMirror.
+- Autoflow panel: load local or SpeechDrop DOCX files, browse heading blocks and tags, preview and multiselect blocks, and import them using plus buttons or drag and drop.
+- Flow library panel: browse browser saves or a linked folder, navigate folders, preview and multiselect saved pages, and import them into the current round.
+- Transcript panel: local microphone or tab-audio transcription, selectable audio controls, speech-document comparison, continuous speech while recording, possible analytics separated for review, optional analytics-only recording view, add-to-flow by button or dragging into cells, export, and clear.
+- Collaboration panel: partner message history, a message composer with inline argument links, system notifications with a test notification, and in-app notification fallback.
+- CardMirror panel and desktop companion plugin: direct WebRTC pairing, manual connection keys and a confirmation link, current-document and speech-document transfers, source navigation, and DOCX opening with transfer progress.
+- Panel placement: Off, Left, Right, Left collapsed, or Right collapsed for every panel; adjustable sidebar widths; one tray-opened panel per side.
+- Collapsed panels stay mounted so timers, recordings and connections keep running. Hovering a tray icon while dragging opens that panel for the drop.
+- One card surface per panel; shared headers, rows, fields and statuses; animated body entry and card resizing; themes, spacing and motion settings apply throughout.
+- Standard panel menus: panel commands, step-by-step walkthrough, settings, show/hide name, move left/right, collapse, and hide.
+- Optional menu-only panels reclaim the title row for content; menu changes persist without opening Settings.
+- Fresh default layout: Tabs on the left, Timers collapsed on the left, and no right sidebar.
+- Panel-specific Settings sections; old layouts and legacy side-notes preferences migrate to the panel settings.
+- Document panels show compact creation placeholders when no document is open. Independent tools remain available before opening a round.
+- An open document with no pages shows large page-creation choices instead of the saved-flow library; page deletion can be undone.
+- DOCX imports recognize debate headings, tags, citations and complete evidence, infer speech columns, match blocks to existing page names, and create pages for new positions.
+- Autoflow settings for including citations in visible tags and showing connected CardMirror heading controls.
+- Imported library pages and Autoflow blocks replace the current empty page by default, with a setting to keep empty pages instead.
+- Drag selected blocks or library pages into tabs, onto an empty cell to replace it, onto a populated cell to add responses, or between arguments to insert siblings.
+- Selected arguments drag with their descendants; internal moves preserve IDs and are undoable. Selection previews keep the arguments’ relative positions.
+- Ctrl/Cmd-click individual cells, Shift-click ranges, and select children across different parents without including their parents. Multi-cell formatting and connected selection corners.
+- Optional click-to-select and click-again-to-edit cell mode; selected cells can be dragged from their text areas.
+- Native text selection stays text selection when the pointer leaves a cell.
+- Complete CardMirror evidence snapshots retain citations, formatting and source references through JSON saves, cell copy/paste and saved-page imports.
+- Drag attached cards directly into CardMirror; paste a CardMirror card into an empty flow cell. CardMirror panel drop targets send to the current or speech document.
+- Incoming CardMirror cards support line-by-line or single-cell insertion, response insertion, page choice, reveal-in-flow and jump-to-source.
+- SpeechDrop-to-CardMirror opening is configurable; an optional setting adds the Flew Notes promo to uploaded DOCX files.
+- Optional timer starts from custom phrases or the first transcript match with the speech document, with CX/prep exclusion enabled by default.
+- Optional word-count-weighted pacing, fixed cell allocations such as :30, and automatic selection of the next speech when time expires.
+- Whisper model selection with WebGPU/WASM fallback, pause-based audio segmentation, silence and repetition filtering, and document comparison in shorter spans.
+- Speech models preload when selected and stay loaded between recordings and panel visibility changes; inference is serialized and stale recording results are ignored.
+- Partner messages and SpeechDrop room codes use the existing peer connection and host relay; notes remain private.
+- Dismissible first-run setup with live preferences and settings import asks about debate style, Timers, Notes, SpeechDrop, light/dark mode and whether to take the tutorial. Returning users keep their existing preferences.
+- The How to use Flew tutorial starts in the main area, moves into a temporary panel once a flow page exists, and highlights relevant controls. Back stays visible and is disabled on the first step. Flow management covers closing and reopening saved flows.
+- Updated Help menu, panel guides, onboarding screens, homepage feature cards in the original layout, and application icon.
+- Shortcut labels match their handlers, including star, save copy and page creation shortcuts that avoid browser-reserved combinations.
+- Fixed settings-import and randomization freezes, invalid setting values, storage failures during popup closing, and timer state changes during transitions.
+- Fixed tooltip resizing and viewport overflow, Coverage response focus across pages, library action wrapping, overlapping cell indicators, and stale pending edits when switching starred notes.
+- Expanded browser, model, persistence, collaboration, drag-and-drop and CardMirror regression coverage; fixed clean Netlify plugin builds.
+
+- TODO: Rewrite this feature inventory in the release voice.
+- TODO: Consider searchable/grouped settings; keep the long scrolling page for now.
 
 # Upstream changelog and roadmap
 
@@ -151,3 +195,5 @@ The following is retained from main for reference.
 TODO: replace the long Settings page with one selected category at a time.
 
 TODO: investigate rendering a single half-megabyte argument; the large collaboration stress test currently stalls before pairing.
+
+Fixed settings-related freezes: timer/pacing transitions, failed browser-storage writes when closing Settings, invalid animation durations, and corrupt or incompatible saved preferences. Fun mode keeps telemetry and transcription-model choices intact.

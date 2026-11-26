@@ -1,3 +1,6 @@
+import { settings } from './settings';
+import { selectedFlowId } from './focus';
+import { isEmptyFlow } from './node';
 import { validProvenance } from '../integrations/cardmirror/protocol';
 import type { DebateStyleFlow } from './debateStyle';
 import { speechDocActions, type DocPlanItem } from './speechDoc';
@@ -261,7 +264,7 @@ export const addNewFlow = decorate(function (
 	} else {
 		actionBundle.push(newBoxAction(id, id, 0));
 	}
-	trackFlowCreated(style.name, nodes.root.children.length + 1);
+	trackFlowCreated();
 	return {
 		action: actionBundle,
 		owner: 'root',
@@ -337,8 +340,14 @@ export const deleteBox = decorate(function (nodes: Nodes, id: BoxId) {
 
 export const deleteFlow = decorate(function (nodes: Nodes, id: FlowId) {
 	const actionBundle = newDeleteAction(nodes, id);
-	trackFlowDeleted(nodes.root.children.length - 1);
+	trackFlowDeleted();
 	return { action: actionBundle, owner: 'root' };
+});
+
+export const deleteFlows = decorate(function (nodes: Nodes, ids: FlowId[]) {
+	const selected = new Set(ids);
+	const flows = nodes.root.children.filter((id) => selected.has(id));
+	return { action: flows.flatMap((id) => newDeleteAction(nodes, id)), owner: 'root' };
 });
 
 export const moveFlow = decorate(function (nodes: Nodes, id: FlowId, newIndex: number) {
@@ -397,30 +406,50 @@ export const importFlowPage = decorate(function (
 	index: number = nodes.root.children.length
 ) {
 	const original = getNode(source, sourceId).unwrap();
-	const id = newFlowId();
-	const actions: ActionBundle = [
-		{
-			tag: 'add',
-			parent: 'root',
-			id,
-			index: Math.max(0, Math.min(index, nodes.root.children.length)),
-			value: structuredClone(original.value)
+	const current = get(selectedFlowId);
+	const replace = !!(
+		settings.data.replaceEmptyPageOnImport.value &&
+		current &&
+		isEmptyFlow(nodes, current)
+	);
+	const id = replace && current ? current : newFlowId();
+	const actions: ActionBundle = replace
+		? [
+				...nodes[id]!.children.flatMap((child) => newDeleteAction(nodes, child)),
+				newUpdateAction(id, structuredClone(original.value))
+		  ]
+		: [
+				{
+					tag: 'add',
+					parent: 'root',
+					id,
+					index: Math.max(0, Math.min(index, nodes.root.children.length)),
+					value: structuredClone(original.value)
+				}
+		  ];
+
+	const copiedIds = new Map<BoxId, BoxId>();
+	function allocate(children: BoxId[]) {
+		for (const child of children) {
+			copiedIds.set(child, newBoxId());
+			allocate(source[child]!.children);
 		}
-	];
+	}
+	allocate(original.children);
 	function copyChildren(parent: FlowId | BoxId, children: BoxId[]) {
 		children.forEach((child, index) => {
 			const node = getNode(source, child).unwrap();
-			const boxId = newBoxId();
-			actions.push({
-				tag: 'add',
-				parent,
-				id: boxId,
-				index,
-				value: { ...structuredClone(node.value), flowId: id }
-			});
+			const boxId = copiedIds.get(child)!;
+			const value = { ...structuredClone(node.value), flowId: id };
+			if (value.respondsTo)
+				value.respondsTo = value.respondsTo.flatMap((target) =>
+					copiedIds.has(target) ? [copiedIds.get(target)!] : []
+				);
+			actions.push({ tag: 'add', parent, id: boxId, index, value });
 			copyChildren(boxId, node.children);
 		});
 	}
+
 	copyChildren(id, original.children);
 	return { action: actions, owner: 'root', ret: id };
 });

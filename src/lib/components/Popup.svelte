@@ -1,10 +1,12 @@
 <script lang="ts">
 	import Button from './Button.svelte';
 	import { popupIn, popupOut } from '../models/transition';
-	export let component: any;
-	export let props: any = {};
-	export let title: string;
-	export let closeSelf: () => void;
+	import { closePopupInstance, type Popup } from '$lib/models/popup';
+	export let popup: Popup;
+
+	function closeSelf() {
+		closePopupInstance(popup);
+	}
 
 	function handleKeydown(e: KeyboardEvent) {
 		if (e.key === 'Escape') {
@@ -18,13 +20,20 @@
 	<div class="upper">
 		<Button
 			icon="delete"
+			ariaLabel="Close popup"
 			tooltip="close"
 			shortcut={['escape']}
 			palette="plain-secondary"
 			on:click={closeSelf}
-		/><span>{title}</span>
+		/><span>{popup.title}</span>
 	</div>
-	<svelte:component this={component} closePopup={closeSelf} {...props} />
+	{#each [popup] as entry (entry)}
+		<svelte:component
+			this={entry.component}
+			closePopup={() => closePopupInstance(entry)}
+			{...entry.props}
+		/>
+	{/each}
 </div>
 
 <style>
@@ -37,6 +46,9 @@
 	}
 	.upper {
 		position: absolute;
+		z-index: 3;
+		background: var(--background);
+		border-radius: var(--border-radius);
 		display: flex;
 		align-items: center;
 		flex-direction: row;

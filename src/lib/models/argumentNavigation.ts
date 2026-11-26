@@ -1,3 +1,4 @@
+import { tick } from 'svelte';
 import { get } from 'svelte/store';
 import { focusId, lastFocusIds, selectedFlowId } from './focus';
 import { nodes } from './store';
@@ -36,5 +37,11 @@ export function showArgument(id: BoxId, tree: Nodes = get(nodes)): boolean {
 	clearSelection();
 	selectedFlowId.set(node.value.flowId);
 	focusId.set(id);
+	void tick().then(() => {
+		if (typeof document !== 'undefined' && get(focusId) === id)
+			document
+				.querySelector<HTMLTextAreaElement>(`[data-box-id="${id}"] textarea`)
+				?.focus({ preventScroll: true });
+	});
 	return true;
 }

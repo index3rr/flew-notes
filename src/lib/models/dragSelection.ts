@@ -5,6 +5,7 @@ import { focusId, selectedFlowId } from './focus';
 import { checkIdBox, type BoxId, type FlowId } from './node';
 import {
 	clearSelection,
+	editingBoxId,
 	collectBoxRange,
 	consumeAnchorCapture,
 	selectedBoxIds,
@@ -49,6 +50,7 @@ export function dragSelect(container: HTMLElement, flowId: FlowId) {
 		startX: number;
 		startY: number;
 		textarea: HTMLTextAreaElement | null;
+		textSelection: boolean;
 	} | null = null;
 	let frame = 0;
 	let lastTime = 0;
@@ -70,6 +72,7 @@ export function dragSelect(container: HTMLElement, flowId: FlowId) {
 
 	function updateSelection() {
 		if (!gesture) return;
+		if (gesture.textSelection) return;
 		const rect = container.getBoundingClientRect();
 		const view = horizontal?.getBoundingClientRect() ?? rect;
 		const left = Math.max(0, rect.left, view.left);
@@ -201,6 +204,31 @@ export function dragSelect(container: HTMLElement, flowId: FlowId) {
 		finish();
 		suppressClick = false;
 		const origin = cellAt(target);
+		if (
+			origin &&
+			settings.data.clickToSelectBoxes.value &&
+			!event.shiftKey &&
+			!event.ctrlKey &&
+			!event.metaKey
+		) {
+			const selected = get(selectedBoxIds);
+			if (get(editingBoxId) === origin) return;
+			if (selected.size === 1 && selected.has(origin) && target instanceof HTMLTextAreaElement) {
+				editingBoxId.set(origin);
+				clearSelection();
+				pointerSelectionHeld = false;
+				return;
+			}
+			event.preventDefault();
+			pointerSelectionHeld = true;
+			suppressClick = true;
+			editingBoxId.set(null);
+			selectionAnchorId.set(origin);
+			selectedBoxIds.set(new Set([origin]));
+			focusId.set(origin);
+			return;
+		}
+		if (!origin || get(editingBoxId) !== origin) editingBoxId.set(null);
 		if (origin && (event.ctrlKey || event.metaKey)) {
 			event.preventDefault();
 			const selected = new Set(get(selectedBoxIds));
@@ -237,6 +265,8 @@ export function dragSelect(container: HTMLElement, flowId: FlowId) {
 			y: event.clientY,
 			startX: event.clientX,
 			startY: event.clientY,
+			// Decide at pointer-down: a fast text drag may leave the cell before its next move event.
+			textSelection: target instanceof HTMLTextAreaElement && !event.shiftKey,
 			textarea: target.closest('[data-box-id]')?.querySelector('textarea') ?? null
 		};
 		if (gesture.textarea && target !== gesture.textarea) {

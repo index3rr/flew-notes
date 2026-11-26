@@ -46,9 +46,10 @@ test('SpeechDrop pins every file in an upload batch to the original room', async
 		} else await route.fulfill({ json: { files: [] } });
 	});
 	await page.getByLabel('SpeechDrop room code').fill('original');
-	await expect(
-		page.getByRole('button', { name: 'Upload to SpeechDrop', exact: true })
-	).toBeEnabled();
+	await expect(page.locator('.speechdrop-panel')).toContainText('This room has no files.');
+	await page.getByRole('button', { name: 'SpeechDrop menu', exact: true }).click();
+	await expect(page.getByRole('menuitem', { name: 'Upload files', exact: true })).toBeEnabled();
+	await page.keyboard.press('Escape');
 	await page.locator('.speechdrop-panel input[type=file]').setInputFiles(
 		['a', 'b'].map((name) => ({
 			name: name + '.txt',
@@ -153,7 +154,7 @@ test('library clicks preview and select, and the plus imports the selected pages
 	await expect(page.locator('.tabs li')).toHaveCount(1);
 	await expect(library.locator('.preview')).toContainText('Original argument');
 	await library.getByRole('button', { name: 'Add selected pages', exact: true }).first().click();
-	await expect(page.locator('.tabs li')).toHaveCount(2);
+	await expect(page.locator('.tabs li')).toHaveCount(1);
 });
 
 test('local DOCX cards keep evidence when flowed, saved and reopened', async ({ page }) => {
@@ -180,9 +181,9 @@ test('local DOCX cards keep evidence when flowed, saved and reopened', async ({ 
 		.click();
 	await page.locator('.tabs').getByRole('button', { name: 'Economy', exact: true }).click();
 	await expect(page.locator('.flow textarea').first()).toHaveValue('Growth solves poverty');
-	await page.getByRole('button', { name: 'Save flow', exact: true }).click();
+	await page.getByRole('button', { name: 'File menu', exact: true }).click();
 	const download = page.waitForEvent('download');
-	await page.getByRole('button', { name: 'download as JSON', exact: true }).click();
+	await page.getByRole('button', { name: 'Download JSON copy', exact: true }).click();
 	const raw = await readFile((await (await download).path())!, 'utf8');
 	expect(raw).toContain('Saved full evidence body.');
 	expect(raw).toContain('"type":"bold"');
@@ -223,4 +224,185 @@ test('pacing updates while a cell is being edited and when word weighting change
 	await page.locator('.upper > .element > .top').click();
 	await cells.first().click();
 	await expect(page.locator('.pacing .time')).toHaveText('04:00');
+});
+
+test('dropping an argument on an empty cell preserves the responses already under it', async ({
+	page
+}) => {
+	await setup(page);
+	await page.getByRole('button', { name: 'New flow', exact: true }).click();
+	const cells = page.locator('.flow textarea');
+	await cells.first().fill('Parent');
+	await cells.first().press('Shift+Enter');
+	await cells.nth(1).fill('Existing response');
+	await cells.first().fill('');
+	const target = page.locator('.flow [data-box-id]').first();
+	await target.evaluate((element) => {
+		const dataTransfer = new DataTransfer();
+		dataTransfer.setData(
+			'application/x-flew-boxes',
+			JSON.stringify({ boxes: [{ value: { content: 'New response' }, children: [] }] })
+		);
+		element.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer }));
+	});
+	await expect(cells).toHaveCount(3);
+	await expect(cells.nth(1)).toHaveValue('New response');
+	await expect(cells.nth(2)).toHaveValue('Existing response');
+});
+
+test('typing a reference wins over an in-flight transcript document drop', async ({ page }) => {
+	await setup(page, { transcriptPanel: 2 });
+	let finish = () => undefined as void;
+	const gate = new Promise<void>((resolve) => (finish = resolve));
+	await page.route('**/api/speechdrop/old/0', async (route) => {
+		await gate;
+		await route.fulfill({ body: 'Old file text' }).catch(() => undefined);
+	});
+	const request = page.waitForRequest('**/api/speechdrop/old/0');
+	await page.locator('.transcript').evaluate((element) => {
+		const dataTransfer = new DataTransfer();
+		dataTransfer.setData(
+			'application/x-flew-speechdrop',
+			JSON.stringify({ room: 'old', index: 0, name: 'old.txt' })
+		);
+		element.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer }));
+	});
+	await request;
+	const reference = page.getByRole('textbox', { name: 'Opponent speech document' });
+	await reference.fill('Current speech reference');
+	finish();
+	await expect(reference).toHaveValue('Current speech reference');
+	await expect(page.getByText('Comparing with old.txt', { exact: true })).toHaveCount(0);
+});
+
+test('opening the next round clears round tools while closing allows post-round review', async ({
+	page
+}) => {
+	await setup(page, { timersPanel: 1, transcriptPanel: 2, speechDropPanel: 1 });
+	await page.route('**/api/speechdrop/*', (route) => route.fulfill({ json: { files: [] } }));
+	const room = page.getByLabel('SpeechDrop room code');
+	const reference = page.getByRole('textbox', { name: 'Opponent speech document' });
+	const newFlow = page.getByRole('button', { name: 'New flow', exact: true });
+	await room.fill('preflight');
+	await newFlow.click();
+	await expect(room).toHaveValue('preflight');
+	await reference.fill('First-round setup');
+	const prep = page.locator('.timer-panel input.minutes').first();
+	await prep.fill('03');
+	await prep.press('Tab');
+	await expect(prep).toHaveValue('03');
+	await page.getByRole('button', { name: 'Close flow', exact: true }).click();
+	await expect(reference).toHaveValue('First-round setup');
+	await page.getByRole('button', { name: 'open', exact: true }).click();
+	await expect(prep).toHaveValue('03');
+	await expect(reference).toHaveValue('First-round setup');
+	await expect(room).toHaveValue('preflight');
+	await page.getByRole('button', { name: 'Close flow', exact: true }).click();
+	await newFlow.click();
+	await expect(prep).toHaveValue('08');
+	await expect(reference).toHaveValue('');
+	await expect(room).toHaveValue('');
+});
+
+test('round layouts persist and restore panel and toolbar choices without changing the document', async ({
+	page
+}) => {
+	await setup(page, { notesPanel: 2, showBoxFormatButtons: false });
+	const open = async () => {
+		await page.getByRole('button', { name: 'Settings', exact: true }).click();
+		await page.getByRole('button', { name: 'Round layouts', exact: true }).click();
+	};
+	const formats = page.getByRole('button', { name: 'Toggle crossed out', exact: true });
+	const newFlow = page.getByRole('button', { name: 'New flow', exact: true });
+	await page.evaluate(() => {
+		localStorage.setItem('flewRoundLayouts', JSON.stringify({ Flowing: { notesPanel: 1 } }));
+	});
+	await open();
+	await page.getByRole('textbox', { name: 'New layout name', exact: true }).fill('CX prep');
+	await page.getByRole('button', { name: 'Save current layout', exact: true }).click();
+	await expect(page.getByRole('status').filter({ hasText: 'Saved CX prep.' })).toBeVisible();
+	await page.getByRole('button', { name: 'Rename CX prep layout', exact: true }).click();
+	const rename = page.getByRole('textbox', { name: 'Layout name', exact: true });
+	await expect(rename).toBeFocused();
+	await rename.fill('Partner prep');
+	await rename.press('Enter');
+	await expect(
+		page.getByRole('button', { name: 'Apply Partner prep layout', exact: true })
+	).toBeVisible();
+	await page.keyboard.press('Escape');
+	await page.reload();
+	await page.locator('#uploadId').setInputFiles({
+		name: 'layout-settings.json',
+		mimeType: 'application/json',
+		buffer: Buffer.from(
+			JSON.stringify({
+				isSettings: true,
+				version: 4,
+				settings: { notesPanel: 0, showBoxFormatButtons: true }
+			})
+		)
+	});
+	await newFlow.click();
+	await expect(formats).toBeVisible();
+	await expect(page.locator('[data-panel=notesPanel]')).toHaveCount(0);
+	const cell = page.locator('.flow textarea').first();
+	await cell.fill('Keep this argument');
+	await open();
+	await page.getByRole('button', { name: 'Apply Flowing layout' }).click();
+	await expect(page.locator('.sidebar [data-panel=notesPanel]')).toBeVisible();
+	await open();
+	await page.getByRole('button', { name: 'Apply Partner prep layout' }).click();
+	await expect(cell).toHaveValue('Keep this argument');
+	await expect(page.locator('.right-sidebar [data-panel=notesPanel]')).toBeVisible();
+	await expect(formats).toHaveCount(0);
+});
+
+test('built-in layouts work out of the box and can all be removed', async ({ page }) => {
+	await setup(page);
+	const header = page.locator('.sidebar .header');
+	const buttons = header.getByRole('button');
+	await expect(buttons).toHaveCount(4);
+	expect(
+		await buttons.evaluateAll(
+			(items) => new Set(items.map((item) => item.getBoundingClientRect().top)).size
+		)
+	).toBe(1);
+	const open = async () => {
+		await page.getByRole('button', { name: 'Settings', exact: true }).click();
+		await page.getByRole('button', { name: 'Round layouts', exact: true }).click();
+	};
+	await page.getByRole('button', { name: 'New flow', exact: true }).click();
+	await open();
+	await page.getByRole('button', { name: 'Apply Prep layout', exact: true }).click();
+	await expect(page.locator('.sidebar [data-panel=timersPanel]')).toBeVisible();
+	await expect(page.locator('.right-sidebar [data-panel=coveragePanel]')).toBeVisible();
+	await open();
+	await page.getByRole('button', { name: 'Apply Review layout', exact: true }).click();
+	await expect(page.locator('.right-sidebar [data-panel=starredPanel]')).toBeVisible();
+	await expect(page.locator('.sidebar [data-panel=timersPanel]')).toBeHidden();
+	await open();
+	for (const name of ['Flowing', 'Prep', 'Review']) {
+		page.once('dialog', (dialog) => dialog.accept());
+		await page.getByRole('button', { name: `Delete ${name} layout`, exact: true }).click();
+	}
+	await expect(page.getByText('No saved layouts.', { exact: true })).toBeVisible();
+	await page.reload();
+	await open();
+	await expect(page.getByText('No saved layouts.', { exact: true })).toBeVisible();
+});
+
+test('an incomplete collaboration link leaves the app usable and shows an error', async ({
+	page
+}) => {
+	const query = new URLSearchParams({
+		join: JSON.stringify({ localOffer: 'incomplete', broadcastId: 'round' })
+	});
+	await page.goto(`/app?${query}`);
+	await expect(
+		page.getByText('This collaboration link is incomplete.', { exact: false })
+	).toBeVisible();
+	await expect(page.getByRole('region', { name: 'Set up Flew' })).toHaveCount(0);
+	await page.keyboard.press('Escape');
+	await page.getByRole('button', { name: 'New flow', exact: true }).click();
+	await expect(page.locator('.flow textarea').first()).toBeVisible();
 });

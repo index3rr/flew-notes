@@ -1,127 +1,143 @@
 <script lang="ts">
 	import { openPopup } from '$lib/models/popup';
+	import { panelIds, panelNames } from '$lib/models/panels';
 	import { isChangelogVersionCurrent } from '$lib/models/version';
 	import Shortcuts from './Shortcuts.svelte';
 	import Button from './Button.svelte';
 	import Changelog from './Changelog.svelte';
-	import { showTutorial } from '$lib/models/tutorial';
+	import PanelMenu from './panels/PanelMenu.svelte';
+	import { startTutorial, startPanelTutorial } from '$lib/models/tutorial';
 	import { closeDocument } from '$lib/models/autoSave';
 	import { tutorialStep } from '$lib/models/store';
+	export let closePopup: () => void;
 	let error = '';
 	async function restartTutorial() {
 		try {
 			if (!(await closeDocument())) return;
 			tutorialStep.set(0);
-			showTutorial.set(true);
+			startTutorial();
 			closePopup();
-		} catch (e) {
-			error = (e as Error).message;
+		} catch (cause) {
+			error = (cause as Error).message;
 		}
 	}
-
-	export let closePopup: () => void;
-
-	function copyText(text: string) {
-		navigator.clipboard.writeText(text);
+	function guides() {
+		closePopup();
+		openPopup(PanelMenu, 'Panel tutorials', {
+			actions: panelIds.map((panel) => ({
+				label: panelNames[panel],
+				run: () => startPanelTutorial(panel)
+			}))
+		});
+	}
+	async function copy(text: string) {
+		try {
+			await navigator.clipboard.writeText(text);
+		} catch {
+			error = 'Could not copy. Please allow clipboard access.';
+		}
 	}
 </script>
 
-<div class="top">
-	<section class="palette-plain">
-		<div class="above">
-			<h2>Links</h2>
-		</div>
-		<ul>
-			<Button icon="undo" text="restart tutorial" on:click={restartTutorial} />
-			{#if error}<p role="alert">{error}</p>{/if}
-			<Button icon="home" text="home page" link="/" on:click={closePopup} />
-			<Button
-				icon="angleBrackets"
-				text="code"
-				link="https://github.com/index3rr/flew-notes"
-				target="_blank"
-			/>
-			<Button
-				icon="delta"
-				text="changelog"
-				on:click={() => {
-					closePopup();
-					openPopup(Changelog, 'Changelog');
-				}}
-				target="_blank"
-				tooltip={$isChangelogVersionCurrent ? undefined : 'see new updates'}
-				notification={!$isChangelogVersionCurrent}
-			/>
-			<Button
-				icon="keyboard"
-				text="shortcuts"
-				on:click={() => {
-					closePopup();
-					openPopup(Shortcuts, 'Shortcuts');
-				}}
-				target="_blank"
-			/>
-		</ul>
-	</section>
-	<section class="palette-plain-secondary secondary">
-		<div class="above">
-			<h2>Contact</h2>
-		</div>
-		<ul>
-			<Button
-				icon="copy"
-				text="email"
-				on:click={() => copyText('striped_dibble_0j@icloud.com')}
-				tooltip="contact me on disc, barely check this"
-			/>
-			<Button icon="copy" text="discord" on:click={() => copyText('indexerr')} />
-			<Button icon="link" text="github" link="https://github.com/index3rr/" target="_blank" />
-			<Button
-				icon="open"
-				text="suggest a feature"
-				link="https://github.com/index3rr/flew-notes/issues/new"
-				tooltip="open a GitHub issue to suggest a feature or report a bug"
-				target="_blank"
-			/>
-		</ul>
-	</section>
+<div class="help palette-plain">
+	<div class="help-actions">
+		<Button icon="undo" text="start tutorial" on:click={restartTutorial} />
+		<Button icon="screen" text="panel tutorials" on:click={guides} />
+		<Button
+			icon="keyboard"
+			text="shortcuts"
+			on:click={() => {
+				closePopup();
+				openPopup(Shortcuts, 'Shortcuts');
+			}}
+		/>
+		<Button
+			icon="delta"
+			text="changelog"
+			notification={!$isChangelogVersionCurrent}
+			on:click={() => {
+				closePopup();
+				openPopup(Changelog, 'Changelog');
+			}}
+		/>
+		<Button icon="home" text="home page" link="/" on:click={closePopup} />
+		<Button
+			icon="angleBrackets"
+			text="source code"
+			link="https://github.com/index3rr/flew-notes"
+			target="_blank"
+		/>
+		<Button
+			icon="copy"
+			text="discord"
+			tooltip="copy discord username"
+			on:click={() => copy('indexerr')}
+		/>
+		<Button
+			icon="copy"
+			text="email"
+			tooltip="copy email address"
+			on:click={() => copy('striped_dibble_0j@icloud.com')}
+		/>
+	</div>
+	<div class="feedback">
+		<Button
+			icon="open"
+			text="report a bug or suggest a feature"
+			link="https://github.com/index3rr/flew-notes/issues/new"
+			target="_blank"
+		/>
+	</div>
+	{#if error}<p role="alert">{error}</p>{/if}
 </div>
 
 <style>
-	.top {
-		width: min(calc(100vw - var(--padding) * 2), 500px);
-		height: min(calc(100vh - var(--padding) * 2), min-content);
+	.help {
+		width: min(calc(100vw - var(--padding-big)), 38em);
+		max-height: calc(100vh - var(--padding-big));
+		overflow-y: auto;
 		box-sizing: border-box;
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		overflow: auto;
-	}
-	section {
-		width: 100%;
-		padding: var(--padding-big);
-		padding-top: calc(var(--button-size) + var(--padding) * 2);
-		box-sizing: border-box;
+		padding: calc(var(--button-size) + var(--padding-big)) var(--padding-big) var(--padding-big);
 		display: flex;
 		flex-direction: column;
 		gap: var(--padding);
-		color: var(--this-text);
 	}
-	.secondary {
-		background: var(--background-secondary);
-	}
-	ul {
-		margin: 0;
-		padding: 0;
-		text-align: left;
-		width: 100%;
-		box-sizing: border-box;
-	}
-	.above {
-		position: relative;
-		display: flex;
-		flex-direction: row;
+	.help-actions {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: var(--padding);
-		align-items: center;
-		justify-content: space-between;
+	}
+	.help-actions > :global(.element),
+	.feedback > :global(.element) {
+		width: 100%;
+	}
+	.help :global(button.top),
+	.help :global(a.top) {
+		box-sizing: border-box;
+		width: 100%;
+		justify-content: flex-start;
+		min-height: calc(var(--button-size) + var(--padding-big));
+		height: auto;
+		white-space: normal;
+		text-align: left;
+		overflow-wrap: anywhere;
+	}
+	.help :global(button.top svg) {
+		flex: 0 0 var(--button-size);
+	}
+	@media (max-width: 600px) {
+		.help-actions {
+			grid-template-columns: 1fr;
+		}
+	}
+	.feedback {
+		display: flex;
+		background: var(--background-secondary);
+		border-radius: var(--border-radius);
+	}
+	p {
+		color: var(--text-error);
+		font-size: 0.85em;
+		margin: 0;
 	}
 </style>

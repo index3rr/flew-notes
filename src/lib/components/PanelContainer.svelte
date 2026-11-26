@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { highlightPanelTutorial } from '$lib/models/tutorial';
 	import { fileMime, boxesMime, pagesMime } from '$lib/models/panelDrag';
 	import { settings } from '$lib/models/settings';
 	import { afterUpdate, beforeUpdate, onDestroy, onMount } from 'svelte';
@@ -140,6 +141,7 @@
 			<div
 				class="panel"
 				data-panel={id}
+				use:highlightPanelTutorial={id}
 				bind:this={elements[id]}
 				class:collapsed={!visiblePanelIds.includes(id)}
 				class:auto-size={autoSize(id, documentPanelsAvailable, $connections.tag !== 'empty')}
@@ -212,7 +214,7 @@
 	/* Each panel is its own surface, like the title bar and flow beside it. */
 	.panel {
 		flex: 1;
-		min-height: 0;
+		min-height: calc(var(--button-size) + var(--padding) * 4);
 		display: flex;
 		flex-direction: column;
 		overflow: hidden;

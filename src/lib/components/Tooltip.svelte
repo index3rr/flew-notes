@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tooltipPosition } from '$lib/models/tooltipPosition';
 	import { tooltipTransition } from '../models/transition';
 	import Shortcut from './Shortcut.svelte';
 	import { tick, onDestroy } from 'svelte';
@@ -8,19 +9,20 @@
 	export let content: string | null;
 	export let shortcut: string[] | null = null;
 	export let disabled: boolean | string = false;
-	export let layout: string = 'bottom';
-	export let inline: boolean = false;
-	let isHovered: boolean = false;
-	let x: number = 0;
-	let y: number = 0;
+	export let layout = 'bottom';
+	export let inline = false;
+	let isHovered = false;
+	let x = 0;
+	let y = 0;
 	let element: HTMLElement;
-	let tooltip: {
-		offsetWidth: number;
-		offsetHeight: number;
-	};
+	let tooltip: HTMLDivElement;
+	let maxHeight = 0;
 
 	let useTooltips = true;
 
+	onDestroy(() => {
+		if (openTimeout != null) clearTimeout(openTimeout);
+	});
 	onDestroy(
 		settings.subscribe(['useTooltips'], function () {
 			useTooltips = settings.data.useTooltips.value as boolean;
@@ -29,8 +31,8 @@
 	let openTimeout: ReturnType<typeof setTimeout> | null = null;
 	async function openTooltip() {
 		isHovered = true;
-		mouseMove();
 		await tick();
+		mouseMove();
 		$tooltipState.open = true;
 	}
 	function mouseOver() {
@@ -46,37 +48,33 @@
 		}
 	}
 	function mouseMove() {
-		if (tooltip) {
-			let rect = element.getBoundingClientRect();
-			const margin = parseFloat(getComputedStyle(element).getPropertyValue('--padding')) || 0;
-			if (layout == 'bottom' || layout == 'top') {
-				x = rect.left - tooltip.offsetWidth / 2 + rect.width / 2;
-				if (x < margin) {
-					x = margin;
-				} else if (x + tooltip.offsetWidth > window.innerWidth - margin) {
-					x = window.innerWidth - tooltip.offsetWidth - margin;
-				}
-				if (layout == 'bottom') {
-					y = rect.bottom + margin;
-				} else if (layout == 'top') {
-					y = rect.top - tooltip.offsetHeight - margin;
-				}
-			} else if (layout == 'left' || layout == 'right') {
-				y = rect.top - tooltip.offsetHeight / 2 + rect.height / 2;
-				if (y < margin) {
-					y = margin;
-				} else if (y + tooltip.offsetHeight > window.innerHeight - margin) {
-					y = window.innerHeight - tooltip.offsetHeight - margin;
-				}
-				if (layout == 'left') {
-					x = rect.left - tooltip.offsetWidth - margin;
-				} else if (layout == 'right') {
-					x = rect.right + margin;
-				}
+		if (!tooltip || !element) return;
+		const gap = parseFloat(getComputedStyle(element).getPropertyValue('--padding')) || 0;
+		({ x, y, maxHeight } = tooltipPosition(
+			element.getBoundingClientRect(),
+			{ width: tooltip.offsetWidth, height: Math.max(tooltip.offsetHeight, tooltip.scrollHeight) },
+			{ width: window.innerWidth, height: window.innerHeight },
+			layout,
+			gap
+		));
+	}
+	function portal(node: HTMLDivElement) {
+		// A transformed flow column would otherwise become the fixed-position containing block.
+		document.body.append(node);
+		const observer = new ResizeObserver(mouseMove);
+		observer.observe(node);
+		observer.observe(element);
+		window.addEventListener('resize', mouseMove);
+		window.addEventListener('scroll', mouseMove, true);
+		mouseMove();
+		return {
+			destroy() {
+				observer.disconnect();
+				window.removeEventListener('resize', mouseMove);
+				window.removeEventListener('scroll', mouseMove, true);
+				node.remove();
 			}
-			x = Math.max(margin, Math.min(x, window.innerWidth - tooltip.offsetWidth - margin));
-			y = Math.max(margin, Math.min(y, window.innerHeight - tooltip.offsetHeight - margin));
-		}
+		};
 	}
 	async function onContentChanged() {
 		await tick();
@@ -106,7 +104,6 @@
 		on:focus={mouseOver}
 		on:mouseleave={mouseLeave}
 		on:blur={mouseLeave}
-		on:mousemove={mouseMove}
 		bind:this={element}
 		role="tooltip"
 	>
@@ -116,7 +113,8 @@
 	{#if isHovered}
 		<div
 			bind:this={tooltip}
-			style="top: {y}px; left: {x}px;"
+			use:portal
+			style="top: {y}px; left: {x}px; max-height: {maxHeight}px;"
 			class="tooltip"
 			transition:tooltipTransition
 		>
@@ -146,6 +144,7 @@
 		display: inline-block;
 	}
 	.tooltip {
+		width: max-content;
 		pointer-events: none;
 		border: none;
 		padding: var(--padding);
@@ -157,6 +156,7 @@
 		max-width: calc(100vw - var(--padding) * 2);
 		box-sizing: border-box;
 		overflow-wrap: anywhere;
+		overflow-y: auto;
 		z-index: 10000;
 		font-size: var(--font-size);
 		display: flex;

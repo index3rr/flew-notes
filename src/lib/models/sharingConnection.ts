@@ -9,7 +9,7 @@ import Message from '$lib/components/Message.svelte';
 import { connections, nodes } from './store';
 import { get } from 'svelte/store';
 import { resolvePendingAction } from './nodePendingAction';
-import { trackSharingStarted } from './telemetry';
+import { trackSharingStarted, trackSharingConnected } from './telemetry';
 import { getIceServers } from './iceServers';
 import { setSharingLocalDescription, sharingRoomId, sharingLocalOffer } from './sharingIce';
 
@@ -294,6 +294,7 @@ export function giveHostGuestKey(key: GuestKey) {
 					};
 
 					connection.channel.onOpen(function () {
+						trackSharingConnected(true);
 						connection.channel.send({
 							tag: 'name',
 							name
@@ -357,6 +358,7 @@ export function giveGuestHostKey(key: HostKey) {
 				const connection = currentConnections.connection;
 				const channel = new Channel<GuestMessage, HostMessage>(rtcChannel);
 				addGuestChannelHandler(channel);
+				channel.onOpen(() => trackSharingConnected(false));
 				addConnectionStateUpdater(connection.pc, 'host', function () {
 					connections.update(function (connections) {
 						if (connections.tag != 'guest') return connections;
@@ -511,16 +513,37 @@ export function createConfirmLink(guestKey: GuestKey): string {
 	return createLinkWithParam('confirm', JSON.stringify(guestKey));
 }
 
-export function parseJoinLink(): HostKey | null {
-	const raw = readLinkParam('join');
+function parseShareLink(param: 'join' | 'confirm'): HostKey | GuestKey | null {
+	const raw = readLinkParam(param);
 	if (raw == null) return null;
-	return JSON.parse(raw);
+	try {
+		const key = JSON.parse(raw);
+		if (
+			typeof key?.localOffer === 'string' &&
+			typeof key.broadcastId === 'string' &&
+			key.broadcastId
+		) {
+			const description = JSON.parse(key.localOffer);
+			const expectedType = param === 'join' ? 'offer' : 'answer';
+			if (
+				description?.type === expectedType &&
+				typeof description.sdp === 'string' &&
+				description.sdp.trim()
+			)
+				return key;
+		}
+	} catch {
+		// Show the same error for incomplete and malformed links.
+	}
+	return null;
+}
+
+export function parseJoinLink(): HostKey | null {
+	return parseShareLink('join');
 }
 
 export function parseConfirmLink(): GuestKey | null {
-	const raw = readLinkParam('confirm');
-	if (raw == null) return null;
-	return JSON.parse(raw);
+	return parseShareLink('confirm');
 }
 
 export function requestSync() {

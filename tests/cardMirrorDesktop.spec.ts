@@ -1,4 +1,4 @@
-import { test, expect, _electron, chromium, firefox, webkit, type Browser } from '@playwright/test';
+import { test, expect, _electron, type Browser } from '@playwright/test';
 import { resolve } from 'node:path';
 import { mkdir, readFile } from 'node:fs/promises';
 
@@ -6,7 +6,7 @@ import { mkdir, readFile } from 'node:fs/promises';
 // No upstream source, normal CardMirror profile or installed plugins are modified.
 test('desktop plugin loads through the real host, sends an extracted tag and jumps back', async ({
 	baseURL,
-	browserName
+	browser: configuredBrowser
 }) => {
 	test.skip(
 		!process.env.CARDMIRROR_DESKTOP_PATH || !process.env.PLAYWRIGHT_ELECTRON_EXECUTABLE_PATH,
@@ -16,11 +16,13 @@ test('desktop plugin loads through the real host, sends an extracted tag and jum
 	const state = resolve(`.local/cardmirror-native-${Date.now()}`);
 	await mkdir(state, { recursive: true });
 	const url = process.env.CARDMIRROR_DEV_URL || 'http://127.0.0.1:5174';
+	const nativeEnv = { ...process.env };
+	delete nativeEnv.ELECTRON_RUN_AS_NODE;
 	const app = await _electron.launch({
 		executablePath: process.env.PLAYWRIGHT_ELECTRON_EXECUTABLE_PATH,
 		args: [resolve(process.env.CARDMIRROR_DESKTOP_PATH!), '--no-sandbox', '--headless'],
 		env: {
-			...process.env,
+			...nativeEnv,
 			CARDMIRROR_DEV_URL: url,
 			XDG_CONFIG_HOME: `${state}/config`,
 			XDG_DATA_HOME: `${state}/data`,
@@ -33,7 +35,7 @@ test('desktop plugin loads through the real host, sends an extracted tag and jum
 			.poll(() => app.windows().map((page) => page.url()), { timeout: 20_000 })
 			.toContainEqual(expect.stringContaining(url));
 		const native = app.windows().find((page) => page.url().startsWith(url))!;
-		browser = await { chromium, firefox, webkit }[browserName].launch();
+		browser = configuredBrowser;
 		await native.addInitScript(() =>
 			localStorage.setItem(
 				'pmd-settings',
@@ -123,7 +125,8 @@ test('desktop plugin loads through the real host, sends an extracted tag and jum
 					isSettings: true,
 					version: 2,
 					settings: {
-						telemetryTier: 0,
+						telemetry: 0,
+						autoflowCardMirrorControls: true,
 						cardMirrorPanel: 2,
 						autoflowPanel: 2,
 						libraryPanel: 1,
@@ -184,9 +187,9 @@ test('desktop plugin loads through the real host, sends an extracted tag and jum
 			'Native CardMirror evidence tag\nAuthor 2026, complete citation'
 		);
 		await expect(flew.getByLabel('CardMirror card', { exact: true })).toBeVisible();
-		await flew.getByRole('button', { name: 'Save flow', exact: true }).click();
+		await flew.getByRole('button', { name: 'File menu', exact: true }).click();
 		const savedDownload = flew.waitForEvent('download');
-		await flew.getByRole('button', { name: 'download as JSON', exact: true }).click();
+		await flew.getByRole('button', { name: 'Download JSON copy', exact: true }).click();
 		const savedBytes = await readFile((await (await savedDownload).path())!);
 		const saved = JSON.parse(savedBytes.toString());
 		const savedBox = Object.values(saved.nodes).find((node: any) => node.value.cardMirror) as any;
@@ -223,13 +226,14 @@ test('desktop plugin loads through the real host, sends an extracted tag and jum
 		await expect.poll(() => native.evaluate(() => getSelection()?.anchorOffset ?? -1)).toBe(0);
 		await command('reveal');
 		await expect(flew.locator('.box textarea').first()).toBeFocused();
-		await flew.getByRole('button', { name: 'Read CardMirror headings', exact: true }).click();
+		await flew.getByRole('button', { name: 'Autoflow menu', exact: true }).click();
+		await flew.getByRole('menuitem', { name: 'Read CardMirror headings', exact: true }).click();
 		await flew.locator('.autoflow-panel .blocks .panel-row .content').first().click();
 		await expect(flew.locator('.autoflow-panel .blocks')).toContainText(
 			'Native CardMirror evidence tag'
 		);
 		await flew
-			.getByRole('button', { name: 'Send selected cells to CardMirror', exact: true })
+			.getByRole('button', { name: 'Send selected arguments to current document', exact: true })
 			.click();
 		await expect(editor.locator('.pmd-card')).toHaveCount(2);
 		await expect(
@@ -257,7 +261,7 @@ test('desktop plugin loads through the real host, sends an extracted tag and jum
 			)
 			.not.toBeNull();
 		await flew
-			.getByRole('button', { name: 'Send selected cells to speech document', exact: true })
+			.getByRole('button', { name: 'Send selected arguments to speech document', exact: true })
 			.click();
 		await expect(editor.locator('.pmd-card')).toHaveCount(2);
 		await expect(
@@ -286,7 +290,7 @@ test('desktop plugin loads through the real host, sends an extracted tag and jum
 		await expect(editor).toContainText('Native CardMirror evidence tag');
 		await opened.evaluate(() => document.getElementById('speech-mark-btn')?.click());
 		await flew
-			.getByRole('button', { name: 'Send selected cells to speech document', exact: true })
+			.getByRole('button', { name: 'Send selected arguments to speech document', exact: true })
 			.click();
 		await expect(opened.locator('.ProseMirror h4.pmd-tag').last()).toContainText(
 			'Native CardMirror evidence tag'
@@ -306,11 +310,71 @@ test('desktop plugin loads through the real host, sends an extracted tag and jum
 		await expect
 			.poll(() => opened.evaluate(() => typeof window.__flewCardMirrorDispose))
 			.toBe('function');
-		await flew.getByRole('button', { name: 'Read speech document headings', exact: true }).click();
+		await flew.getByRole('button', { name: 'Autoflow menu', exact: true }).click();
+		await flew
+			.getByRole('menuitem', { name: 'Read speech document headings', exact: true })
+			.click();
 		await flew.locator('.autoflow-panel .blocks .panel-row .content').first().click();
 		await expect(flew.locator('.autoflow-panel .blocks')).toContainText(
 			'Native CardMirror evidence tag'
 		);
+
+		// Use the real editor's external HTML drop handler, without the Flew RPC path.
+		const richDrag = await flew
+			.locator('.flow [data-box-id]')
+			.first()
+			.evaluate((element) => {
+				const dataTransfer = new DataTransfer();
+				element.dispatchEvent(
+					new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer })
+				);
+				return dataTransfer.getData('text/html');
+			});
+		expect(richDrag).toContain('Saved evidence with');
+		const beforeDrop = await editor.locator('.pmd-card').count();
+		await native.evaluate(async (html) => {
+			const modulePath = '/src/editor/index.ts';
+			const { getActiveView } = await import(/* @vite-ignore */ modulePath);
+			const view = getActiveView();
+			const position = view.coordsAtPos(view.state.doc.content.size - 1);
+			const dataTransfer = new DataTransfer();
+			dataTransfer.setData('text/html', html);
+			dataTransfer.setData('text/plain', 'Native CardMirror evidence tag');
+			view.dom.dispatchEvent(
+				new DragEvent('drop', {
+					bubbles: true,
+					cancelable: true,
+					clientX: position.left,
+					clientY: position.top,
+					dataTransfer
+				})
+			);
+		}, richDrag);
+		await expect(editor.locator('.pmd-card')).toHaveCount(beforeDrop + 1);
+		await expect(editor.locator('.pmd-card').last().locator('.pmd-card-body strong')).toHaveText(
+			'bold wording'
+		);
+		await expect(editor.locator('.pmd-card').last().locator('.pmd-cite-para')).toHaveText(
+			'Author 2026, complete citation'
+		);
+		const copiedHtml = await editor
+			.locator('.pmd-card')
+			.last()
+			.evaluate((element) => element.outerHTML);
+		await flew.locator('.flow textarea').first().press('Enter');
+		const empty = flew.locator('.flow textarea').last();
+		await empty.evaluate((element, html) => {
+			const clipboardData = new DataTransfer();
+			clipboardData.setData('text/html', html);
+			clipboardData.setData('text/plain', 'Native CardMirror evidence tag');
+			const event = new ClipboardEvent('paste', { bubbles: true, cancelable: true });
+			Object.defineProperty(event, 'clipboardData', { value: clipboardData });
+			element.dispatchEvent(event);
+		}, copiedHtml);
+		await expect(empty).toHaveValue(
+			'Native CardMirror evidence tag\nAuthor 2026, complete citation'
+		);
+		await expect(flew.getByLabel('CardMirror card', { exact: true })).toHaveCount(2);
 	} finally {
 		await browser?.close();
 		await app.evaluate(({ app }) => app.exit(0)).catch(() => undefined);

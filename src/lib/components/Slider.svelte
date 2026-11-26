@@ -7,9 +7,27 @@
 		step: number;
 		hue?: boolean;
 	};
+	let numberValue: number | undefined = value;
+	let editingNumber = false;
+	$: if (!editingNumber) numberValue = value;
 
-	let mousedown: boolean = false;
-	let drag: boolean = false;
+	function inputNumber(event: Event) {
+		if (!(event.currentTarget instanceof HTMLInputElement)) return;
+		const next = event.currentTarget.valueAsNumber;
+		// Keep partial numbers in the field without applying invalid layout/animation values.
+		if (Number.isFinite(next) && next >= detail.min && next <= detail.max) value = next;
+	}
+	function commitNumber() {
+		value =
+			typeof numberValue === 'number' && Number.isFinite(numberValue)
+				? Math.max(detail.min, Math.min(detail.max, numberValue))
+				: auto;
+		numberValue = value;
+		editingNumber = false;
+	}
+
+	let mousedown = false;
+	let drag = false;
 	let startX = 0;
 	function handleMouseDown(e: MouseEvent) {
 		mousedown = true;
@@ -22,7 +40,7 @@
 			drag = true;
 		}
 	}
-	function handleMouseUp(_: MouseEvent) {
+	function handleMouseUp() {
 		mousedown = false;
 		drag = false;
 	}
@@ -63,7 +81,16 @@
 		/>
 	</label>
 	<label class="small">
-		<input type="number" bind:value />
+		<input
+			type="number"
+			min={detail.min}
+			max={detail.max}
+			step={detail.step}
+			bind:value={numberValue}
+			on:focus={() => (editingNumber = true)}
+			on:input={inputNumber}
+			on:blur={commitNumber}
+		/>
 	</label>
 </div>
 

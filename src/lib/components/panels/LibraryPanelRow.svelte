@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { trackFeatureUsed } from '$lib/models/telemetry';
+	import { selectItems } from '$lib/models/multiSelect';
 	import FlowCard from '../FlowCard.svelte';
 	import PanelStatus from './PanelStatus.svelte';
 	import type { SavedNodesData } from '$lib/models/autoSave';
@@ -22,23 +24,19 @@
 		: [];
 	function selectPage({ detail }: CustomEvent<{ index: number; event: MouseEvent }>) {
 		const { index, event } = detail;
-		if (event.shiftKey)
-			selectedPages = Array.from(
-				{ length: Math.abs(index - anchor) + 1 },
-				(_, i) => Math.min(index, anchor) + i
-			);
-		else if (event.ctrlKey || event.metaKey) {
-			selectedPages = selectedPages.includes(index)
-				? selectedPages.filter((i) => i !== index)
-				: [...selectedPages, index];
-			anchor = index;
-		} else {
-			selectedPages = [index];
-			anchor = index;
+		const next = selectItems(
+			flowData.flowInfos.map((_, i) => i),
+			selectedPages,
+			index,
+			anchor,
+			event
+		);
+		selectedPages = [...next.selected];
+		anchor = next.anchor ?? index;
+		if (!event.shiftKey && !event.ctrlKey && !event.metaKey)
 			expandedPages = expandedPages.includes(index)
 				? expandedPages.filter((i) => i !== index)
 				: [...expandedPages, index];
-		}
 	}
 	let error = '';
 	let busy = false;
@@ -67,7 +65,10 @@
 				? [...selectedPages].sort((a, b) => a - b)
 				: [index]) {
 				const id = loaded.root.children[i];
-				if (id) importFlowPage(loaded, id);
+				if (id) {
+					importFlowPage(loaded, id);
+					trackFeatureUsed('library', 'imported');
+				}
 			}
 		} catch (cause) {
 			error = (cause as Error).message;

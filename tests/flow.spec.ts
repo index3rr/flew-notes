@@ -1,5 +1,9 @@
 import { test, expect } from '@playwright/test';
 
+test.beforeEach(async ({ context }) => {
+	await context.addInitScript(() => localStorage.setItem('onboardingComplete', 'true'));
+});
+
 test('add and delete flows', async ({ page }) => {
 	await page.goto('/app');
 	// create a document with its starting aff page

@@ -4,6 +4,7 @@
 	import PacingTimer from './PacingTimer.svelte';
 	import type { TimerState, SpeechTimerState } from '$lib/models/timer';
 	import { currentSpeech as publishedSpeech, speechClock } from '$lib/models/timer';
+	import { roundToolsVersion } from '$lib/models/collaboration';
 	import { timer } from '$lib/models/transition';
 	import { settings } from '$lib/models/settings';
 	import { onDestroy } from 'svelte';
@@ -19,8 +20,6 @@
 
 	let showTimers = true;
 
-	let update = false;
-
 	let debateStyleIndex = settings.data['debateStyle'].value as number;
 	let debateStyle: DebateStyle = debateStyles[debateStyleMap[debateStyleIndex]];
 	onDestroy(
@@ -30,7 +29,6 @@
 			debateStyleIndex = newDebateStyleIndex;
 			debateStyle = debateStyles[debateStyleMap[debateStyleIndex]];
 			resetStates();
-			update = !update;
 		})
 	);
 
@@ -38,7 +36,6 @@
 	onDestroy(
 		settings.subscribe(['pacingEnabled'], (key: string) => {
 			pacingEnabled = settings.data[key].value as boolean;
-			update = !update;
 		})
 	);
 
@@ -65,7 +62,7 @@
 		states = newStates;
 	}
 
-	resetStates();
+	$: $roundToolsVersion, resetStates();
 
 	let currentNodes: Nodes;
 	onDestroy(nodes.subscribe((n) => (currentNodes = n)));
@@ -105,42 +102,46 @@
 </script>
 
 <div class="top">
-	{#key update}
+	<!-- Keep outgoing timer bindings attached to their original state during transitions.
+	     Toggling pacing only changes the pacing UI, not the speech/prep timer instances. -->
+	{#each [states] as timerStates (timerStates)}
 		{#if showTimers}
 			<div class="timer" transition:timer>
-				{#if states.prep}
+				{#if timerStates.prep}
 					<Timer
-						resetTime={states.prep.resetTime}
-						bind:time={states.prep.time}
-						bind:state={states.prep.state}
+						resetTime={timerStates.prep.resetTime}
+						label="primary prep timer"
+						bind:time={timerStates.prep.time}
+						bind:state={timerStates.prep.state}
 						palette={'accent'}
 					/>
 				{/if}
-				{#if states.prepSecondary}
+				{#if timerStates.prepSecondary}
 					<Timer
-						resetTime={states.prepSecondary.resetTime}
-						bind:time={states.prepSecondary.time}
-						bind:state={states.prepSecondary.state}
+						resetTime={timerStates.prepSecondary.resetTime}
+						label="secondary prep timer"
+						bind:time={timerStates.prepSecondary.time}
+						bind:state={timerStates.prepSecondary.state}
 						palette={'accent-secondary'}
 					/>
 				{/if}
 				<SpeechTimer
 					speeches={debateStyle.timerSpeeches}
-					bind:resetTimeIndex={states.speech.resetTimeIndex}
-					bind:time={states.speech.time}
-					bind:state={states.speech.state}
+					bind:resetTimeIndex={timerStates.speech.resetTimeIndex}
+					bind:time={timerStates.speech.time}
+					bind:state={timerStates.speech.state}
 				/>
 				{#if pacingEnabled}
 					<PacingTimer
 						nodes={currentNodes}
-						mainTimerTime={states.speech.time}
-						isRunning={states.speech.state.name === 'running'}
+						mainTimerTime={timerStates.speech.time}
+						isRunning={timerStates.speech.state.name === 'running'}
 						palette={pacingPalette}
 					/>
 				{/if}
 			</div>
 		{/if}
-	{/key}
+	{/each}
 </div>
 
 <style>

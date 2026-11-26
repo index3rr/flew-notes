@@ -6,6 +6,8 @@
 	export let multiline = false;
 	export let rows = 3;
 	export let readonly = false;
+	export let disabled = false;
+	export let fill = false;
 	export let maxlength: number | undefined = undefined;
 	export let spellcheck = true;
 </script>
@@ -13,6 +15,8 @@
 {#if multiline}
 	<textarea
 		class="panel-field"
+		class:fill
+		{disabled}
 		bind:value
 		{placeholder}
 		{rows}
@@ -27,6 +31,8 @@
 {:else}
 	<input
 		class="panel-field"
+		class:fill
+		{disabled}
 		bind:value
 		{placeholder}
 		{readonly}
@@ -60,6 +66,12 @@
 	}
 	.panel-field::placeholder {
 		color: var(--text-weak);
+	}
+	.panel-field.fill {
+		flex: 1;
+		height: 100%;
+		min-height: 0;
+		resize: none;
 	}
 	textarea.panel-field {
 		resize: vertical;

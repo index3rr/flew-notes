@@ -1,4 +1,4 @@
-import { test, expect, firefox, type Browser } from '@playwright/test';
+import { test, expect, firefox, type Browser, type TestInfo } from '@playwright/test';
 import QRCode from 'qrcode';
 import { encodeSharingQr, decodeSharingQr } from '../src/lib/models/sharingQr';
 import {
@@ -8,6 +8,10 @@ import {
 	preferredTlsRelay
 } from '../src/lib/models/sharingIce';
 
+test.beforeEach(async ({ context }) => {
+	await context.addInitScript(() => localStorage.setItem('onboardingComplete', 'true'));
+});
+
 async function installFakeQrCamera(
 	page: import('@playwright/test').Page,
 	rejectIceOverrides = false,
@@ -15,6 +19,7 @@ async function installFakeQrCamera(
 ) {
 	await page.addInitScript(
 		({ rejectIceOverrides, forceRelay }) => {
+			localStorage.setItem('onboardingComplete', 'true');
 			if (forceRelay) {
 				const setConfiguration = RTCPeerConnection.prototype.setConfiguration;
 				RTCPeerConnection.prototype.setConfiguration = function (configuration) {
@@ -257,8 +262,9 @@ test('share', async ({ context }) => {
 	]) {
 		// add tab on page
 		await page.locator('.addTab').getByRole('button', { name: 'aff', exact: true }).click();
-		await page.getByPlaceholder('type name here').first().fill(`share test ${i}`);
-		await page.getByPlaceholder('type name here').first().press('Enter');
+		const title = page.locator('.title textarea:visible').last();
+		await title.fill(`share test ${i}`);
+		await title.press('Enter');
 		// check if otherPage has the new tab
 		await expect(
 			otherPage.locator('.tabs').getByRole('button', { name: `share test ${i}` })
@@ -479,13 +485,18 @@ for (const rejectIceOverrides of [false, true]) {
 	});
 }
 
+function launchFirefox(testInfo: TestInfo) {
+	const project = testInfo.config.projects.find(({ use }) => use.browserName === 'firefox');
+	return firefox.launch(project?.use.launchOptions);
+}
+
 for (const firefoxHosts of [false, true]) {
 	test(`QR collaboration across Chromium and Firefox with ${
 		firefoxHosts ? 'Firefox' : 'Chromium'
-	} hosting`, async ({ browser, browserName }) => {
+	} hosting`, async ({ browser, browserName }, testInfo) => {
 		test.skip(browserName != 'chromium', 'Run each mixed-browser combination once.');
 		test.setTimeout(90_000);
-		const firefoxBrowser = await firefox.launch();
+		const firefoxBrowser = await launchFirefox(testInfo);
 		try {
 			await verifyQrSharing(
 				firefoxHosts ? firefoxBrowser : browser,
@@ -497,10 +508,13 @@ for (const firefoxHosts of [false, true]) {
 	});
 }
 
-test('QR mixed browser fallback with Firefox hosting', async ({ browser, browserName }) => {
+test('QR mixed browser fallback with Firefox hosting', async ({
+	browser,
+	browserName
+}, testInfo) => {
 	test.skip(browserName != 'chromium', 'Run mixed browser test once.');
 	test.setTimeout(90_000);
-	const firefoxBrowser = await firefox.launch();
+	const firefoxBrowser = await launchFirefox(testInfo);
 	try {
 		await verifyQrSharing(firefoxBrowser, browser, true);
 	} finally {
@@ -511,10 +525,10 @@ test('QR mixed browser fallback with Firefox hosting', async ({ browser, browser
 test('QR photographed reply still connects after a 35 second handoff', async ({
 	browser,
 	browserName
-}) => {
+}, testInfo) => {
 	test.skip(browserName != 'chromium', 'Run this physical-handoff scenario once.');
 	test.setTimeout(90_000);
-	const firefoxBrowser = await firefox.launch();
+	const firefoxBrowser = await launchFirefox(testInfo);
 	try {
 		await verifyQrSharing(firefoxBrowser, browser, false, 35_000);
 	} finally {
@@ -522,10 +536,13 @@ test('QR photographed reply still connects after a 35 second handoff', async ({
 	}
 });
 
-test('QR relay-only pairing uses TURN without a LAN shortcut', async ({ browser, browserName }) => {
+test('QR relay-only pairing uses TURN without a LAN shortcut', async ({
+	browser,
+	browserName
+}, testInfo) => {
 	test.skip(browserName != 'chromium', 'Run the mixed-browser relay scenario once.');
 	test.setTimeout(90_000);
-	const firefoxBrowser = await firefox.launch();
+	const firefoxBrowser = await launchFirefox(testInfo);
 	try {
 		await verifyQrSharing(firefoxBrowser, browser, false, 35_000, true);
 	} finally {

@@ -1,3 +1,4 @@
+import { trackFeatureUsed } from './telemetry';
 import { exportItems } from '../integrations/cardmirror/evidence';
 import { get, writable } from 'svelte/store';
 import { Connection, type ConnectionState } from '../integrations/cardmirror/connection';
@@ -55,6 +56,7 @@ const connection = new Connection(handleRequest, (state, error = '') => {
 		cardMirrorDocuments.set({ supported: false, checked: false, sending: '', progress: 0 });
 	}
 	if (state === 'connected') {
+		trackFeatureUsed('cardmirror', 'connected');
 		const current = session;
 		void connection
 			.request('integration.capabilities', {})

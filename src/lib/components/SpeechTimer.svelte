@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { TimeState, TimerSpeech } from '$lib/models/timer';
-	import { onMount, onDestroy, tick } from 'svelte';
+	import { onDestroy, tick } from 'svelte';
 	import Button from './Button.svelte';
 	import Timer from './Timer.svelte';
 	import { get } from 'svelte/store';
@@ -16,31 +16,14 @@
 
 	export let state: TimeState;
 
-	let selectedButton: HTMLButtonElement;
-
-	let selectedButtonInit = false;
-	function selectedButtonUpdate() {
-		if (selectedButton) {
-			if (selectedButtonInit) {
-				selectedButton.scrollIntoView({
-					behavior: 'smooth',
-					inline: 'center'
-				});
-			}
-			selectedButtonInit = true;
-		}
+	let selectedButton: HTMLButtonElement | undefined;
+	let speechStrip: HTMLDivElement | undefined;
+	function centerSelectedSpeech(button?: HTMLButtonElement, strip?: HTMLDivElement) {
+		if (!button || !strip) return;
+		const selected = button.getBoundingClientRect();
+		const viewport = strip.getBoundingClientRect();
+		strip.scrollLeft += selected.left - viewport.left + (selected.width - viewport.width) / 2;
 	}
-
-	onMount(() => {
-		setTimeout(() => {
-			if (selectedButton) {
-				selectedButton.scrollIntoView({
-					behavior: 'instant',
-					inline: 'center'
-				});
-			}
-		}, 50);
-	});
 
 	let resetTimeIndexInit = false;
 	async function resetTimeIndexUpdate() {
@@ -52,7 +35,7 @@
 		resetTimeIndexInit = true;
 	}
 
-	$: selectedButton, selectedButtonUpdate();
+	$: centerSelectedSpeech(selectedButton, speechStrip);
 	$: resetTimeIndex, resetTimeIndexUpdate();
 
 	let advance = settings.data.timerAutoAdvance.value as boolean;
@@ -105,7 +88,7 @@
 <div class="top">
 	{#if speeches.length > 1}
 		<div class="over">
-			<div class="speechesScroll">
+			<div class="speechesScroll" bind:this={speechStrip}>
 				<div class="speeches">
 					{#each speeches as speech, index}
 						{#if index == resetTimeIndex}
@@ -113,14 +96,13 @@
 								class={`speech selected ${
 									speech.secondary ? 'palette-accent-secondary' : 'palette-accent'
 								}`}
+								aria-pressed="true"
 								bind:this={selectedButton}>{speech.name}</button
 							>
 						{:else}
 							<button
 								class={`speech ${speech.secondary ? 'palette-accent-secondary' : 'palette-accent'}`}
-								on:click={() => {
-									resetTimeIndex = index;
-								}}
+								aria-pressed="false"
 								on:click={() => {
 									resetTimeIndex = index;
 								}}>{speech.name}</button
@@ -131,6 +113,9 @@
 			</div>
 			<Button
 				icon={resetTimeIndex == speeches.length - 1 ? 'arrowLeft' : 'arrowRight'}
+				ariaLabel={resetTimeIndex === speeches.length - 1
+					? 'Return to first speech'
+					: 'Next speech'}
 				palette={speeches[(resetTimeIndex + 1) % speeches.length].secondary
 					? 'accent-secondary'
 					: 'accent'}
@@ -151,6 +136,7 @@
 			bind:start
 			bind:reset
 			resetTime={speeches[resetTimeIndex].time}
+			label={`${speeches[resetTimeIndex].name} timer`}
 		/>
 	</div>
 </div>

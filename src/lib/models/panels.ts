@@ -29,7 +29,7 @@ export const panelNames: Record<PanelId, string> = {
 };
 
 export const panelIcons: Record<PanelId, string> = {
-	tabsPanel: 'dots',
+	tabsPanel: 'tabs',
 	notesPanel: 'file',
 	coveragePanel: 'checklist',
 	starredPanel: 'star',

@@ -1,6 +1,17 @@
 <script lang="ts">
-	import PanelMenu from './PanelMenu.svelte';
-	import { openPopup } from '$lib/models/popup';
+	import { panelDrop } from '$lib/models/panelDrop';
+	import {
+		boxesMime,
+		pagesMime,
+		fileMime,
+		selectionRoots,
+		readPageDrag,
+		droppedDocument
+	} from '$lib/models/panelDrag';
+	import { serializeBoxSubtree } from '$lib/models/node';
+	import { selectedBoxIds } from '$lib/models/selection';
+	import { sendToCardMirror, openCardMirrorDocument } from '$lib/models/cardMirror';
+	import { readEvidenceTransfer, evidenceMime } from '$lib/integrations/cardmirror/clipboard';
 	import Button from '../Button.svelte';
 	import PanelHeader from './PanelHeader.svelte';
 	import PanelField from './PanelField.svelte';
@@ -72,27 +83,49 @@
 		const chars = Array.from(text);
 		return chars.length > 160 ? chars.slice(0, 160).join('') + '…' : text;
 	}
-</script>
-
-<section class="cardmirror-panel" aria-label="CardMirror integration">
-	<PanelHeader
-		name="CardMirror"
-		detail={$cardMirror.state === 'connected'
-			? 'connected'
-			: $cardMirror.state === 'connecting'
-			? 'Connecting…'
-			: null}
-	>
-		<Button
-			icon="dots"
-			ariaLabel="CardMirror menu"
-			tooltip="cardmirror menu"
-			on:click={() =>
-				openPopup(PanelMenu, 'CardMirror', {
-					actions: [
+	async function sendSelection(speech = false) {
+		resolvePendingAction($nodes);
+		const ids = $selectedBoxIds.size ? $selectedBoxIds : argument ? [argument.id] : [];
+		await perform(() =>
+			sendToCardMirror(
+				selectionRoots($nodes, ids).map((id) => serializeBoxSubtree($nodes, id)),
+				speech
+			)
+		);
+	}
+	async function drop(event: DragEvent, speech = false) {
+		event.preventDefault();
+		event.stopPropagation();
+		if ($cardMirror.state !== 'connected') return;
+		await perform(async () => {
+			const transfer = event.dataTransfer;
+			if (!transfer) return;
+			const pages = transfer.getData(pagesMime),
+				boxes = transfer.getData(boxesMime);
+			if (pages) {
+				const { source, ids } = readPageDrag(pages);
+				await sendToCardMirror(
+					ids.flatMap((id) =>
+						source[id]!.children.map((child) => serializeBoxSubtree(source, child))
+					),
+					speech
+				);
+			} else if (boxes) await sendToCardMirror(JSON.parse(boxes).boxes, speech);
+			else if (transfer.types.includes(evidenceMime) || transfer.types.includes('text/html'))
+				await sendToCardMirror(readEvidenceTransfer(transfer), speech);
+			else {
+				const file = await droppedDocument(event);
+				if (file) await openCardMirrorDocument(file.name, file.blob);
+			}
+		});
+	}
+	function panelActions() {
+		return [
+			...($cardMirror.state !== 'connected'
+				? [
+						{ label: 'Download companion plugin', run: downloadPlugin },
 						{
 							label: 'Paste reply key',
-							disabled: $cardMirror.state === 'connected',
 							run: async () => {
 								try {
 									reply = await navigator.clipboard.readText();
@@ -100,28 +133,66 @@
 									error = 'Could not read clipboard.';
 								}
 							}
+						}
+				  ]
+				: []),
+			...(argument ? [{ label: 'Copy selected text', run: copyArgument }] : []),
+			...($cardMirror.state === 'connected' && argument
+				? [
+						{
+							label: 'Send selected arguments to current document',
+							run: () => sendSelection(false)
 						},
-						{ label: 'Copy selected text', disabled: !argument, run: copyArgument }
-					]
-				})}
-		/>
+						{ label: 'Send selected arguments to speech document', run: () => sendSelection(true) }
+				  ]
+				: []),
+			...($cardMirror.state !== 'disconnected'
+				? [{ label: 'Disconnect', run: disconnectCardMirror }]
+				: [])
+		];
+	}
+</script>
 
-		{#if $cardMirror.state !== 'connected'}<Button
-				icon="download"
-				ariaLabel="Download CardMirror plugin"
-				tooltip="download the plugin, then load it from CardMirror's plugin settings and run “Connect to Flew”"
-				on:click={downloadPlugin}
-			/>{/if}
-		{#if $cardMirror.state !== 'disconnected'}<Button
-				icon="delete"
-				ariaLabel="Disconnect CardMirror"
-				tooltip="disconnect"
-				on:click={() => {
-					disconnectCardMirror();
-					reply = '';
-				}}
-			/>{/if}
-	</PanelHeader>
+<section
+	class="cardmirror-panel"
+	aria-label="CardMirror integration"
+	use:panelDrop={{
+		types: [boxesMime, pagesMime, fileMime, evidenceMime, 'text/html', 'Files'],
+		disabled: $cardMirror.state !== 'connected'
+	}}
+	on:drop={(event) => drop(event)}
+>
+	<PanelHeader
+		name="CardMirror"
+		detail={$cardMirror.state === 'connected'
+			? 'connected'
+			: $cardMirror.state === 'connecting'
+			? 'Connecting…'
+			: null}
+		actions={panelActions}
+	/>
+	{#if $cardMirror.state === 'connected'}<div class="send-targets">
+			<div class="transfer-target" role="region" aria-label="Send to current document">
+				<span>current document</span>{#if argument}<Button
+						icon="addRight"
+						ariaLabel="Send selected arguments to current document"
+						on:click={() => sendSelection(false)}
+					/>{/if}
+			</div>
+			<div
+				class="transfer-target"
+				role="region"
+				aria-label="Send to speech document"
+				use:panelDrop={{ types: [boxesMime, pagesMime, evidenceMime, 'text/html'] }}
+				on:drop={(event) => drop(event, true)}
+			>
+				<span>speech document</span>{#if argument}<Button
+						icon="addRight"
+						ariaLabel="Send selected arguments to speech document"
+						on:click={() => sendSelection(true)}
+					/>{/if}
+			</div>
+		</div>{/if}
 	{#if $cardMirror.state !== 'connected'}
 		<div class="steps">
 			<Button
@@ -177,27 +248,15 @@
 			</PanelStatus>{/if}
 	{/if}
 	{#if sources.length}
-		<PanelHeader name="Selected argument" detail={sources.length ? String(sources.length) : null}>
-			<Button
-				icon="copy"
-				ariaLabel="Copy argument text"
-				tooltip="copy plain text to paste into your speech document"
-				disabled={busy}
-				on:click={copyArgument}
-			/>
-		</PanelHeader>
 		{#each groups as group}
 			<div class="source">
 				<PanelStatus>{group.title || 'Untitled document'}</PanelStatus>
-				{#each group.sources as source}<PanelRow
-						ariaLabel="Jump to source"
-						title={source.token
-							? 'return to the original evidence in CardMirror'
-							: 'saved evidence attached; original document link unavailable'}
-						disabled={busy || $cardMirror.state !== 'connected' || !source.token}
-						on:click={() => perform(() => jumpToCardMirror(source.token))}
-						>{source.kind === 'cite' ? 'Citation: ' : ''}{excerpt(source.excerpt)}</PanelRow
-					>{/each}
+				{#each group.sources as source}{#if source.token && $cardMirror.state === 'connected'}<PanelRow
+							ariaLabel="Jump to source"
+							title="return to the original evidence"
+							on:click={() => perform(() => jumpToCardMirror(source.token))}
+							>{excerpt(source.excerpt)}</PanelRow
+						>{:else}<PanelStatus>{excerpt(source.excerpt)}</PanelStatus>{/if}{/each}
 			</div>
 		{/each}
 		{#if sources.length > sourceLimit}<PanelRow weak on:click={() => (sourceLimit += 8)}
@@ -208,6 +267,21 @@
 </section>
 
 <style>
+	.send-targets {
+		display: flex;
+		flex-direction: column;
+		gap: var(--padding-small);
+	}
+	.transfer-target {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		background: var(--background-indent);
+		padding: var(--padding);
+		border-radius: var(--border-radius-small);
+		font-size: 0.85em;
+		color: var(--text-weak);
+	}
 	.cardmirror-panel {
 		display: flex;
 		flex-direction: column;

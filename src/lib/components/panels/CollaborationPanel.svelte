@@ -45,36 +45,36 @@
 </script>
 
 <section class="collaboration-panel" aria-label="Collaboration">
-	<PanelHeader name="Collaboration">
-		{#if $partnerNotificationPermission !== 'granted' && $partnerNotificationPermission !== 'unsupported'}
-			<Button
-				icon="screen"
-				ariaLabel="Enable partner notifications"
-				tooltip="enable system notifications"
-				disabled={$partnerNotificationPermission === 'denied'}
-				disabledReason="Allow notifications in your browser settings"
-				on:click={async () => {
-					try {
-						await enablePartnerNotifications();
-					} catch {
-						error = 'Could not enable system notifications.';
+	<PanelHeader
+		name="Collaboration"
+		actions={$partnerNotificationPermission !== 'granted' &&
+		$partnerNotificationPermission !== 'unsupported'
+			? [
+					{
+						label: 'Enable partner notifications',
+						disabled: $partnerNotificationPermission === 'denied',
+						run: async () => {
+							try {
+								await enablePartnerNotifications();
+							} catch {
+								error = 'Could not enable system notifications.';
+							}
+						}
 					}
-				}}
-			/>
-		{/if}
-		{#if $connections.tag === 'empty'}
+			  ]
+			: []}
+	/>
+	{#if $connections.tag === 'empty'}
+		<div class="panel-leading">
 			<Button
 				icon="people"
 				ariaLabel="Enable collaboration"
-				tooltip="share this flow with your partner"
+				text="start collaboration"
 				on:click={() => openPopup(Share, 'Share')}
 			/>
-		{/if}
-	</PanelHeader>
-	{#if $connections.tag === 'empty'}
-		<PanelStatus>Share this flow to message your partner.</PanelStatus>
+		</div>
 	{:else}
-		<div class="messages" aria-live="polite">
+		<div class="messages panel-leading" aria-live="polite">
 			{#each $partnerNotices as notice (notice.id)}
 				<div class="message" class:received={notice.received}>
 					<p>
@@ -114,6 +114,14 @@
 		gap: var(--padding-small);
 		min-height: 0;
 		flex: 1;
+	}
+	.panel-leading > :global(button.top) {
+		box-sizing: border-box;
+		width: 100%;
+		height: auto;
+		min-height: calc(var(--button-size) + var(--padding) * 2);
+		white-space: normal;
+		overflow-wrap: anywhere;
 	}
 	.messages {
 		display: flex;

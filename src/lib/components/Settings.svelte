@@ -1,6 +1,8 @@
 <script lang="ts">
 	import Setting from './Setting.svelte';
+	import RoundLayouts from './RoundLayouts.svelte';
 	import { panelIds } from '$lib/models/panels';
+	import { openPopup } from '$lib/models/popup';
 	import Button from './Button.svelte';
 	import { settingsGroups, settings } from '$lib/models/settings';
 	import { onDestroy, onMount, tick } from 'svelte';
@@ -16,7 +18,7 @@
 		if (index >= 0) scrollToGroupHeader(index);
 	});
 
-	export const closePopup: () => void = () => undefined;
+	export let closePopup: () => void = () => undefined;
 	onDestroy(() => {
 		flushSettingChanges();
 		settings.saveToLocalStorage();
@@ -102,6 +104,16 @@
 		</div>
 	</div>
 	<div class="content" class:customScrollbar={settings.data.customScrollbar.value}>
+		<section class="controls">
+			<Button
+				icon="screen"
+				text="Round layouts"
+				on:click={() => {
+					closePopup();
+					openPopup(RoundLayouts, 'Round layouts');
+				}}
+			/>
+		</section>
 		<section class="controls">
 			<Button
 				icon="arrowRoundLeft"

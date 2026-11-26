@@ -3,6 +3,23 @@ import { readFile, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
+// This suite exercises the saved-flow workspace; first-run setup has its own spec.
+test.beforeEach(async ({ context }) => {
+	await context.addInitScript(() => localStorage.setItem('onboardingComplete', 'true'));
+});
+
+async function saveFromFileMenu(page: Page, copy = false) {
+	await page.getByRole('button', { name: 'File menu', exact: true }).click();
+	const save = page.getByRole('button', {
+		name: copy ? 'Save a copy to linked folder' : 'Save to linked folder',
+		exact: true
+	});
+	if (await save.count()) {
+		await save.click();
+		await expect(page.getByRole('region', { name: 'Flow files', exact: true })).toHaveCount(0);
+	}
+}
+
 // Persisted native handles must use a regular browser profile. Chromium's temporary
 // incognito storage crashes when restoring OPFS handles from IndexedDB after reload.
 const nativeTest = test.extend({
@@ -314,7 +331,7 @@ nativeTest(
 		await closeFlow(page);
 		await row(page, 'Saved round.json').getByRole('button', { name: 'Duplicate' }).click();
 		await expect(title(page)).toHaveValue('Saved round copy');
-		await page.getByRole('button', { name: 'Save flow', exact: true }).click();
+		await saveFromFileMenu(page);
 		await expect(page.locator('.save-status')).toHaveText('Saved');
 		await closeFlow(page);
 		await expect(row(page, 'Saved round copy.json')).toBeVisible();
@@ -434,7 +451,7 @@ nativeTest(
 		] as const) {
 			await title(page).fill(name);
 			await page.getByRole('button', { name: 'New flow', exact: true }).click();
-			await page.getByRole('button', { name: 'Save flow', exact: true }).click();
+			await saveFromFileMenu(page);
 			await expect(page.locator('.save-status')).toHaveText('Saved');
 			const suggestion = await page.evaluate(() => localStorage.getItem('save-suggestion'));
 			const filename = expected ?? suggestion!;
@@ -551,7 +568,7 @@ nativeTest(
 		expect(await page.evaluate(() => localStorage.getItem('requested-write'))).toBe('true');
 		await page.getByRole('button', { name: 'New flow', exact: true }).click();
 		await title(page).fill('Picked folder round');
-		await page.getByRole('button', { name: 'Save flow', exact: true }).click();
+		await saveFromFileMenu(page);
 		await expect(page.locator('.save-status')).toHaveText('Saved');
 		await expect(page.locator('.sidebar .library-panel')).toHaveCount(0);
 		await closeFlow(page);
@@ -621,7 +638,7 @@ test('library controls, alternating rows, and Help tutorial follow the main-scre
 	await expect(lib(page).getByRole('button', { name: 'Refresh', exact: true })).toHaveCount(0);
 	await row(page, 'Round.json').getByRole('button', { name: 'Duplicate', exact: true }).click();
 	await expect(page.getByRole('button', { name: 'New flow', exact: true })).toHaveCount(0);
-	await page.getByRole('button', { name: 'Save flow', exact: true }).click();
+	await saveFromFileMenu(page);
 	await expect(
 		page
 			.locator('.popups')
@@ -647,11 +664,11 @@ test('library controls, alternating rows, and Help tutorial follow the main-scre
 	await expect(page.getByRole('button', { name: 'Up one folder' })).toBeVisible();
 	await page.getByRole('button', { name: 'Up one folder' }).click();
 	await expect(page.getByRole('heading', { name: 'persistancy' })).toBeVisible();
-	await expect(page.getByRole('button', { name: 'restart tutorial', exact: true })).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'start tutorial', exact: true })).toHaveCount(0);
 	await page.getByRole('button', { name: 'Help', exact: true }).click();
-	await page.getByRole('button', { name: 'restart tutorial', exact: true }).click();
+	await page.getByRole('button', { name: 'start tutorial', exact: true }).click();
 	await expect(page.getByRole('heading', { name: 'persistancy' })).toHaveCount(0);
-	await expect(page.locator('.prelude')).toContainText('click to start tutorial');
+	await expect(page.getByRole('region', { name: 'Getting started', exact: true })).toBeVisible();
 });
 
 nativeTest(
@@ -665,7 +682,7 @@ nativeTest(
 		expect(await page.evaluate(() => localStorage.getItem('save-count'))).toBeNull();
 		expect(await diskNames(page)).not.toContain('First save.json');
 		await page.evaluate(() => localStorage.setItem('cancel-save', 'true'));
-		await page.getByRole('button', { name: 'Save flow', exact: true }).click();
+		await saveFromFileMenu(page);
 		await expect.poll(() => page.evaluate(() => localStorage.getItem('save-count'))).toBe('1');
 		await expect(page.locator('.save-status')).toHaveText('Not saved to disk');
 		expect(await diskNames(page)).not.toContain('First save.json');
@@ -687,7 +704,7 @@ nativeTest(
 		expect(await page.evaluate(() => localStorage.getItem('save-activation'))).toBe('true');
 		await page.getByPlaceholder('type here', { exact: true }).fill('Later edit');
 		await expect(page.locator('.save-status')).toHaveText('Saved');
-		await page.getByRole('button', { name: 'Save flow', exact: true }).click();
+		await saveFromFileMenu(page, true);
 		await expect(page.locator('.save-status')).toHaveText('Saved');
 		expect(await page.evaluate(() => localStorage.getItem('save-count'))).toBe('3');
 		await closeFlow(page);
@@ -700,7 +717,7 @@ nativeTest(
 		await expect(title(page)).toHaveValue('Chosen name copy');
 		expect(await page.evaluate(() => localStorage.getItem('save-count'))).toBe('3');
 		await page.evaluate(() => localStorage.setItem('save-as-path', 'preflows/Copy chosen.json'));
-		await page.getByRole('button', { name: 'Save flow', exact: true }).click();
+		await saveFromFileMenu(page);
 		await expect(page.locator('.save-status')).toHaveText('Saved');
 		expect(await page.evaluate(() => localStorage.getItem('save-start'))).toBe('preflows');
 		expect(await page.evaluate(() => localStorage.getItem('save-count'))).toBe('4');
@@ -718,14 +735,19 @@ nativeTest(
 		await nativeFolder(page);
 		await title(page).fill('Autosave round');
 		await page.getByRole('button', { name: 'New flow', exact: true }).click();
-		await page.getByRole('button', { name: 'Save flow', exact: true }).click();
+		await saveFromFileMenu(page);
 		await expect(page.locator('.save-status')).toHaveText('Saved');
 		const filename = 'Autosave round.json';
 		const argument = page.getByPlaceholder('type here', { exact: true });
 		const readArgument = async () => {
-			const saved = await disk(page, filename);
-			const flow = saved.nodes[saved.nodes.root.children[0]];
-			return saved.nodes[flow.children[0]].value.content;
+			try {
+				const saved = await disk(page, filename);
+				const flow = saved.nodes[saved.nodes.root.children[0]];
+				return saved.nodes[flow.children[0]].value.content;
+			} catch (cause) {
+				if ((cause as Error).message.includes('NotReadableError')) return null;
+				throw cause;
+			}
 		};
 		await argument.fill('Typed without leaving the argument');
 		await expect(page.locator('.save-status')).toBeVisible();
@@ -806,7 +828,7 @@ test('local-only browsers import folders into local flows and autosave without c
 			)
 		)
 		.toContain('Autosaved local argument');
-	await page.getByRole('button', { name: 'Save flow', exact: true }).click();
+	await saveFromFileMenu(page);
 	await page.keyboard.press('Escape');
 	await closeFlow(page);
 	expect(dialogs).toEqual([]);
@@ -1040,15 +1062,10 @@ nativeTest(
 		await nativeFolder(page);
 		await title(page).fill('Original');
 		await page.getByRole('button', { name: 'New flow', exact: true }).click();
-		const save = page.getByRole('button', { name: 'Save flow', exact: true });
-		await save.hover();
-		await expect(page.getByText('Save as…', { exact: true })).toBeVisible();
-		await save.click();
+		await saveFromFileMenu(page);
 		await expect(page.locator('.save-status')).toHaveText('Saved');
-		await save.hover();
-		await expect(page.getByText('Save a copy', { exact: true })).toBeVisible();
 		await page.evaluate(() => localStorage.setItem('save-as-path', 'Copy.json'));
-		await save.click();
+		await saveFromFileMenu(page, true);
 		await expect.poll(() => diskNames(page)).toContain('Copy.json');
 		expect(await page.evaluate(() => localStorage.getItem('save-count'))).toBe('2');
 		const before = await disk(page, 'Copy.json');
@@ -1060,7 +1077,7 @@ nativeTest(
 			.toContain('Still editing the original');
 		expect(await disk(page, 'Copy.json')).toEqual(before);
 		await page.evaluate(() => localStorage.setItem('cancel-save', 'true'));
-		await save.click();
+		await saveFromFileMenu(page, true);
 		expect(await page.evaluate(() => localStorage.getItem('save-count'))).toBe('3');
 		await page.getByPlaceholder('type here', { exact: true }).fill('After cancellation');
 		await expect
@@ -1185,7 +1202,7 @@ nativeTest(
 		await nativeFolder(page);
 		await title(page).fill('Initial');
 		await page.getByRole('button', { name: 'New flow', exact: true }).click();
-		await page.getByRole('button', { name: 'Save flow', exact: true }).click();
+		await saveFromFileMenu(page);
 		await expect(page.locator('.save-status')).toHaveText('Saved');
 		await title(page).fill('Renamed');
 		await expect(page.locator('.save-status')).toHaveText('Saved');
@@ -1257,22 +1274,23 @@ nativeTest(
 	}
 );
 
-test('Choose file replaces Save with no open document and imports normally without a linked folder', async ({
+test('File menu remains available before and after importing a flow without a linked folder', async ({
 	page
 }) => {
 	await page.goto('/app');
-	const choose = page.getByRole('button', { name: 'Choose file', exact: true });
+	const choose = page.getByRole('button', { name: 'File menu', exact: true });
 	await expect(choose).toBeEnabled();
-	await expect(page.getByRole('button', { name: 'Save flow', exact: true })).toHaveCount(0);
+
 	const picker = page.waitForEvent('filechooser');
 	await choose.click();
+	await page.getByRole('button', { name: 'Open flow or import settings', exact: true }).click();
 	await (await picker).setFiles(path.join(fixtures, 'Round.json'));
 	await expect(title(page)).toHaveValue('Round');
 	await expect(page.getByPlaceholder('type here', { exact: true })).toHaveValue(
 		'Original argument'
 	);
-	await expect(page.getByRole('button', { name: 'Save flow', exact: true })).toBeEnabled();
-	await expect(choose).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'File menu', exact: true })).toBeEnabled();
+	await expect(choose).toBeEnabled();
 	await expect
 		.poll(() =>
 			page.evaluate(() => {
@@ -1290,7 +1308,8 @@ nativeTest(
 	async ({ page }) => {
 		await nativeFolder(page);
 		const picker = page.waitForEvent('filechooser');
-		await page.getByRole('button', { name: 'Choose file', exact: true }).click();
+		await page.getByRole('button', { name: 'File menu', exact: true }).click();
+		await page.getByRole('button', { name: 'Open flow or import settings', exact: true }).click();
 		await (await picker).setFiles(path.join(fixtures, 'Round.json'));
 		await expect(title(page)).toHaveValue('Round copy');
 		await expect(page.locator('.save-status')).toHaveText('Not saved to disk');
@@ -1306,14 +1325,14 @@ nativeTest(
 			.toContain('Independent imported copy');
 		expect(await diskNames(page)).not.toContain('Round copy.json');
 		expect(await disk(page, 'Round.json')).toEqual(round);
-		await page.getByRole('button', { name: 'Save flow', exact: true }).click();
+		await saveFromFileMenu(page);
 		await expect(page.locator('.save-status')).toHaveText('Saved');
 		expect(JSON.stringify(await disk(page, 'Round copy.json'))).toContain(
 			'Independent imported copy'
 		);
 		expect(await disk(page, 'Round.json')).toEqual(round);
 		await closeFlow(page);
-		await expect(page.getByRole('button', { name: 'Choose file', exact: true })).toBeEnabled();
+		await expect(page.getByRole('button', { name: 'File menu', exact: true })).toBeEnabled();
 	}
 );
 

@@ -1,7 +1,7 @@
 import { panelIds, panelNames } from './panels';
 import { trackSettingChanged, setFunMode } from './telemetry';
 
-export const SETTINGS_VERSION = 2;
+export const SETTINGS_VERSION = 4;
 
 type SettingBasic<T> = {
 	name: string;
@@ -52,7 +52,31 @@ class Settings {
 	init() {
 		this.loadFromLocalStorage();
 	}
+	private validValue(setting: Setting, value: unknown): Setting['value'] {
+		switch (setting.type) {
+			case 'toggle':
+				return typeof value === 'boolean' ? value : setting.auto;
+			case 'text':
+				return typeof value === 'string' ? value : setting.auto;
+			case 'color':
+				return typeof value === 'string' && /^#[\da-f]{6}$/i.test(value)
+					? (value as Hexcode)
+					: setting.auto;
+			case 'radio': {
+				const count = setting.detail.options.length + (setting.detail.customOption ? 1 : 0);
+				return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value < count
+					? value
+					: setting.auto;
+			}
+			case 'slider':
+				return typeof value === 'number' && Number.isFinite(value)
+					? Math.max(setting.detail.min, Math.min(setting.detail.max, value))
+					: setting.auto;
+		}
+	}
 	setValue(key: string, value: boolean | number | string): void {
+		if (!Object.prototype.hasOwnProperty.call(this.data, key)) return;
+		value = this.validValue(this.data[key], value);
 		const changed = this.data[key].value !== value;
 		this.data[key].value = value;
 		if (key === 'funMode') {
@@ -103,6 +127,8 @@ class Settings {
 						this.data[k].type !== 'slider' &&
 						k !== 'funMode' &&
 						k !== 'colorTheme' &&
+						k !== 'telemetry' &&
+						k !== 'transcriptModel' &&
 						k !== 'speechDropPromo'
 				);
 				if (keys.length === 0) return;
@@ -172,56 +198,80 @@ class Settings {
 
 		return JSON.stringify(jsonData);
 	}
-	parseJsonToSettings(jsonData: { [key: string]: any }) {
-		if (!jsonData['isSettings']) {
+	parseJsonToSettings(jsonData: unknown) {
+		if (!jsonData || typeof jsonData !== 'object' || Array.isArray(jsonData)) return;
+		const data = jsonData as Record<string, unknown>;
+		if (
+			data.isSettings !== true ||
+			!data.settings ||
+			typeof data.settings !== 'object' ||
+			Array.isArray(data.settings)
+		)
 			return;
+		const values = { ...(data.settings as Record<string, unknown>) };
+		const version = typeof data.version === 'number' ? data.version : 0;
+		// Keep existing preferences; old content-upload tiers become anonymous usage only.
+		if (version < 4) {
+			if (values.telemetry == null) values.telemetry = 2;
+			else if (values.telemetry === 3 || values.telemetry === 4) values.telemetry = 2;
+			delete values.showSaveButton;
 		}
-
-		const settingsData = jsonData as SaveableSettings;
-		// In the panels fork, existing users who had Notes visible should find it on the right.
 		const migrateNotesPanel =
-			(settingsData.version ?? 0) < 2 &&
-			(settingsData.settings['showSideDoc'] === true ||
-				settingsData.settings['notesPanel'] === 1 ||
-				settingsData.settings['notesPanel'] === 2);
-
-		try {
-			for (const key in settingsData.settings) {
-				if (this.data[key] == null) {
-					continue;
-				}
-				if (this.data[key].type == 'radio') {
-					const setting = this.data[key] as RadioSetting;
-					if (settingsData['settings'][key + 'Custom']) {
-						setting.detail.customOptionValue = settingsData['settings'][key + 'Custom'] as string;
-					}
-				}
-				this.setValue(key, settingsData['settings'][key] as number | boolean | Hexcode);
+			version < 2 &&
+			(values.showSideDoc === true || values.notesPanel === 1 || values.notesPanel === 2);
+		for (const key of Object.keys(values)) {
+			if (key === 'funMode' || !Object.prototype.hasOwnProperty.call(this.data, key)) continue;
+			const setting = this.data[key];
+			if (
+				setting.type === 'radio' &&
+				setting.detail.customOption &&
+				typeof values[key + 'Custom'] === 'string'
+			) {
+				setting.detail.customOptionValue = values[key + 'Custom'] as string;
 			}
-			if ((settingsData.version ?? 0) < 2 && settingsData.settings['notesPanel'] == null) {
-				this.setValue('notesPanel', settingsData.settings['showSideDoc'] === true ? 2 : 0);
-			}
-			if (migrateNotesPanel) {
-				this.setValue('notesPanel', 2);
-			}
-			if ((settingsData.version ?? 0) < SETTINGS_VERSION) this.saveToLocalStorage();
-		} catch (e) {
-			localStorage.setItem('settings', JSON.stringify({}));
-			this.resetToAuto();
-			return;
+			this.setValue(key, this.validValue(setting, values[key]));
 		}
+		if (version < 2 && values.notesPanel == null)
+			this.setValue('notesPanel', values.showSideDoc === true ? 2 : 0);
+		if (migrateNotesPanel) this.setValue('notesPanel', 2);
+		if (version < 2 && values.timersPanel == null) this.setValue('timersPanel', 1);
+		// Version 2 omitted its default panel positions from saved settings.
+		if (version === 2) {
+			if (values.notesPanel == null) this.setValue('notesPanel', 2);
+			if (values.coveragePanel == null) this.setValue('coveragePanel', 2);
+			if (values.timersPanel == null) this.setValue('timersPanel', 1);
+		}
+		if (version < SETTINGS_VERSION) this.saveToLocalStorage();
 	}
+
 	saveToLocalStorage() {
-		const jsonData = this.convertSettingsToJson();
-		localStorage.setItem('settings', jsonData);
+		try {
+			localStorage.setItem('settings', this.convertSettingsToJson());
+			return true;
+		} catch {
+			// Settings closes during Svelte's update cycle. A full/blocked storage area
+			// must not interrupt component teardown and leave every control unresponsive.
+			return false;
+		}
 	}
 	loadFromLocalStorage() {
-		const settingsData = localStorage.getItem('settings');
-		if (settingsData) {
-			const settingsObj = JSON.parse(settingsData);
-			this.parseJsonToSettings(settingsObj);
+		let settingsData: unknown;
+		try {
+			const raw = localStorage.getItem('settings');
+			if (!raw) return;
+			settingsData = JSON.parse(raw);
+		} catch {
+			// A damaged settings entry must not prevent the app and its saved flows from opening.
+			try {
+				localStorage.removeItem('settings');
+			} catch {
+				/* Storage may be unavailable. */
+			}
+			return;
 		}
+		this.parseJsonToSettings(settingsData);
 	}
+
 	resetToAuto() {
 		for (const key in this.data) {
 			this.setValue(key, this.data[key].auto);
@@ -249,9 +299,15 @@ class Settings {
 			} else if (setting.type == 'toggle') {
 				this.setValue(key, Math.random() < 0.5);
 			} else if (setting.type == 'color') {
-				const r = Math.floor(Math.random() * 256).toString(16);
-				const g = Math.floor(Math.random() * 256).toString(16);
-				const b = Math.floor(Math.random() * 256).toString(16);
+				const r = Math.floor(Math.random() * 256)
+					.toString(16)
+					.padStart(2, '0');
+				const g = Math.floor(Math.random() * 256)
+					.toString(16)
+					.padStart(2, '0');
+				const b = Math.floor(Math.random() * 256)
+					.toString(16)
+					.padStart(2, '0');
 				this.setValue(key, ('#' + r + g + b) as Hexcode);
 			}
 		}
@@ -781,13 +837,6 @@ export const settings: Settings = new Settings({
 		detail: { min: 0, max: 500, step: 1 }
 	},
 
-	showSaveButton: {
-		name: 'Manual save button',
-		value: true,
-		auto: true,
-		type: 'toggle'
-	},
-
 	autoflowPanel: {
 		name: 'Autoflow',
 		value: 0,
@@ -893,8 +942,8 @@ export const settings: Settings = new Settings({
 	},
 	timersPanel: {
 		name: 'Timers',
-		value: 1,
-		auto: 1,
+		value: 3,
+		auto: 3,
 		type: 'radio',
 		detail: {
 			options: ['Off', 'Left', 'Right', 'Left collapsed', 'Right collapsed']
@@ -902,8 +951,8 @@ export const settings: Settings = new Settings({
 	},
 	notesPanel: {
 		name: 'Notes',
-		value: 2,
-		auto: 2,
+		value: 0,
+		auto: 0,
 		type: 'radio',
 		detail: {
 			options: ['Off', 'Left', 'Right', 'Left collapsed', 'Right collapsed']
@@ -918,8 +967,8 @@ export const settings: Settings = new Settings({
 	},
 	coveragePanel: {
 		name: 'Coverage',
-		value: 2,
-		auto: 2,
+		value: 0,
+		auto: 0,
 		type: 'radio',
 		info: 'Lists arguments the next speech still has to answer and arguments the other side dropped',
 		detail: { options: ['Off', 'Left', 'Right', 'Left collapsed', 'Right collapsed'] }
@@ -1043,15 +1092,47 @@ export const settings: Settings = new Settings({
 		}
 	},
 	telemetry: {
-		name: 'Telemetry',
+		name: 'Share anonymous diagnostics',
 		type: 'radio',
-		value: 2,
-		auto: 2,
+		value: 0,
+		auto: 0,
 		detail: {
-			options: ['None', 'Errors', '+ Usage', '+ Your flows', '+ Extra Data']
+			options: ['None', 'Errors only', 'Errors and usage']
 		},
-		info: 'Anonymous telemetry. None: off. Errors: JS errors. Usage: errors + feature usage. Your flows: usage + your flows. Extra: even more data.'
+		info: 'Share anonymous errors and usage.'
 	},
+	replaceEmptyPageOnImport: {
+		name: 'Replace the current empty page when importing',
+		type: 'toggle',
+		value: true,
+		auto: true
+	},
+	autoflowIncludeCites: {
+		name: 'Include citations in flowed tags',
+		type: 'toggle',
+		value: false,
+		auto: false
+	},
+	autoflowCardMirrorControls: {
+		name: 'Show CardMirror heading controls',
+		type: 'toggle',
+		value: false,
+		auto: false
+	},
+	clickToSelectBoxes: {
+		name: 'Click to select, click again to edit',
+		type: 'toggle',
+		value: false,
+		auto: false,
+		info: 'Drag a selected box to move it with its responses. Double-click or press Enter to edit.'
+	},
+	...Object.fromEntries(
+		panelIds.map((id) => [
+			id + 'ShowName',
+			{ name: 'Show panel name', type: 'toggle' as const, value: true, auto: true }
+		])
+	),
+
 	funMode: {
 		name: 'Fun mode (EPILEPSY WARNING)',
 		type: 'toggle',
@@ -1066,6 +1147,8 @@ type SettingsGroup = {
 	settings: string[];
 };
 const panelSettings: Partial<Record<(typeof panelIds)[number], string[]>> = {
+	tabsPanel: ['replaceEmptyPageOnImport'],
+	autoflowPanel: ['autoflowIncludeCites', 'autoflowCardMirrorControls'],
 	coveragePanel: ['coverageShowDropped', 'coverageShowExtended'],
 	transcriptPanel: [
 		'transcriptModel',
@@ -1100,7 +1183,10 @@ export const settingsGroups: SettingsGroup[] = [
 		]
 	},
 	{ name: 'Panels', settings: ['sidebarWidth', 'panelWidth'] },
-	...panelIds.map((id) => ({ name: panelNames[id], settings: [id, ...(panelSettings[id] ?? [])] })),
+	...panelIds.map((id) => ({
+		name: panelNames[id],
+		settings: [id, id + 'ShowName', ...(panelSettings[id] ?? [])]
+	})),
 
 	{
 		name: 'Colors',
@@ -1178,8 +1264,7 @@ export const settingsGroups: SettingsGroup[] = [
 			'showUndoRedoButtons',
 			'showBoxCreationButtons',
 			'showQuickExtensionButtons',
-			'showBoxFormatButtons',
-			'showSaveButton'
+			'showBoxFormatButtons'
 		]
 	},
 	{
@@ -1188,7 +1273,12 @@ export const settingsGroups: SettingsGroup[] = [
 	},
 	{
 		name: 'Controls',
-		settings: ['consistentEnterBehaviour', 'tabReturnsToParent', 'shiftArrowThroughCells']
+		settings: [
+			'clickToSelectBoxes',
+			'consistentEnterBehaviour',
+			'tabReturnsToParent',
+			'shiftArrowThroughCells'
+		]
 	},
 	{ name: 'Fun', settings: ['funMode'] }
 ];

@@ -18,8 +18,6 @@
 	import { settings } from '$lib/models/settings';
 	import type { BoxId, FlowId } from '$lib/models/node';
 	import { tick, onDestroy } from 'svelte';
-	import Settings from '../Settings.svelte';
-	import { openPopup } from '$lib/models/popup';
 
 	export let selectedFlowId: FlowId | null = null;
 	export let clickTab: (id: FlowId) => void = () => undefined;
@@ -111,24 +109,16 @@
 			? `${speech} · ${toAnswer} open${dropped.length ? ` · ${dropped.length} dropped` : ''}`
 			: null}
 		tooltip="what the selected speech still has to answer, and what the other side dropped"
-	>
-		<Button
-			icon="settings"
-			ariaLabel="Coverage options"
-			tooltip="coverage options"
-			on:click={() => openPopup(Settings, 'Settings', { initialGroup: 'Coverage' })}
-		/>
-		<Button
-			icon="arrowRightThroughCircle"
-			ariaLabel="Extend all dropped arguments"
-			tooltip="extend every dropped argument into this speech"
-			disabled={!allDropped.length || $frozen}
-			disabledReason={$frozen ? 'Wait for synchronization' : 'Nothing dropped to extend'}
-			on:click={() => extend(allDropped)}
-		/>
-	</PanelHeader>
+		actions={[
+			{
+				label: 'Extend all dropped arguments',
+				disabled: !allDropped.length || $frozen,
+				run: () => extend(allDropped)
+			}
+		]}
+	/>
 	{#if speeches.length > 1}
-		<div class="speeches" class:customScrollbar={settings.data.customScrollbar.value}>
+		<div class="speeches panel-leading" class:customScrollbar={settings.data.customScrollbar.value}>
 			{#each speeches as name, index}
 				<button
 					class={`speech palette-${speechPalette(index)}`}

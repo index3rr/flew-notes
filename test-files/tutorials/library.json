@@ -1,0 +1,113 @@
+{
+	"version": 1,
+	"nodes": {
+		"root": {
+			"value": { "tag": "root" },
+			"level": -1,
+			"parent": null,
+			"children": ["demo-case", "demo-costs"]
+		},
+		"demo-case": {
+			"value": {
+				"tag": "flow",
+				"content": "Access answers",
+				"invert": false,
+				"columns": ["1AC", "1NC", "2AC"]
+			},
+			"level": 0,
+			"parent": "root",
+			"children": ["demo-access", "demo-funding"]
+		},
+		"demo-costs": {
+			"value": {
+				"tag": "flow",
+				"content": "Cost answers",
+				"invert": true,
+				"columns": ["1AC", "1NC", "2AC"]
+			},
+			"level": 0,
+			"parent": "root",
+			"children": ["demo-low"]
+		},
+		"demo-access": {
+			"value": {
+				"tag": "box",
+				"content": "Transit improves access to jobs",
+				"flowId": "demo-case",
+				"cardMirror": {
+					"kind": "tag",
+					"sources": [
+						{
+							"key": "tutorial-card",
+							"token": "",
+							"documentTitle": "Example evidence",
+							"excerpt": "Transit improves access to jobs",
+							"evidence": {
+								"version": 1,
+								"id": "tutorial-card",
+								"node": {
+									"type": "card",
+									"content": [
+										{
+											"type": "tag",
+											"attrs": { "id": "demo-heading" },
+											"content": [{ "type": "text", "text": "Transit improves access to jobs" }]
+										},
+										{
+											"type": "cite_paragraph",
+											"content": [{ "type": "text", "text": "Rivera 2026, transport research" }]
+										},
+										{
+											"type": "card_body",
+											"content": [
+												{
+													"type": "text",
+													"text": "Frequent transit connects people to work and reduces the cost of access."
+												}
+											]
+										}
+									]
+								},
+								"html": "<div class=\"pmd-card\"><h4 class=\"pmd-tag\">Transit improves access to jobs</h4><p class=\"pmd-cite-para\">Rivera 2026, transport research</p><p class=\"pmd-card-body\">Frequent transit <strong>connects people to work</strong> and reduces <u>the cost of access</u>.</p></div>"
+							}
+						}
+					]
+				},
+				"starred": true,
+				"starNote": "Compare access, not just ridership."
+			},
+			"parent": "demo-case",
+			"level": 1,
+			"children": []
+		},
+		"demo-funding": {
+			"value": {
+				"tag": "box",
+				"content": "The plan funds frequent service",
+				"flowId": "demo-case"
+			},
+			"parent": "demo-case",
+			"level": 1,
+			"children": ["demo-answer"]
+		},
+		"demo-answer": {
+			"value": {
+				"tag": "box",
+				"content": "Existing service is already improving",
+				"flowId": "demo-case"
+			},
+			"parent": "demo-funding",
+			"level": 2,
+			"children": []
+		},
+		"demo-low": {
+			"value": { "tag": "box", "content": "Costs are already declining", "flowId": "demo-costs" },
+			"parent": "demo-costs",
+			"level": 1,
+			"children": []
+		}
+	},
+	"title": "Answers to transit",
+	"created": "2026-11-25T12:00:00.000Z",
+	"sideDocText": ""
+}

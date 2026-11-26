@@ -1,6 +1,5 @@
 <script lang="ts">
 	import Button from './Button.svelte';
-	import TutorialHighlight from './TutorialHighlight.svelte';
 	import {
 		getDebateStyleFlow,
 		getAllDebateStyleFlows,
@@ -53,28 +52,26 @@
 	<div class="buttons">
 		{#each currentStyleTemplates as flow, index}
 			{#if index === 0 || index === 1}
-				<TutorialHighlight step={6 + index}>
-					<!-- Page controls follow the New flow button in the tutorial. -->
-					<!-- index % 2 === (switchSpeakers ? 1 : 0) can be used instead of !flow.invert for mandatory flip-flop colors -->
-					<Button
-						{disabled}
-						disabledReason="create a flow first"
-						text={flow.name}
-						palette={disabled ? null : !flow.invert ? 'accent' : 'accent-secondary'}
-						icon="add"
-						on:click={() => addFlow(flow)}
-						tooltip={`create new ${flow.name} flow`}
-						shortcut={index === 0
-							? ['commandControl', 'option', 'n']
-							: index === 1
-							? ['commandControl', 'option', 'shift', 'n']
-							: null}
-					/>
-				</TutorialHighlight>
+				<!-- index % 2 === (switchSpeakers ? 1 : 0) can be used instead of !flow.invert for mandatory flip-flop colors -->
+				<Button
+					tutorialHighlight={1}
+					{disabled}
+					disabledReason="create a flow first"
+					text={flow.name}
+					palette={disabled ? null : !flow.invert ? 'accent' : 'accent-secondary'}
+					icon="add"
+					on:click={() => addFlow(flow)}
+					tooltip={`create new ${flow.name} flow`}
+					shortcut={index === 0
+						? ['commandControl', 'option', 'n']
+						: index === 1
+						? ['commandControl', 'option', 'shift', 'n']
+						: null}
+				/>
 			{/if}
 			{#if index > 1}
-				<!-- Only use the first two buttons in the tutorial -->
 				<Button
+					tutorialHighlight={1}
 					{disabled}
 					disabledReason="create a flow first"
 					text={flow.name}

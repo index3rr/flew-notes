@@ -13,7 +13,7 @@ import { getNode, type Nodes } from './node';
 import { getDebateStyleFlow } from './debateStyle';
 import { addNewFlow } from './nodeDecorateAction';
 import { resolvePendingAction } from './nodePendingAction';
-import { trackFlowDataUpload, getCurrentTier } from './telemetry';
+import { flushTelemetry, trackDocumentCreated, trackDocumentOpened } from './telemetry';
 import {
 	documentTitle,
 	resetDocumentTitle,
@@ -41,6 +41,7 @@ import {
 import { focusId, selectedFlowId, lastFocusIds } from './focus';
 import { history, History } from './history';
 import { settings } from './settings';
+import { resetRoundTools } from './collaboration';
 import { publishDocument } from './sharingChannel';
 import { applyActionBundle, toBundle } from './nodeAction';
 import { clearSelection } from './selection';
@@ -215,7 +216,7 @@ export async function saveNodes(value = get(nodes), renameFile = false): Promise
 						: 'Saved in browser')
 			);
 		}
-		if (getCurrentTier() >= 3) trackFlowDataUpload(value);
+
 		return !recoveryError;
 	} catch (error) {
 		if (session === savedSession) {
@@ -281,6 +282,15 @@ export async function saveBeforeSwitch() {
 		);
 	}
 }
+let hasOpenedRound = false;
+let closedRound: { key: NodeKey | null; raw: string | null } | null = null;
+function enterRound(resuming = false) {
+	// Keep pre-round setup for the first document and allow review after closing.
+	if (hasOpenedRound && !resuming) resetRoundTools();
+	hasOpenedRound = true;
+	closedRound = null;
+}
+
 export async function openDocument(
 	raw: string,
 	options: { key?: string; target?: FileTarget; duplicate?: boolean } = {}
@@ -291,11 +301,17 @@ export async function openDocument(
 	loadNodes(data, false); // Validate without touching the current document.
 	await saveBeforeSwitch();
 	if (session !== previousSession || get(frozen)) return;
+	const previous = get(documentOpen) ? { key: flowKey, raw: lastDurableRaw } : closedRound;
+	const resuming =
+		!options.duplicate &&
+		((options.key !== undefined && options.key === previous?.key) ||
+			(options.target !== undefined && raw === previous?.raw));
 	clearTimer();
 	switching = true;
 	beginDocumentChange();
 	session++;
 	try {
+		enterRound(resuming);
 		setDocumentId();
 		flowKey = options.duplicate ? null : options.key ?? null;
 		bindLibraryFile(options.duplicate ? newLibraryTarget() : options.target ?? null);
@@ -328,10 +344,15 @@ export async function openDocument(
 		switching = false;
 		endDocumentChange();
 	}
+	trackDocumentOpened(
+		options.duplicate ? 'copy' : options.key ? 'browser' : options.target ? 'folder' : 'file',
+		get(nodes).root.children.length
+	);
 	publishDocument();
 	if (options.duplicate || (!options.key && !options.target)) await saveNodes();
 }
 export async function closeDocument(publish = true) {
+	flushTelemetry();
 	if (get(frozen)) throw new Error('Wait for collaboration to finish syncing.');
 	const previousSession = session;
 	await saveBeforeSwitch();
@@ -341,6 +362,7 @@ export async function closeDocument(publish = true) {
 	beginDocumentChange();
 	session++;
 	try {
+		if (get(documentOpen)) closedRound = { key: flowKey, raw: lastDurableRaw };
 		setDocumentId();
 		unsetFlowKey();
 		documentOpen.set(false);
@@ -371,6 +393,7 @@ export async function createDocument(title = get(documentTitle)) {
 	if (!(await closeDocument(false))) return;
 	beginDocumentChange();
 	try {
+		enterRound();
 		resetDocumentTitle(title);
 		documentCreated.set(new Date().toISOString());
 		documentOpen.set(true);
@@ -381,6 +404,7 @@ export async function createDocument(title = get(documentTitle)) {
 	} finally {
 		endDocumentChange();
 	}
+	trackDocumentCreated(get(nodes).root.children.length);
 	publishDocument();
 	await saveNodes();
 }
@@ -414,7 +438,10 @@ registerDocumentReceiver((document) => {
 	session++;
 	try {
 		pendingAction.set(null);
-		if (changed) unsetFlowKey();
+		if (changed) {
+			if (document.open) enterRound();
+			unsetFlowKey();
+		}
 		setDocumentId(document.id);
 		documentOpen.set(document.open);
 		resetDocumentTitle(document.title);

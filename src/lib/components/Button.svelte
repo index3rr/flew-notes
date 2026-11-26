@@ -1,7 +1,7 @@
 <script lang="ts">
 	import Icon from './Icon.svelte';
 	import Tooltip from './Tooltip.svelte';
-	import TutorialHighlight from './TutorialHighlight.svelte';
+	import { highlightTutorial } from '$lib/models/tutorial';
 	import Link from './Link.svelte';
 	// TODO: add grouping
 
@@ -32,37 +32,31 @@
 	}
 </script>
 
-<TutorialHighlight step={tutorialHighlight}>
-	<Tooltip
-		content={tooltip}
-		disabled={disabled && disabledReason}
-		{shortcut}
-		layout={tooltipLayout}
-	>
-		<Link {link} {target}>
-			<button
-				class={`top ${palette ? 'palette-' + palette : ''}`}
-				class:notification
-				class:toggled
-				class:disabled
-				on:click
-				on:click={onclick}
-				on:mousedown={handleMouseDown}
-				class:inline
-				aria-label={ariaLabel ?? undefined}
-				disabled={!!disabled}
-			>
-				{#if notification}
-					<div class="dot" />
-				{/if}
-				<Icon name={icon} size="var(--button-size)" />
-				{#if text != null}
-					{text}
-				{/if}
-			</button>
-		</Link>
-	</Tooltip>
-</TutorialHighlight>
+<Tooltip content={tooltip} disabled={disabled && disabledReason} {shortcut} layout={tooltipLayout}>
+	<Link {link} {target}>
+		<button
+			use:highlightTutorial={tutorialHighlight}
+			class={`top ${palette ? 'palette-' + palette : ''}`}
+			class:notification
+			class:toggled
+			class:disabled
+			on:click
+			on:click={onclick}
+			on:mousedown={handleMouseDown}
+			class:inline
+			aria-label={ariaLabel ?? undefined}
+			disabled={!!disabled}
+		>
+			{#if notification}
+				<div class="dot" />
+			{/if}
+			<Icon name={icon} size="var(--button-size)" />
+			{#if text != null}
+				{text}
+			{/if}
+		</button>
+	</Link>
+</Tooltip>
 
 <style>
 	.top {
@@ -91,6 +85,10 @@
 		display: inline-flex;
 		padding: var(--padding-small);
 		vertical-align: middle;
+	}
+	.top > :global(svg) {
+		flex-shrink: 0;
+		margin: 0;
 	}
 	.top.disabled {
 		color: var(--this-text-weak);

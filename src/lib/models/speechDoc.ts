@@ -11,6 +11,7 @@ export type DocBlock = {
 	title: string;
 	group: string;
 	tags: string[];
+	text?: string;
 	provenance?: (import('../integrations/cardmirror/protocol').Provenance | null)[];
 };
 
@@ -68,6 +69,20 @@ export function blocksFromHtml(html: string): DocBlock[] {
 	}
 	// A block without tags (an overview or analytic block) still deserves a cell.
 	for (const block of blocks) if (!block.tags.length) block.tags.push(block.title);
+	const blockHeads = [...html.matchAll(/<h([1-4])[^>]*>([\s\S]*?)<\/h\1>/g)].filter(
+		(match) => Number(match[1]) === blockLevel
+	);
+	for (let i = 0; i < blocks.length; i++) {
+		const head = blockHeads[i];
+		if (head?.index != null) {
+			const section = html.slice(head.index, blockHeads[i + 1]?.index ?? html.length);
+			blocks[i].text = section
+				.split(/<\/(?:p|h[1-4]|li|tr)>/i)
+				.map(decode)
+				.filter(Boolean)
+				.join('\n');
+		}
+	}
 	return blocks;
 }
 

@@ -2,6 +2,8 @@ import { writable, get, type Writable } from 'svelte/store';
 import type { BoxId, FlowId, Nodes } from './node';
 import { focusId } from './focus';
 
+export const editingBoxId: Writable<BoxId | null> = writable(null);
+
 export const selectionAnchorId: Writable<BoxId | null> = writable(null);
 export const selectedBoxIds: Writable<Set<BoxId>> = writable(new Set());
 

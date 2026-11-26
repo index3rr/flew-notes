@@ -6,6 +6,7 @@
 import type { Box, BoxId, Flow, FlowId, Nodes, RootId } from './node';
 import { doActionBundle, type Action, type ActionBundle } from './nodeAction';
 import { pendingAction } from './store';
+import { trackBoxEdited } from './telemetry';
 import { history } from './history';
 
 // - focusId changes
@@ -27,5 +28,14 @@ export function resolvePendingAction(nodes: Nodes) {
 	history.setNextBeforeFocus(pending.beforeFocusId, pending.ownerId);
 	const action = pending.action(nodes);
 	doActionBundle(action, pending.ownerId);
+	if (
+		(Array.isArray(action) ? action : [action]).some(
+			(item) =>
+				item.tag === 'update' &&
+				item.newValue.tag === 'box' &&
+				(!item.fields || item.fields.includes('content'))
+		)
+	)
+		trackBoxEdited();
 	history.setPrevAfterFocus(pending.afterFocusId, pending.ownerId);
 }

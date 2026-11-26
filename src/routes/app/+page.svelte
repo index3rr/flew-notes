@@ -1,4 +1,15 @@
 <script lang="ts">
+	import Tutorial from '$lib/components/Tutorial.svelte';
+	import Onboarding from '$lib/components/Onboarding.svelte';
+	import PanelGuide from '$lib/components/panels/PanelGuide.svelte';
+	import {
+		showTutorial,
+		panelTutorial,
+		tutorialDocked,
+		setupPending,
+		highlightTutorial
+	} from '$lib/models/tutorial';
+	import { tutorialStep } from '$lib/models/store';
 	import { readPageDrag } from '$lib/models/panelDrag';
 	import AddTab from '$lib/components/AddTab.svelte';
 	import Button from '$lib/components/Button.svelte';
@@ -49,6 +60,14 @@
 	import { addNewFlow, deleteFlow, moveFlow, importFlowPage } from '$lib/models/nodeDecorateAction';
 	import { getDebateStyleFlow, type DebateStyleFlow } from '$lib/models/debateStyle';
 
+	let previouslyOpen = false;
+	$: {
+		if ($showTutorial && $documentOpen && !previouslyOpen && $tutorialStep === 0)
+			tutorialStep.set(1);
+		previouslyOpen = $documentOpen;
+	}
+	$: if ($showTutorial && $documentOpen && $nodes.root.children.length) tutorialDocked.set(true);
+
 	$: unsavedToDisk = $documentOpen && $library.connected && !$library.imported && !$hasDiskFile;
 	$: closeLabel = unsavedToDisk ? 'Close without saving' : 'Close flow';
 	$: unsavedChanges = $nodes.root.children.length > 0;
@@ -59,7 +78,7 @@
 	function saveFlow() {
 		if (!directFolderAccess || !$library.connected || $library.imported) {
 			void saveNodes();
-			openPopup(DownloadUpload, 'Save flow');
+			openPopup(DownloadUpload, 'File');
 		} else void saveDocument($hasDiskFile);
 	}
 
@@ -78,6 +97,9 @@
 	}
 
 	onMount(() => {
+		const query = new URLSearchParams(location.search);
+		if ($setupPending && !query.has('join') && !query.has('confirm'))
+			openPopup(Onboarding, 'Set up Flew');
 		acceptCardMirrorLink();
 		libraryBusy = true;
 		void restoreLibrary().finally(() => {
@@ -148,11 +170,24 @@
 		})
 	);
 
-	let showSaveButton = settings.data.showSaveButton.value as boolean;
+	let showToolbar = true;
 	onDestroy(
-		settings.subscribe(['showSaveButton'], (key) => {
-			showSaveButton = settings.data[key].value as boolean;
-		})
+		settings.subscribe(
+			[
+				'showUndoRedoButtons',
+				'showBoxCreationButtons',
+				'showQuickExtensionButtons',
+				'showBoxFormatButtons'
+			],
+			() => {
+				showToolbar = [
+					'showUndoRedoButtons',
+					'showBoxCreationButtons',
+					'showQuickExtensionButtons',
+					'showBoxFormatButtons'
+				].some((key) => Boolean(settings.data[key].value));
+			}
+		)
 	);
 
 	function clickTab(id: FlowId) {
@@ -318,47 +353,32 @@
 		keyDownHandler(e);
 	}
 
-	function readUploadDragged(e: DragEvent) {
-		e.preventDefault();
-		let file = e?.dataTransfer?.files[0];
-		if (file == undefined) {
-			return;
-		}
-
-		let reader: FileReader = new FileReader();
-		reader.onload = function (fileLoadedEvent) {
-			let uploadData = fileLoadedEvent.target?.result;
-			if (uploadData == undefined) return;
-			handleUpload(uploadData.toString());
-		};
-		// check if can readAsText
-		if (file.type == 'text/plain') {
-			reader.readAsText(file, 'UTF-8');
-		} else if (file.type == 'application/json') {
-			reader.readAsText(file, 'UTF-8');
-		} else {
+	async function readUploadFile(file: File, duplicate = false) {
+		try {
+			await handleUpload(await file.text(), duplicate);
+		} catch (error) {
 			openPopup(Message, 'File Message', {
-				message: 'Invalid file',
+				message: error instanceof Error ? error.message : 'Could not open this file.',
 				error: true
 			});
 		}
 	}
+
+	function readUploadDragged(event: DragEvent) {
+		event.preventDefault();
+		const file = event.dataTransfer?.files[0];
+		if (!file) return;
+		if (/\.json$/i.test(file.name) || ['text/plain', 'application/json'].includes(file.type)) {
+			void readUploadFile(file);
+		} else {
+			openPopup(Message, 'File Message', { message: 'Invalid file', error: true });
+		}
+	}
 	function readUpload(event: Event, duplicate = false) {
-		const fileInput = event.currentTarget as HTMLInputElement;
-		if (!fileInput?.files?.length) return;
-		const file = fileInput.files[0];
-
-		let reader: FileReader = new FileReader();
-		reader.onload = function (fileLoadedEvent) {
-			let uploadData = fileLoadedEvent.target?.result;
-			if (uploadData == undefined) return;
-			void handleUpload(uploadData.toString(), duplicate).catch((error: Error) => {
-				openPopup(Message, 'File Message', { message: error.message, error: true });
-			});
-
-			fileInput.value = ''; // allow for the same file to be reuploaded
-		};
-		reader.readAsText(file, 'UTF-8');
+		const input = event.currentTarget as HTMLInputElement;
+		const file = input.files?.[0];
+		input.value = '';
+		if (file) void readUploadFile(file, duplicate);
 	}
 
 	function preventDefault(e: { preventDefault: () => void }) {
@@ -372,7 +392,10 @@
 			$frozen ||
 			!$documentOpen ||
 			(event.target instanceof Element &&
-				event.target.closest('[data-box-id], .autoflow-panel, .transcript'))
+				(event.target.closest(
+					'[data-box-id], .autoflow-panel, .transcript, .notes-panel, .cardmirror-panel'
+				) ||
+					(event.target.closest('.panel-body') && !event.target.closest('.tabs'))))
 		)
 			return;
 		event.preventDefault();
@@ -414,7 +437,7 @@
 			openPopup(Message, 'File Message', { message: 'Invalid file', error: true });
 			return;
 		}
-		if (dataObj['isSettings']) {
+		if (dataObj?.isSettings === true) {
 			importSettingsJson(dataObj);
 			return;
 		}
@@ -482,6 +505,7 @@
 <main class:activeMouse class="palette-plain">
 	<input id="uploadId" type="file" hidden on:change={readUpload} />
 	<input
+		id="chooseFlowFile"
 		bind:this={chooseFileInput}
 		type="file"
 		accept=".json,application/json"
@@ -496,54 +520,35 @@
 						wrap
 						buttons={[
 							{
-								icon: 'link',
+								icon: 'help',
 								ariaLabel: 'Help',
+								tutorialHighlight: 7,
 								onclick: () => openPopup(Help, 'Help'),
 								tooltip: $isChangelogVersionCurrent ? 'help' : 'new updates',
-								tutorialHighlight: 1,
 								notification: !$isChangelogVersionCurrent
 							},
 							{
 								icon: 'gear',
+								ariaLabel: 'Settings',
+								tutorialHighlight: 6,
 								onclick: () => openPopup(Settings, 'Settings'),
-								tooltip: 'settings',
-								tutorialHighlight: 2
+								tooltip: 'settings'
 							},
-							...(showSaveButton
-								? [
-										{
-											icon: !$documentOpen
-												? 'open'
-												: $library.connected && !$library.imported
-												? 'save'
-												: 'file',
-											ariaLabel: $documentOpen ? 'Save flow' : 'Choose file',
-											tutorialHighlight: 3,
-											tooltip: !$documentOpen
-												? 'Choose file'
-												: $library.connected && !$library.imported
-												? $hasDiskFile
-													? 'Save a copy'
-													: 'Save as…'
-												: 'File',
-											shortcut: $documentOpen ? ['commandControl', 's'] : null,
-											disabled: $frozen || libraryBusy,
-											onclick: () => {
-												if ($documentOpen) saveFlow();
-												else chooseFileInput.click();
-											}
-										}
-								  ]
-								: []),
+							{
+								icon: 'file',
+								ariaLabel: 'File menu',
+								tooltip: 'file menu',
+								onclick: () => openPopup(DownloadUpload, 'File')
+							},
 							{
 								icon: isOnline ? 'people' : 'offline',
+								tutorialHighlight: 5,
 								onclick: () => {
 									if (isOnline) openPopup(Share, 'Share');
 								},
 								disabled: !isOnline,
 								disabledReason: 'sharing is disabled while offline',
-								tooltip: 'share',
-								tutorialHighlight: 4
+								tooltip: 'share'
 							}
 						]}
 					/>
@@ -552,6 +557,7 @@
 					<div class="document-name">
 						<input
 							class="document-title"
+							use:highlightTutorial={!$documentOpen ? 0 : null}
 							aria-label="Flow document title"
 							placeholder="new flow"
 							title={$documentTitle || 'new flow'}
@@ -564,10 +570,10 @@
 					<Button
 						icon={$documentOpen ? (unsavedToDisk ? 'undo' : 'delete') : 'add'}
 						ariaLabel={$documentOpen ? closeLabel : 'New flow'}
+						tutorialHighlight={!$documentOpen ? 0 : 4}
 						tooltip={$documentOpen ? closeLabel : 'New flow'}
 						disabled={libraryBusy || $frozen}
 						disabledReason="library is busy"
-						tutorialHighlight={5}
 						on:click={toggleDocument}
 					/>
 				</div>
@@ -604,14 +610,15 @@
 		{#if $documentOpen}
 			{#if $selectedFlowId != null && $nodes[$selectedFlowId]}
 				{#key $selectedFlowId}
-					<div class="title">
+					<div class="title" class:full-width={!showToolbar} use:highlightTutorial={1}>
 						<Title flowId={$selectedFlowId} deleteSelf={() => deleteFlowAndFocus()} />
 					</div>
-					<div class="box-control">
-						<BoxControl flowId={$selectedFlowId} />
-					</div>
+					{#if showToolbar}<div class="box-control">
+							<BoxControl flowId={$selectedFlowId} />
+						</div>{/if}
 					<div
 						class="flow"
+						use:highlightTutorial={$tutorialStep === 3 ? 3 : null}
 						class:customScrollbar={settings.data.customScrollbar.value}
 						on:scroll={fixScroll}
 					>
@@ -632,17 +639,28 @@
 			{/if}
 		{:else}
 			<div class="prelude">
-				{#if showFlowLibraryBar}
+				{#if showFlowLibraryBar && (!$showTutorial || $tutorialStep === 4)}
 					<FlowLibrarySetup bind:busy={libraryBusy} bind:error={libraryError} />
 				{/if}
 				{#if !showFlowLibraryBar && libraryError}<p role="alert">{libraryError}</p>{/if}
-				<div class="prelude-content">
-					<Prelude bind:busy={libraryBusy} bind:error={libraryError} />
+				<div
+					class="prelude-content"
+					use:highlightTutorial={$showTutorial && $tutorialStep === 4 ? 4 : null}
+				>
+					{#if $showTutorial && !$tutorialDocked}<Tutorial />{:else}<Prelude
+							bind:busy={libraryBusy}
+							bind:error={libraryError}
+						/>{/if}
 				</div>
 			</div>
 		{/if}
-		{#if hasRightPanels}
+		{#if hasRightPanels || ($showTutorial && $tutorialDocked) || $panelTutorial}
 			<div class="right-sidebar">
+				{#if $panelTutorial}<div class="tutorial-card">
+						<PanelGuide panel={$panelTutorial} />
+					</div>{:else if $showTutorial && $tutorialDocked}<div class="tutorial-card">
+						<Tutorial panel />
+					</div>{/if}
 				<PanelContainer
 					side="right"
 					selectedFlowId={$selectedFlowId}
@@ -657,7 +675,20 @@
 </main>
 
 <style>
-	.empty-flow {
+	.tutorial-card {
+		display: flex;
+		flex-direction: column;
+		flex: 1;
+		min-height: calc(var(--button-size) + var(--padding) * 4);
+		overflow: hidden;
+		padding: var(--padding);
+		background: var(--background);
+		border-radius: var(--border-radius);
+		box-sizing: border-box;
+	}
+
+	.flow.empty-flow {
+		height: 100%;
 		grid-row: 1 / -1;
 		grid-column: 2 / 4;
 	}
@@ -778,6 +809,9 @@
 		width: 100%;
 		grid-area: title;
 		height: var(--title-height);
+	}
+	.title.full-width {
+		grid-column: 2 / 4;
 	}
 	.box-control {
 		background: var(--background);

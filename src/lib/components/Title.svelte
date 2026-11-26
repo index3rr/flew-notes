@@ -2,15 +2,14 @@
 	import Text from './Text.svelte';
 	import Button from './Button.svelte';
 	import type { FlowId, Node, Flow } from '../models/node';
-	import { onMount, tick } from 'svelte';
+	import { onMount } from 'svelte';
 	import { createKeyDownHandler } from '$lib/models/key';
 	import { focusId } from '$lib/models/focus';
-	import { history } from '$lib/models/history';
 	import { nodes, pendingAction } from '$lib/models/store';
 	import { newUpdateAction } from '$lib/models/nodeDecorateAction';
 
 	export let flowId: FlowId;
-	export let deleteSelf: () => void = () => {};
+	export let deleteSelf: () => void = () => undefined;
 
 	let node: Node<Flow>;
 	$: {
@@ -28,8 +27,7 @@
 			$focusId = null;
 		}
 	}
-	async function handleFocus() {
-		await tick();
+	function handleFocus() {
 		if ($focusId != flowId) {
 			$focusId = flowId;
 		}
@@ -75,7 +73,7 @@
 		}
 	}
 
-	let editAlreadyPending: boolean = false;
+	let editAlreadyPending = false;
 	function handleBeforeInput() {
 		if (editAlreadyPending) return;
 		editAlreadyPending = true;
@@ -90,7 +88,7 @@
 		};
 	}
 
-	let palette: string = 'plain';
+	let palette = 'plain';
 	$: {
 		if (flow.invert) {
 			palette = 'accent-secondary';

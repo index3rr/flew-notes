@@ -174,6 +174,12 @@
 		e.preventDefault();
 	}
 
+	let starredPanelEnabled = Number(settings.data.starredPanel.value) !== 0;
+	onDestroy(
+		settings.subscribe(['starredPanel'], () => {
+			starredPanelEnabled = Number(settings.data.starredPanel.value) !== 0;
+		})
+	);
 	let buttonGroups: { [key: string]: ComponentProps<Button>[] } = getButtonGroups();
 	function getButtonGroups() {
 		return {
@@ -202,6 +208,7 @@
 			showBoxCreationButtons: [
 				{
 					icon: 'addRight',
+					tutorialHighlight: 3,
 					onclick: addChild,
 					disabled: targetId == null,
 					tooltip: groupReplyTargets($nodes, $selectedBoxIds)
@@ -258,18 +265,22 @@
 				}
 			],
 			showBoxFormatButtons: [
-				{
-					icon: 'star',
-					onclick: () => toggleFormat('starred'),
-					disabled: targetId == null || targetBox()?.value.isExtension,
-					tooltip: 'toggle starred argument',
-					ariaLabel: 'Toggle starred argument',
-					shortcut: ['commandControl', 'shift', '8'],
-					toggled: targetBox()?.value?.starred,
-					disabledReason: targetBox()?.value.isExtension
-						? "can't star an extension"
-						: disabledReason
-				},
+				...(starredPanelEnabled
+					? [
+							{
+								icon: 'star',
+								onclick: () => toggleFormat('starred'),
+								disabled: targetId == null || targetBox()?.value.isExtension,
+								tooltip: 'toggle starred argument',
+								ariaLabel: 'Toggle starred argument',
+								shortcut: ['commandControl', 'shift', '8'],
+								toggled: targetBox()?.value?.starred,
+								disabledReason: targetBox()?.value.isExtension
+									? "can't star an extension"
+									: disabledReason
+							}
+					  ]
+					: []),
 				{
 					icon: 'cross',
 					onclick: () => toggleFormat('crossed'),
@@ -309,7 +320,13 @@
 	function updateButtonGroups() {
 		buttonGroups = getButtonGroups();
 	}
-	$: targetId, $nodes, $pendingAction, $folded, $selectedBoxIds, updateButtonGroups();
+	$: targetId,
+		$nodes,
+		$pendingAction,
+		$folded,
+		$selectedBoxIds,
+		starredPanelEnabled,
+		updateButtonGroups();
 
 	let buttonGroupsShow: { [key: string]: boolean } = {};
 	for (let key of Object.keys(buttonGroups)) {
@@ -323,15 +340,11 @@
 	);
 
 	let showButtons: ComponentProps<Button>[];
-	let hideButtons: ComponentProps<Button>[];
 	function updateButtonLists() {
 		showButtons = [];
-		hideButtons = [];
 		for (let key of Object.keys(buttonGroups)) {
 			if (buttonGroupsShow[key]) {
 				showButtons = [...showButtons, ...buttonGroups[key]];
-			} else {
-				hideButtons = [...hideButtons, ...buttonGroups[key]];
 			}
 		}
 	}
@@ -341,7 +354,7 @@
 <!-- svelte-ignore a11y-no-static-element-interactions -->
 <!-- this isn't an actual interaction, its just preventing blur -->
 <div class="top" on:mousedown={preventBlur}>
-	<ButtonBar buttons={[...showButtons, ...hideButtons]} showCount={showButtons.length} />
+	<ButtonBar buttons={showButtons} />
 </div>
 
 <style>

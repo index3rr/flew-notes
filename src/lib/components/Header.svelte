@@ -9,7 +9,13 @@
 		{column}
 	</div>
 	<div class="add">
-		<Button icon="add" on:click={addEmpty} />
+		<Button
+			tutorialHighlight={2}
+			icon="add"
+			ariaLabel={`Add argument in ${column}`}
+			tooltip="add an unconnected argument"
+			on:click={addEmpty}
+		/>
 	</div>
 </div>
 
@@ -32,11 +38,5 @@
 	.add {
 		position: absolute;
 		right: 0;
-		opacity: 0;
-		overflow: show;
-		transition: opacity var(--transition-speed);
-	}
-	.top:hover .add {
-		opacity: 1;
 	}
 </style>

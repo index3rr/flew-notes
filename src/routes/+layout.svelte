@@ -1,15 +1,19 @@
 <script lang="ts">
 	import './global.css';
 	import PartnerNotifications from '$lib/components/PartnerNotifications.svelte';
+	import { preloadSelectedSpeechModel } from '$lib/models/speechModel';
 	import { settings } from '$lib/models/settings';
-	import { popups, closePopup, openPopup, type Popup as PopupType } from '$lib/models/popup';
+	import { popups, closePopup, openPopup } from '$lib/models/popup';
 	import { screenTransition } from '$lib/models/transition';
 	import {
 		initTelemetry,
-		shouldShowExtraPopup,
-		markExtraPopupShown,
+		setTelemetryContext,
+		trackAppOpened,
 		type TelemetryTier
 	} from '$lib/models/telemetry';
+	import { panelIds } from '$lib/models/panels';
+	import { debateStyleMap } from '$lib/models/debateStyle';
+	import { afterNavigate } from '$app/navigation';
 
 	import { onDestroy, onMount } from 'svelte';
 	import { dev } from '$app/environment';
@@ -32,20 +36,22 @@
 		document.body.classList.add('dark');
 	}
 	settings.init();
+	onDestroy(preloadSelectedSpeechModel());
 
 	const ref = data.ref ?? localStorage.getItem('telemetry_ref') ?? undefined;
+	const updateTelemetryContext = () =>
+		setTelemetryContext({
+			debate_style: debateStyleMap[Number(settings.data.debateStyle.value)],
+			enabled_panels: panelIds.filter((id) => Number(settings.data[id].value) > 0),
+			theme: ['system', 'light', 'dark', 'custom'][Number(settings.data.colorTheme.value)]
+		});
+	onDestroy(settings.subscribe(['debateStyle', 'colorTheme', ...panelIds], updateTelemetryContext));
+	afterNavigate(({ to }) => trackAppOpened(to?.url.pathname === '/app' ? 'app' : 'home'));
 
 	onDestroy(
 		settings.subscribe(['telemetry'], function () {
 			const tier = settings.data.telemetry.value as number as TelemetryTier;
 			initTelemetry(tier, ref);
-			if (shouldShowExtraPopup()) {
-				markExtraPopupShown();
-				openPopup(Message, 'Extra Telemetry Enabled', {
-					message:
-						'so theres a button at the top left in the main flowing thign that looks liike a link, if you push it you can see my email and discord, i cant be bothered to collect any nefarious information so just go ahead and send it to my discord ok thanks'
-				});
-			}
 		})
 	);
 
@@ -295,6 +301,7 @@
 	onMount(function () {
 		const hostKey = parseJoinLink();
 		const guestKey = parseConfirmLink();
+		const query = new URLSearchParams(location.search);
 
 		if (hostKey != null) {
 			initGuestConnection();
@@ -335,24 +342,17 @@
 					}
 				}
 			}, 1000);
+		} else if (query.has('join') || query.has('confirm')) {
+			openPopup(Message, 'Could not connect', {
+				message: 'This collaboration link is incomplete. Ask your partner to send a new one.',
+				error: true
+			});
 		}
 
 		if (!dev && 'serviceWorker' in navigator) {
 			navigator.serviceWorker.register('/sw.js');
 		}
 	});
-
-	let popupsUpdate: boolean = true;
-
-	let oldFirstPopup: PopupType | undefined = undefined;
-	function onPopupsChange() {
-		// only update if first element changed
-		if (oldFirstPopup == $popups[0]) return;
-		oldFirstPopup = $popups[0];
-		popupsUpdate = !popupsUpdate;
-	}
-
-	$: $popups, onPopupsChange();
 </script>
 
 <svelte:head>
@@ -394,14 +394,7 @@
 				closePopup(0);
 			}}
 		>
-			{#key popupsUpdate}
-				<Popup
-					component={$popups[0].component}
-					closeSelf={() => closePopup(0)}
-					title={$popups[0].title}
-					props={$popups[0].props}
-				/>
-			{/key}
+			<Popup popup={$popups[0]} />
 		</div>
 	</div>
 {/if}

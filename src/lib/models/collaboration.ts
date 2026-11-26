@@ -9,6 +9,15 @@ export const speechDocumentSource = writable<{ name: string; room: string; index
 speechDocument.subscribe(() => speechDocumentSource.set(null));
 export const speechDetected = writable(0);
 export const transcribedPhrase = writable({ id: 0, text: '' });
+export const roundToolsVersion = writable(0);
+export function resetRoundTools() {
+	roundToolsVersion.update((version) => version + 1);
+	speechDropCode.set('');
+	speechDocument.set('');
+	speechDocumentSource.set(null);
+	transcribedPhrase.update(({ id }) => ({ id, text: '' }));
+}
+
 export type PartnerNotice = { id: string; text: string; received: boolean; argumentId?: BoxId };
 function savedMessages(): PartnerNotice[] {
 	try {

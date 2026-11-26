@@ -16,6 +16,9 @@ export function closePopup(index: number) {
 		return popups;
 	});
 }
+export function closePopupInstance(popup: Popup) {
+	popups.update((queue) => queue.filter((entry) => entry !== popup));
+}
 export function openPopup<P extends object>(
 	component: ComponentType<SvelteComponent<P>>,
 	title: string,

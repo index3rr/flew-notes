@@ -7,6 +7,10 @@
 			svg: `<path d="M50 7L63.3 35.1L94 39.2L71.6 60.8L77.3 91L50 76.1L22.7 91L28.4 60.8L6 39.2L36.7 35.1L50 7Z" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>`
 		},
 		{
+			name: 'tabs',
+			svg: `<path d="M10 90V10H62V90H10ZM62 25H78V90H62M78 40H92V90H78" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>`
+		},
+		{
 			name: 'dots',
 			svg: `<circle cx="26.25" cy="50.25" r="5.625" stroke-width="11.25"/>
 <circle cx="71.25" cy="80.25" r="5.625" stroke-width="11.25"/>
@@ -96,6 +100,15 @@
 		{
 			name: 'check',
 			svg: `<path d="M88.7817 29.2843L39.2842 78.7817L11 50.4975" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>`
+		},
+		{
+			name: 'help',
+			svg: `<path d="M28 30C29 17 39 10 51 10C65 10 74 19 74 30C74 48 50 46 50 63" stroke-width="10" stroke-linecap="round"/>
+<circle cx="50" cy="85" r="2" stroke-width="10"/>`
+		},
+		{
+			name: 'edit',
+			svg: `<path d="M15 66L65 16C70 11 77 11 82 16L85 19C90 24 90 31 85 36L35 86L12 89L15 66ZM59 22L79 42" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>`
 		},
 		{
 			name: 'home',

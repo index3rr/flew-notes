@@ -68,30 +68,37 @@ async function load(setting: number) {
 	return loaded;
 }
 
-self.onmessage = async (event: MessageEvent<{ audio?: Float32Array; model?: number }>) => {
+type Request = { audio?: Float32Array; model?: number; requestId?: string };
+let work = Promise.resolve();
+self.onmessage = (event: MessageEvent<Request>) => {
+	// A stopped recording may leave one inference finishing. Keep the cached model serial.
+	work = work.then(() => processRequest(event.data));
+};
+async function processRequest(data: Request) {
 	try {
-		if (!event.data.audio) {
-			const { choice, device } = await load(event.data.model ?? 0);
+		if (!data.audio) {
+			const { choice, device } = await load(data.model ?? 0);
 			self.postMessage({ ready: true, model: models[choice].label, device });
 			return;
 		}
 		if (!transcriber || !loaded) await load(0);
-		const seconds = event.data.audio.length / 16000;
-		const audio = event.data.audio;
+		const seconds = data.audio.length / 16000;
+		const audio = data.audio;
 		let peak = 0;
 		for (const sample of audio) peak = Math.max(peak, Math.abs(sample));
 		const gain = peak > 0.005 ? Math.min(8, 0.9 / peak) : 1;
 		if (gain > 1) for (let i = 0; i < audio.length; i++) audio[i] *= gain;
-		const result = await transcriber!(event.data.audio, {
+		const result = await transcriber!(data.audio, {
 			return_timestamps: false,
 			// Allow headroom for fast speech and technical vocabulary; cap runaway decoding.
 			max_new_tokens: Math.min(440, Math.ceil(seconds * 16) + 24),
 			...(models[loaded!.choice].multilingual ? { language: 'english', task: 'transcribe' } : {})
 		});
 		self.postMessage({
+			requestId: data.requestId,
 			text: Array.isArray(result) ? result.map((item) => item.text).join(' ') : result.text
 		});
 	} catch (error) {
-		self.postMessage({ error: (error as Error).message });
+		self.postMessage({ requestId: data.requestId, error: (error as Error).message });
 	}
-};
+}

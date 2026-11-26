@@ -1,8 +1,19 @@
+import {
+	setEvidenceTransfer,
+	readEvidenceTransfer,
+	evidenceMime
+} from '../integrations/cardmirror/clipboard';
 import { readSpeechDropFile, type SpeechDropFile } from './speechDropFile';
 import { get } from 'svelte/store';
 import { nodes, frozen } from './store';
 import { selectedBoxIds, collectAllBoxesInFlow } from './selection';
-import { serializeBoxSubtree, type BoxId, type Nodes, type SerializedBox } from './node';
+import {
+	validSerializedBoxes,
+	serializeBoxSubtree,
+	type BoxId,
+	type Nodes,
+	type SerializedBox
+} from './node';
 import { buildPasteActions, newDeleteAction } from './nodeDecorateAction';
 import { resolvePendingAction } from './nodePendingAction';
 import { doActionBundle, applyAction } from './nodeAction';
@@ -48,6 +59,10 @@ export function startBoxDrag(event: DragEvent, id: BoxId) {
 	);
 	event.dataTransfer?.setData('text/plain', ids.map((key) => tree[key]!.value.content).join('\n'));
 	if (event.dataTransfer) {
+		setEvidenceTransfer(
+			event.dataTransfer,
+			ids.map((key) => serializeBoxSubtree(tree, key))
+		);
 		event.dataTransfer.effectAllowed = 'copyMove';
 		// Native drag images only include the initiating element. Preserve the grid's
 		// actual row/column positions for the entire selected group.
@@ -125,7 +140,9 @@ export function readPageDrag(raw: string) {
 export function canDropBoxes(event: DragEvent) {
 	return (
 		!!event.dataTransfer &&
-		[boxesMime, pagesMime].some((type) => event.dataTransfer!.types.includes(type))
+		[boxesMime, pagesMime, evidenceMime, 'text/html'].some((type) =>
+			event.dataTransfer!.types.includes(type)
+		)
 	);
 }
 export function dropOnBox(event: DragEvent, target: BoxId) {
@@ -138,43 +155,29 @@ export function dropOnBox(event: DragEvent, target: BoxId) {
 	if (!node) return;
 	let boxes: SerializedBox[];
 	let moving: BoxId[] = [];
-	const raw = event.dataTransfer!.getData(pagesMime);
-	if (raw) {
-		const { source, ids } = readPageDrag(raw);
-		boxes = ids.flatMap((id) =>
-			source[id]!.children.map((child) => serializeBoxSubtree(source, child))
-		);
-	} else {
-		const data = JSON.parse(event.dataTransfer!.getData(boxesMime));
-		boxes = data.boxes;
-		moving = event.ctrlKey || event.metaKey ? [] : selectionRoots(tree, data.ids ?? []);
+	try {
+		const transfer = event.dataTransfer!;
+		const rawPage = transfer.getData(pagesMime);
+		const rawBoxes = transfer.getData(boxesMime);
+		if (rawPage) {
+			const { source, ids } = readPageDrag(rawPage);
+			boxes = ids.flatMap((id) =>
+				source[id]!.children.map((child) => serializeBoxSubtree(source, child))
+			);
+		} else if (rawBoxes) {
+			const data = JSON.parse(rawBoxes);
+			const ids = data.ids ?? [];
+			if (!Array.isArray(ids) || !ids.every((id) => typeof id === 'string')) return;
+			boxes = data.boxes;
+			moving = event.ctrlKey || event.metaKey ? [] : selectionRoots(tree, ids as BoxId[]);
+		} else {
+			boxes = readEvidenceTransfer(transfer);
+		}
+	} catch {
+		// Transfer data can come from another app or a different Flew build.
+		return;
 	}
-	let count = 0;
-	const valid = (box: SerializedBox, depth = 0): boolean => {
-		if (
-			++count > 10000 ||
-			depth > 64 ||
-			!box ||
-			typeof box !== 'object' ||
-			!box.value ||
-			typeof box.value.content !== 'string' ||
-			!Array.isArray(box.children)
-		)
-			return false;
-		for (const field of [
-			'empty',
-			'crossed',
-			'bold',
-			'isExtension',
-			'starred',
-			'cardMirrorSpacer'
-		] as const)
-			if (box.value[field] != null && typeof box.value[field] !== 'boolean') return false;
-		for (const field of ['placeholder', 'starNote'] as const)
-			if (box.value[field] != null && typeof box.value[field] !== 'string') return false;
-		return box.children.every((child) => valid(child, depth + 1));
-	};
-	if (!Array.isArray(boxes) || !boxes.length || !boxes.every((box) => valid(box))) return;
+	if (!validSerializedBoxes(boxes)) return;
 	// Never move a branch into itself or remove a target through one of its ancestors.
 	let ancestor: string | undefined = target;
 	while (ancestor && ancestor !== 'root') {
@@ -182,7 +185,11 @@ export function dropOnBox(event: DragEvent, target: BoxId) {
 		ancestor = tree[ancestor as BoxId]?.parent;
 	}
 	const position = boxDropPosition(event);
-	const replace = position === 'inside' && !node.value.content.trim() && !node.value.isExtension;
+	const replace =
+		position === 'inside' &&
+		!node.value.content.trim() &&
+		!node.value.isExtension &&
+		!node.children.length;
 	const flow = tree[node.value.flowId]!;
 	const depth = (box: SerializedBox): number => 1 + Math.max(0, ...box.children.map(depth));
 	if (

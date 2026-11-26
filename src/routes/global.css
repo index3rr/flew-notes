@@ -271,18 +271,18 @@ a:active {
 	color: var(--text-accent-select);
 }
 .customScrollbar::-webkit-scrollbar {
-	width: var(--custom-scrollbar-width); 
+	width: var(--custom-scrollbar-width);
 	height: var(--custom-scrollbar-width);
 }
 .customScrollbar::-webkit-scrollbar-thumb {
-	background: var(--scrollbar-thumb); 
+	background: var(--scrollbar-thumb);
 	border: 2px solid var(--scrollbar-background);
 }
 .customScrollbar::-webkit-scrollbar-thumb:hover {
-	background: var(--scrollbar-thumb-hover); 
+	background: var(--scrollbar-thumb-hover);
 }
 .customScrollbar::-webkit-scrollbar-track {
-	background: var(--scrollbar-background); 
+	background: var(--scrollbar-background);
 }
 
 /* Firefox-specific styles */
@@ -293,5 +293,15 @@ a:active {
 	}
 }
 
-.panel:has([data-drop-state="ready"]) { background:var(--background-active); }
-.panel:has([data-drop-state="blocked"]) { background:var(--background-secondary); }
+.panel:has([data-drop-state='ready']) {
+	background: var(--background-active);
+}
+.panel:has([data-drop-state='blocked']) {
+	background: var(--background-secondary);
+}
+
+/* The tutorial marks only the controls used by its current step. */
+[data-tutorial-active],
+[data-panel-tutorial-active] {
+	box-shadow: inset 0 0 0 var(--padding-small) var(--color-accent);
+}

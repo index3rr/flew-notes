@@ -1,5 +1,15 @@
 import { test, expect } from '@playwright/test';
 
+test.beforeEach(async ({ context }) => {
+	await context.addInitScript(() => {
+		localStorage.setItem('onboardingComplete', 'true');
+		localStorage.setItem(
+			'settings',
+			JSON.stringify({ isSettings: true, version: 4, settings: { telemetry: 0, starredPanel: 4 } })
+		);
+	});
+});
+
 test('format tooltips show the real shortcuts and star works with Ctrl and Command', async ({
 	page
 }) => {

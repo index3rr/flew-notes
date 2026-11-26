@@ -13,7 +13,11 @@ async function settings(
 			if (localStorage.getItem('settings')) return;
 			localStorage.setItem(
 				'settings',
-				JSON.stringify({ isSettings: true, version, settings: { telemetry: 0, ...values } })
+				JSON.stringify({
+					isSettings: true,
+					version,
+					settings: { telemetry: 0, replaceEmptyPageOnImport: false, ...values }
+				})
 			);
 		},
 		{ values, version }
@@ -27,7 +31,7 @@ test('legacy visible notes migrate to the right and survive reload', async ({ pa
 	await expect(page.locator('.right-sidebar')).toBeVisible();
 	await expect
 		.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('settings')!).version))
-		.toBe(2);
+		.toBe(4);
 	await page.reload();
 	await expect(page.locator('.right-sidebar')).toBeVisible();
 });
@@ -168,10 +172,16 @@ test('microphone capture sends PCM to local worker, flags new claims and starts 
 		timerStartOnSpeech: true
 	});
 	await page.addInitScript(() => {
+		Object.assign(window, { workerCreations: 0 });
 		class LocalWorker {
-			onmessage: ((event: { data: { ready?: boolean; text?: string } }) => void) | null = null;
+			constructor() {
+				(window as unknown as { workerCreations: number }).workerCreations++;
+			}
+			onmessage:
+				| ((event: { data: { ready?: boolean; text?: string; requestId?: string } }) => void)
+				| null = null;
 			count = 0;
-			postMessage(data: { audio?: Float32Array }) {
+			postMessage(data: { audio?: Float32Array; requestId?: string }) {
 				if (!data.audio) {
 					queueMicrotask(() => this.onmessage?.({ data: { ready: true } }));
 					return;
@@ -182,7 +192,12 @@ test('microphone capture sends PCM to local worker, flags new claims and starts 
 					this.count++ === 0
 						? 'Economic growth solves poverty'
 						: 'Santa outweighs every single impact';
-				queueMicrotask(() => this.onmessage?.({ data: { text } }));
+				queueMicrotask(() => {
+					this.onmessage?.({
+						data: { text: 'Old recording result', requestId: data.requestId + '-stale' }
+					});
+					this.onmessage?.({ data: { text, requestId: data.requestId } });
+				});
 			}
 			terminate() {
 				this.onmessage = null;
@@ -236,6 +251,34 @@ test('microphone capture sends PCM to local worker, flags new claims and starts 
 		)
 	).toBe(true);
 	await expect(page.getByRole('button', { name: 'Export transcript', exact: true })).toBeEnabled();
+	await page
+		.getByRole('textbox', { name: 'Opponent speech document' })
+		.fill('Santa outweighs every single impact.');
+	await expect(page.locator('.entries .outside')).toContainText('Santa');
+	await expect(page.locator('.entries')).not.toContainText('Economic growth solves poverty');
+	await page.getByRole('button', { name: 'Start transcription', exact: true }).click();
+	await expect(page.getByRole('button', { name: 'Stop', exact: true })).toBeEnabled();
+	await page.getByRole('button', { name: 'Stop', exact: true }).click();
+	expect(
+		await page.evaluate(() => (window as unknown as { workerCreations: number }).workerCreations)
+	).toBe(1);
+	await expect(page.locator('.entries')).not.toContainText('Old recording result');
+	await page.getByRole('button', { name: 'New flow', exact: true }).click();
+	const analytic = page.locator('.entries .outside').first();
+	const text = (await analytic.locator('.text').textContent())!.trim();
+	await analytic.dragTo(page.locator('.flow [data-box-id]').first());
+	await expect(page.locator('.flow textarea')).toHaveCount(1);
+	await expect(page.locator('.flow textarea').first()).toHaveValue(text);
+	await page.keyboard.press('Control+z');
+	await expect(page.locator('.flow textarea').first()).toHaveValue('');
+	await page.locator('.flow textarea').first().fill('Answer this argument');
+	await analytic.dragTo(page.locator('.flow [data-box-id]').first());
+	await expect(page.locator('.flow textarea')).toHaveCount(2);
+	await expect(page.locator('.flow textarea').last()).toHaveValue(text);
+	await page.keyboard.press('Control+z');
+	await expect(page.locator('.flow textarea')).toHaveCount(1);
+	await expect(page.locator('.flow textarea').first()).toHaveValue('Answer this argument');
+	await expect(analytic).toContainText(text);
 });
 
 test('library page drops insert before, between, and after existing tabs', async ({ page }) => {
@@ -259,11 +302,13 @@ test('library page drops insert before, between, and after existing tabs', async
 	}, source);
 	await page.goto('/app');
 	await page.getByRole('button', { name: 'New flow', exact: true }).click();
-	await page.getByPlaceholder('type name here').fill('First');
+	const focusedTitle = page.locator('.title textarea:focus');
+	await focusedTitle.fill('First');
 	await page.locator('.addTab').getByRole('button', { name: 'neg', exact: true }).click();
-	await page.getByPlaceholder('type name here').fill('Second');
+	await focusedTitle.fill('Second');
 	const chip = page
-		.locator('.library-panel')
+		.locator('.library-panel .flow.compact')
+		.filter({ has: page.getByText('Drag source', { exact: true }) })
 		.getByRole('button', { name: 'Select Imported page', exact: true });
 	await expect(chip).toHaveAttribute('draggable', 'true');
 	async function dropAt(index: number, after: boolean) {
@@ -328,6 +373,7 @@ test('configured collapsed notes and library remain usable for viewing placehold
 
 test('flow library panel is off by default', async ({ page }) => {
 	await page.goto('/app');
+	await page.getByRole('button', { name: 'skip tutorial', exact: true }).click();
 	await expect(page.locator('.library-panel')).toHaveCount(0);
 	await page.getByRole('button', { name: 'New flow', exact: true }).click();
 	await expect(page.locator('.library-panel')).toHaveCount(0);
@@ -450,6 +496,10 @@ test('deleting the last page shows creation choices and can be undone', async ({
 	await page.locator('.flow .box textarea').first().fill('Restore this argument');
 	await page.locator('.title').getByRole('button').click();
 	await expect(page.locator('.empty-document')).toBeVisible();
+	const emptyBounds = await page.locator('.empty-flow').boundingBox();
+	const sidebarBounds = await page.locator('.sidebar').boundingBox();
+	expect(emptyBounds!.y).toBeCloseTo(sidebarBounds!.y, 0);
+	expect(emptyBounds!.height).toBeCloseTo(sidebarBounds!.height, 0);
 	await page.keyboard.press('Control+z');
 	await expect(page.locator('.flow .box textarea').first()).toHaveValue('Restore this argument');
 });
@@ -494,10 +544,12 @@ test('SpeechDrop uploads and deletes files and drags a reference document into T
 }) => {
 	await settings(page, { speechDropPanel: 1, transcriptPanel: 2, notesPanel: 0, timersPanel: 0 });
 	let removed = false,
-		uploaded = false;
+		uploaded = false,
+		dropped = false;
 	await page.route('**/api/speechdrop/roomABC', async (route) => {
 		if (route.request().method() === 'POST') {
 			uploaded = route.request().postDataBuffer()?.includes(Buffer.from('new.txt')) ?? false;
+			dropped ||= route.request().postDataBuffer()?.includes(Buffer.from('dropped.txt')) ?? false;
 			await route.fulfill({ json: { ok: true } });
 			return;
 		}
@@ -525,6 +577,16 @@ test('SpeechDrop uploads and deletes files and drags a reference document into T
 		.locator('.speechdrop-panel input[type=file]')
 		.setInputFiles({ name: 'new.txt', mimeType: 'text/plain', buffer: Buffer.from('New upload') });
 	await expect.poll(() => uploaded).toBe(true);
+	await page.locator('.speechdrop-panel').evaluate((element) => {
+		const dataTransfer = new DataTransfer();
+		dataTransfer.items.add(new File(['Dropped upload'], 'dropped.txt', { type: 'text/plain' }));
+		element.dispatchEvent(
+			new DragEvent('dragover', { dataTransfer, bubbles: true, cancelable: true })
+		);
+		element.dispatchEvent(new DragEvent('drop', { dataTransfer, bubbles: true, cancelable: true }));
+	});
+	await expect.poll(() => dropped).toBe(true);
+
 	page.once('dialog', (dialog) => dialog.accept());
 	await page.getByRole('button', { name: 'Delete file', exact: true }).click();
 	await expect(page.locator('.speechdrop-panel')).toContainText('This room has no files.');
@@ -653,9 +715,10 @@ test('SpeechDrop optionally appends the promo to the uploaded DOCX copy', async 
 	);
 	await page.goto('/app');
 	await page.getByLabel('SpeechDrop room code').fill('promoRoom');
-	await expect(
-		page.getByRole('button', { name: 'Upload to SpeechDrop', exact: true })
-	).toBeEnabled();
+	await expect(page.locator('.speechdrop-panel')).toContainText('This room has no files.');
+	await page.getByRole('button', { name: 'SpeechDrop menu', exact: true }).click();
+	await expect(page.getByRole('menuitem', { name: 'Upload files', exact: true })).toBeEnabled();
+	await page.keyboard.press('Escape');
 	await page
 		.locator('.speechdrop-panel input[type=file]')
 		.setInputFiles('test-files/autoflow/headings.docx');
@@ -759,7 +822,8 @@ test('Coverage filters dropped and extended arguments independently and extends 
 	await panel.getByRole('button', { name: 'Extend', exact: true }).first().click();
 	await expect(panel.locator('.tag')).toHaveText(['extended', 'dropped']);
 	await expect(page.locator('.flow textarea').nth(2)).toHaveValue('dropped');
-	await page.getByRole('button', { name: 'Coverage options', exact: true }).click();
+	await page.getByRole('button', { name: 'Coverage menu', exact: true }).click();
+	await page.getByRole('menuitem', { name: 'Settings', exact: true }).click();
 	const option = (name: string) =>
 		page
 			.locator('.settings > ul > div')
@@ -768,7 +832,8 @@ test('Coverage filters dropped and extended arguments independently and extends 
 	await option('Show extended arguments').click();
 	await page.keyboard.press('Escape');
 	await expect(panel.locator('.tag')).toHaveText(['dropped']);
-	await page.getByRole('button', { name: 'Coverage options', exact: true }).click();
+	await page.getByRole('button', { name: 'Coverage menu', exact: true }).click();
+	await page.getByRole('menuitem', { name: 'Settings', exact: true }).click();
 	await option('Show extended arguments').click();
 	await option('Show dropped arguments').click();
 	await page.keyboard.press('Escape');
@@ -836,12 +901,12 @@ for (const position of [3, 4])
 		await expect(page.locator('.transcript')).toContainText('Comparing with speech.txt');
 	});
 
-test('selected flow boxes open a collapsed Autoflow panel and reach its drop handler', async ({
+test('selected flow boxes reveal collapsed CardMirror and an unavailable drop closes it', async ({
 	page
 }) => {
 	await page.setViewportSize({ width: 1600, height: 1000 });
 	await settings(page, {
-		autoflowPanel: 4,
+		cardMirrorPanel: 4,
 		timersPanel: 0,
 		notesPanel: 0,
 		coveragePanel: 0,
@@ -859,12 +924,14 @@ test('selected flow boxes open a collapsed Autoflow panel and reach its drop han
 	await dragThroughIcon(
 		page,
 		page.locator('.flow [data-box-id]').first(),
-		page.getByRole('button', { name: 'Autoflow', exact: true }),
-		page.locator('.autoflow-panel')
+		page.getByRole('button', { name: 'CardMirror', exact: true }),
+		page.locator('.cardmirror-panel')
 	);
-	await expect(page.locator('.autoflow-panel [role=alert]')).toContainText(
-		'Connect CardMirror to Flew first.'
-	);
+	await expect(page.locator('.cardmirror-panel')).not.toBeVisible();
+	await expect(page.locator('.flow .box.selected')).toHaveCount(2);
+	await expect(
+		page.getByRole('region', { name: 'Send to current document', exact: true })
+	).toHaveCount(0);
 });
 
 test('library pages open collapsed Tabs and can be dropped to import a new page', async ({
@@ -930,7 +997,9 @@ for (const initial of ['default', 'granted'] as const)
 				constructor(title: string, options: { body: string }) {
 					notices.push(title + ': ' + options.body);
 				}
-				close() {}
+				close() {
+					return undefined;
+				}
 			}
 			Object.defineProperty(window, 'Notification', {
 				value: TestNotification,
@@ -939,8 +1008,13 @@ for (const initial of ['default', 'granted'] as const)
 		}, initial);
 		await page.goto('/app');
 		await page.getByRole('button', { name: 'Collaboration', exact: true }).click();
-		const enable = page.getByRole('button', { name: 'Enable partner notifications', exact: true });
+		await page.getByRole('button', { name: 'Collaboration menu', exact: true }).click();
+		const enable = page.getByRole('menuitem', {
+			name: 'Enable partner notifications',
+			exact: true
+		});
 		if (initial === 'default') await enable.click();
+		else await page.keyboard.press('Escape');
 		await expect(enable).toHaveCount(0);
 		expect(
 			await page.evaluate(() => (window as unknown as { testNotices: string[] }).testNotices)
@@ -985,7 +1059,8 @@ for (const colorTheme of [1, 2, 3])
 			const column = page.locator(side + ' .panel-container');
 			expect(await column.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
 		}
-		await page.getByRole('button', { name: 'Coverage options', exact: true }).click();
+		await page.getByRole('button', { name: 'Coverage menu', exact: true }).click();
+		await page.getByRole('menuitem', { name: 'Settings', exact: true }).click();
 		await expect(
 			page
 				.locator('.settings > ul > li.title')

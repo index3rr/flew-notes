@@ -1,8 +1,6 @@
 <script lang="ts">
 	const errorMessage = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause));
-	import PanelMenu from './PanelMenu.svelte';
-	import { openPopup } from '$lib/models/popup';
-	import Button from '../Button.svelte';
+
 	import { importLocalFlows } from '$lib/models/autoSave';
 	import PanelHeader from './PanelHeader.svelte';
 	import PanelRow from './PanelRow.svelte';
@@ -29,6 +27,9 @@
 	$: saved = Object.entries($savedNodesDatas).sort(
 		(a, b) => Date.parse(b[1].modified) - Date.parse(a[1].modified)
 	);
+	function panelActions() {
+		return [{ label: 'Import flow files', run: () => filesInput.click() }];
+	}
 </script>
 
 <section class="library-panel" aria-label="Flow library panel">
@@ -38,17 +39,8 @@
 			? [$library.name, ...$library.path].join('/')
 			: null}
 		tooltip="drag into flow tabs or into the flow"
-	>
-		<Button
-			icon="dots"
-			ariaLabel="Flow library menu"
-			tooltip="library menu"
-			on:click={() =>
-				openPopup(PanelMenu, 'Flow library', {
-					actions: [{ label: 'Import flow files', run: () => filesInput.click() }]
-				})}
-		/>
-	</PanelHeader>
+		actions={panelActions}
+	/>
 	<input
 		bind:this={filesInput}
 		type="file"

@@ -1,7 +1,7 @@
 <script lang="ts">
+	import { trackFeatureUsed } from '$lib/models/telemetry';
 	import { panelDrop } from '$lib/models/panelDrop';
-	import PanelMenu from './PanelMenu.svelte';
-	import { openPopup } from '$lib/models/popup';
+
 	import { fileMime } from '$lib/models/panelDrag';
 	import { cacheSpeechDropFile, clearSpeechDropFile } from '$lib/models/speechDropFile';
 	import { onDestroy, onMount } from 'svelte';
@@ -193,6 +193,7 @@
 			if (currentRequest !== requestNumber) return;
 			files = result.files;
 			loadedRoomCode = code;
+			trackFeatureUsed('speechdrop', 'connected');
 			scheduleFallbackRefresh(code, currentRequest);
 			connectRoomSocket(code, currentRequest);
 		} catch (cause) {
@@ -274,7 +275,7 @@
 				link.remove();
 				downloaded = true;
 				setTimeout(() => URL.revokeObjectURL(url), 30_000);
-				status = `Downloaded ${file.name}.`;
+				status = '';
 			}
 			if (
 				action === 'open' ||
@@ -329,6 +330,7 @@
 				});
 				if (!response.ok) throw new Error((await response.json()).error);
 			}
+			trackFeatureUsed('speechdrop', 'uploaded');
 			if (room === loadedRoomCode && request === requestNumber) await refreshRoom(room, request);
 		} catch (cause) {
 			if (room === loadedRoomCode && request === requestNumber) error = (cause as Error).message;
@@ -357,6 +359,27 @@
 	}
 
 	$: canOpenInCardMirror = $cardMirror.state === 'connected' && $cardMirrorDocuments.supported;
+	function panelActions() {
+		return [
+			{
+				label: 'Upload files',
+				disabled: !loadedRoomCode || writing,
+				run: () => localFile.click()
+			},
+			{
+				label: 'Paste room code',
+				run: async () => {
+					try {
+						roomCode = (await navigator.clipboard.readText()).trim();
+						shareSpeechDropCode(roomCode);
+						editRoomCode();
+					} catch {
+						error = 'Could not read clipboard.';
+					}
+				}
+			}
+		];
+	}
 </script>
 
 <section
@@ -377,43 +400,11 @@
 		}
 	}}
 >
-	<PanelHeader name="SpeechDrop" detail={files.length ? String(files.length) : null}>
-		<Button
-			icon="dots"
-			ariaLabel="SpeechDrop menu"
-			tooltip="speechdrop menu"
-			on:click={() =>
-				openPopup(PanelMenu, 'SpeechDrop', {
-					actions: [
-						{
-							label: 'Upload files',
-							disabled: !loadedRoomCode || writing,
-							run: () => localFile.click()
-						},
-						{
-							label: 'Paste room code',
-							run: async () => {
-								try {
-									roomCode = (await navigator.clipboard.readText()).trim();
-									shareSpeechDropCode(roomCode);
-									editRoomCode();
-								} catch {
-									error = 'Could not read clipboard.';
-								}
-							}
-						}
-					]
-				})}
-		/>
-		<Button
-			icon="upload"
-			ariaLabel="Upload to SpeechDrop"
-			tooltip="upload files to this room"
-			disabled={!loadedRoomCode || writing}
-			disabledReason=""
-			on:click={() => localFile.click()}
-		/>
-	</PanelHeader>
+	<PanelHeader
+		name="SpeechDrop"
+		detail={files.length ? String(files.length) : null}
+		actions={panelActions}
+	/>
 	<input
 		bind:this={localFile}
 		type="file"
@@ -424,16 +415,18 @@
 			localFile.value = '';
 		}}
 	/>
-	<PanelField
-		ariaLabel="SpeechDrop room code"
-		placeholder="room code"
-		spellcheck={false}
-		bind:value={roomCode}
-		on:input={() => {
-			shareSpeechDropCode(roomCode);
-			editRoomCode();
-		}}
-	/>
+	<div class="panel-leading">
+		<PanelField
+			ariaLabel="SpeechDrop room code"
+			placeholder="room code"
+			spellcheck={false}
+			bind:value={roomCode}
+			on:input={() => {
+				shareSpeechDropCode(roomCode);
+				editRoomCode();
+			}}
+		/>
+	</div>
 	{#if loading}
 		<PanelStatus>Connecting…</PanelStatus>
 	{:else if error}

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { speechModelState } from '$lib/models/speechModel';
 	import Toggle from './Toggle.svelte';
 	import Radio from './Radio.svelte';
 	import Slider from './Slider.svelte';
@@ -11,18 +12,21 @@
 	export let setting: Setting;
 	export let key: string;
 	export let displayName: string | null = null;
+	export let onValueChange: ((value: Setting['value']) => void) | null = null;
 
 	let value: any = setting.value;
 
 	function setValue(value: any) {
-		settings.setValue(key, value);
+		if (onValueChange) {
+			setting.value = value;
+			onValueChange(value);
+		} else settings.setValue(key, value);
 		value = setting.value;
 	}
-	$: value, setValue(value);
+	$: if (!onValueChange || value !== setting.value) setValue(value);
 
 	function resetValue() {
-		settings.setValue(key, setting.auto);
-		value = setting.value;
+		setValue(setting.auto);
 	}
 
 	onDestroy(
@@ -83,6 +87,16 @@
 			on:forceUpdate={() => setValue(value)}
 		/>
 	{/if}
+	{#if key === 'transcriptModel' && $speechModelState.status !== 'idle'}<p
+			class="model-state"
+			role="status"
+		>
+			{$speechModelState.status === 'loading'
+				? 'Loading model…'
+				: $speechModelState.status === 'ready'
+				? 'Model ready'
+				: $speechModelState.error}
+		</p>{/if}
 	{#if setting.type == 'text'}
 		<input
 			class="text-setting"
@@ -100,6 +114,10 @@
 </div>
 
 <style>
+	.model-state {
+		color: var(--text-weak);
+		font-size: 0.85em;
+	}
 	.text-setting {
 		box-sizing: border-box;
 		width: 100%;

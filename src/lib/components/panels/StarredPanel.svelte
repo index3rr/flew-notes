@@ -1,7 +1,6 @@
 <script lang="ts">
 	import PanelHeader from './PanelHeader.svelte';
 	import PanelRow from './PanelRow.svelte';
-	import PanelStatus from './PanelStatus.svelte';
 	import { nodes, pendingAction, frozen } from '$lib/models/store';
 	import { type Box, type BoxId, type FlowId, type Node } from '$lib/models/node';
 	import { newUpdateAction, toggleBoxFormat } from '$lib/models/nodeDecorateAction';
@@ -70,9 +69,7 @@
 
 <section class="starred-panel" aria-label="Starred arguments">
 	<PanelHeader name="Starred arguments" detail={starred.length ? String(starred.length) : null} />
-	{#if starred.length === 0}
-		<PanelStatus>Star an argument to keep it here.</PanelStatus>
-	{:else}
+	{#if starred.length > 0}
 		<div class="list">
 			{#each starred as { id, node } (id)}
 				<article class={`palette-${flowPalette(node.value.flowId, node.level)}`}>

@@ -69,8 +69,15 @@ async function point(cell: Locator, fraction = 0.3) {
 	return { x: rect.x + rect.width * fraction, y: rect.y + Math.min(rect.height / 2, 10) };
 }
 
+async function paddingPoint(cell: Locator) {
+	return cell.evaluate((element) => {
+		const rect = element.closest('[data-box-id]')!.getBoundingClientRect();
+		return { x: rect.left + 1, y: rect.top + rect.height / 2 };
+	});
+}
+
 async function drag(page: Page, from: Locator, to: Locator) {
-	const start = await point(from);
+	const start = await paddingPoint(from);
 	const end = await point(to);
 	await page.mouse.move(start.x, start.y);
 	await page.mouse.down();
@@ -183,7 +190,7 @@ test('drag selection scrolls at the edge and ends when released outside the flow
 }) => {
 	await page.setViewportSize({ width: 900, height: 500 });
 	await setup(page, 30);
-	const start = await point(cells(page).nth(0));
+	const start = await paddingPoint(cells(page).nth(0));
 	const second = await point(cells(page).nth(1));
 	await page.mouse.move(start.x, start.y);
 	await page.mouse.down();
@@ -209,7 +216,7 @@ test('Escape cancels a cell drag and touch gestures keep their native behavior',
 	page
 }) => {
 	await setup(page);
-	const start = await point(cells(page).nth(0));
+	const start = await paddingPoint(cells(page).nth(0));
 	const end = await point(cells(page).nth(2));
 	await page.mouse.move(start.x, start.y);
 	await page.mouse.down();
